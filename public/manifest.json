@@ -1,0 +1,13 @@
+{
+  "name": "Secretaria de Agricultura",
+  "short_name": "Agricultura",
+  "description": "Sistema de Gestão de Demandas Agrícolas",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#1e5aa0",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/favicon.ico", "sizes": "64x64", "type": "image/x-icon" }
+  ]
+}
