@@ -3,7 +3,7 @@ import { DemandType, Settlement, Location, Producer, Service, User } from '@/typ
 // Default demand types (8 categories)
 export const defaultDemandTypes: DemandType[] = [
   { id: '1', name: 'Operação com Grade', description: 'Serviço de gradagem do solo', isActive: true, createdAt: new Date() },
-  { id: '2', name: 'PC (Pé de Galinha)', description: 'Preparo do solo com implemento PC', isActive: true, createdAt: new Date() },
+  { id: '2', name: 'PC (Retroescavadeira)', description: 'Serviço com retroescavadeira', isActive: true, createdAt: new Date() },
   { id: '3', name: 'Plantadeira', description: 'Serviço de plantio mecanizado', isActive: true, createdAt: new Date() },
   { id: '4', name: 'Calcário', description: 'Aplicação de calcário para correção do solo', isActive: true, createdAt: new Date() },
   { id: '5', name: 'Silagem', description: 'Produção e armazenamento de silagem', isActive: true, createdAt: new Date() },
