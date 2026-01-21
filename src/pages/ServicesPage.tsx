@@ -8,7 +8,7 @@ import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
 import { ServiceForm } from '@/components/forms/ServiceForm';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -16,11 +16,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Service, ServiceStatus } from '@/types';
+import { Service } from '@/types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Plus, Pencil, Trash2, Archive, CheckCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Archive, CheckCircle, Eye } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { Separator } from '@/components/ui/separator';
 
 export default function ServicesPage() {
   const { services, producers, demandTypes, settlements, locations, createService, updateService, deleteService } = useData();
@@ -33,13 +40,14 @@ export default function ServicesPage() {
   const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [serviceToArchive, setServiceToArchive] = useState<Service | null>(null);
+  const [detailService, setDetailService] = useState<Service | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const filteredServices = services.filter(s => {
     const producer = producers.find(p => p.id === s.producerId);
     const matchesSearch = producer?.name.toLowerCase().includes(search.toLowerCase()) || producer?.cpf.includes(search);
     const matchesDemandType = demandTypeFilter === 'all' || s.demandTypeId === demandTypeFilter;
     
-    // Status filter: active = pending + in_progress, archived = completed
     const matchesStatus = statusFilter === 'active' 
       ? (s.status === 'pending' || s.status === 'in_progress')
       : s.status === 'completed';
@@ -47,12 +55,10 @@ export default function ServicesPage() {
     return matchesSearch && matchesDemandType && matchesStatus;
   });
 
-  // Sort: pending and in_progress first by scheduled date
   const sortedServices = [...filteredServices].sort((a, b) => {
     if (statusFilter === 'active') {
       return new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
     }
-    // Archived: most recently completed first
     return new Date(b.completedDate || b.updatedAt).getTime() - new Date(a.completedDate || a.updatedAt).getTime();
   });
 
@@ -104,55 +110,55 @@ export default function ServicesPage() {
   };
 
   const openEditForm = (service: Service) => {
+    setDetailOpen(false);
     setEditingService(service);
     setFormOpen(true);
   };
 
   const openDeleteDialog = (service: Service) => {
+    setDetailOpen(false);
     setServiceToDelete(service);
     setDeleteDialogOpen(true);
   };
 
   const openArchiveDialog = (service: Service) => {
+    setDetailOpen(false);
     setServiceToArchive(service);
     setArchiveDialogOpen(true);
   };
 
+  const openDetail = (service: Service) => {
+    setDetailService(service);
+    setDetailOpen(true);
+  };
+
+  // Colunas simplificadas para mobile: Nome do Produtor, Tipo, Assentamento
   const columns = [
     { 
       key: 'producer', 
       header: 'Produtor', 
       render: (s: Service) => {
         const producer = producers.find(p => p.id === s.producerId);
-        return (
-          <div>
-            <div className="font-medium">{producer?.name || 'N/A'}</div>
-            <div className="text-xs text-muted-foreground">{producer?.cpf}</div>
-          </div>
-        );
+        return <span className="font-medium">{producer?.name || 'N/A'}</span>;
       }
     },
-    { key: 'demandType', header: 'Tipo', render: (s: Service) => demandTypes.find(d => d.id === s.demandTypeId)?.name || 'N/A' },
-    { key: 'scheduledDate', header: 'Data', render: (s: Service) => format(new Date(s.scheduledDate), 'dd/MM/yyyy', { locale: ptBR }) },
-    { key: 'workedArea', header: 'Área (ha)', render: (s: Service) => s.workedArea.toFixed(2) },
-    { key: 'status', header: 'Status', render: (s: Service) => <StatusBadge status={s.status} /> },
+    { 
+      key: 'demandType', 
+      header: 'Tipo', 
+      render: (s: Service) => demandTypes.find(d => d.id === s.demandTypeId)?.name || 'N/A' 
+    },
+    { 
+      key: 'settlement', 
+      header: 'Assentamento', 
+      render: (s: Service) => settlements.find(st => st.id === s.settlementId)?.name || 'N/A' 
+    },
     { 
       key: 'actions', 
-      header: 'Ações', 
+      header: '', 
       render: (s: Service) => (
-        <div className="flex gap-1">
-          {s.status !== 'completed' && (
-            <Button variant="ghost" size="icon" onClick={() => openArchiveDialog(s)} title="Finalizar">
-              <CheckCircle className="h-4 w-4 text-success" />
-            </Button>
-          )}
-          <Button variant="ghost" size="icon" onClick={() => openEditForm(s)} title="Editar">
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => openDeleteDialog(s)} className="text-destructive hover:text-destructive" title="Excluir">
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
+        <Button variant="ghost" size="icon" onClick={() => openDetail(s)}>
+          <Eye className="h-4 w-4" />
+        </Button>
       )
     },
   ];
@@ -160,11 +166,17 @@ export default function ServicesPage() {
   const activeCount = services.filter(s => s.status !== 'completed').length;
   const archivedCount = services.filter(s => s.status === 'completed').length;
 
+  // Dados do serviço selecionado para detalhes
+  const detailProducer = detailService ? producers.find(p => p.id === detailService.producerId) : null;
+  const detailDemandType = detailService ? demandTypes.find(d => d.id === detailService.demandTypeId) : null;
+  const detailSettlement = detailService ? settlements.find(s => s.id === detailService.settlementId) : null;
+  const detailLocation = detailService ? locations.find(l => l.id === detailService.locationId) : null;
+
   return (
     <AppLayout>
       <PageHeader title="Atendimentos" description="Gerenciar atendimentos">
         <Button onClick={() => { setEditingService(null); setFormOpen(true); }}>
-          <Plus className="h-4 w-4 mr-2" /> Novo Atendimento
+          <Plus className="h-4 w-4 mr-2" /> Novo
         </Button>
       </PageHeader>
 
@@ -181,10 +193,10 @@ export default function ServicesPage() {
       </Tabs>
 
       <div className="flex gap-2 items-center flex-wrap mb-4">
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por produtor..." className="max-w-sm" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por produtor..." className="flex-1 min-w-[200px]" />
         <Select value={demandTypeFilter} onValueChange={setDemandTypeFilter}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Tipo de demanda" />
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Tipo" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os tipos</SelectItem>
@@ -201,6 +213,110 @@ export default function ServicesPage() {
         keyExtractor={(s) => s.id} 
         emptyMessage={statusFilter === 'active' ? "Nenhum atendimento ativo" : "Nenhum atendimento arquivado"} 
       />
+
+      {/* Sheet de Detalhes do Atendimento */}
+      <Sheet open={detailOpen} onOpenChange={setDetailOpen}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="text-left">Detalhes do Atendimento</SheetTitle>
+          </SheetHeader>
+          
+          {detailService && (
+            <div className="mt-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Status</span>
+                <StatusBadge status={detailService.status} />
+              </div>
+
+              <Separator />
+
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm text-muted-foreground">Produtor</p>
+                  <p className="font-medium">{detailProducer?.name || 'N/A'}</p>
+                  <p className="text-sm text-muted-foreground">{detailProducer?.cpf}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm text-muted-foreground">Tipo de Demanda</p>
+                  <p className="font-medium">{detailDemandType?.name || 'N/A'}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm text-muted-foreground">Localização</p>
+                  <p className="font-medium">{detailSettlement?.name || 'N/A'}</p>
+                  <p className="text-sm">{detailLocation?.name || 'N/A'}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm text-muted-foreground">Data Agendada</p>
+                  <p className="font-medium">
+                    {format(new Date(detailService.scheduledDate), 'dd/MM/yyyy', { locale: ptBR })}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-sm text-muted-foreground">Área Trabalhada</p>
+                  <p className="font-medium">{detailService.workedArea.toFixed(2)} ha</p>
+                </div>
+
+                <div>
+                  <p className="text-sm text-muted-foreground">Finalidade</p>
+                  <p className="font-medium">{detailService.purpose || 'N/A'}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm text-muted-foreground">Maquinário</p>
+                  <p className="font-medium">{detailService.machinery || 'N/A'}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm text-muted-foreground">Operador</p>
+                  <p className="font-medium">{detailService.operatorName || 'N/A'}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm text-muted-foreground">Chassi/Patrimônio</p>
+                  <p className="font-medium">{detailService.chassisCode || 'N/A'}</p>
+                </div>
+
+                {detailService.notes && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Observações</p>
+                    <p className="font-medium">{detailService.notes}</p>
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+
+              <div className="flex flex-col gap-2">
+                {detailService.status !== 'completed' && (
+                  <Button 
+                    onClick={() => openArchiveDialog(detailService)}
+                    className="w-full bg-success hover:bg-success/90"
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Finalizar Atendimento
+                  </Button>
+                )}
+                <Button variant="outline" onClick={() => openEditForm(detailService)} className="w-full">
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Editar
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={() => openDeleteDialog(detailService)}
+                  className="w-full"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Excluir
+                </Button>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
       <ServiceForm
         open={formOpen}

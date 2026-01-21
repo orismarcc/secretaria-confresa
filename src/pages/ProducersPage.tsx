@@ -7,6 +7,7 @@ import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
 import { ProducerForm } from '@/components/forms/ProducerForm';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { ProducerDetailSheet } from '@/components/ProducerDetailSheet';
 import {
   Select,
   SelectContent,
@@ -15,7 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Producer } from '@/types';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function ProducersPage() {
@@ -26,6 +27,8 @@ export default function ProducersPage() {
   const [editingProducer, setEditingProducer] = useState<Producer | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [producerToDelete, setProducerToDelete] = useState<Producer | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedProducer, setSelectedProducer] = useState<Producer | null>(null);
 
   const filtered = producers.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.cpf.includes(search);
@@ -65,55 +68,69 @@ export default function ProducersPage() {
     setDeleteDialogOpen(true);
   };
 
+  const openDetail = (producer: Producer) => {
+    setSelectedProducer(producer);
+    setDetailOpen(true);
+  };
+
+  // Colunas simplificadas para mobile: Nome, Assentamento e botão Ver Informações
   const columns = [
-    { key: 'name', header: 'Nome' },
-    { key: 'cpf', header: 'CPF' },
-    { key: 'phone', header: 'Telefone' },
+    { key: 'name', header: 'Nome', render: (p: Producer) => <span className="font-medium">{p.name}</span> },
     { key: 'settlement', header: 'Assentamento', render: (p: Producer) => settlements.find(s => s.id === p.settlementId)?.name || 'N/A' },
-    { key: 'location', header: 'Localidade', render: (p: Producer) => locations.find(l => l.id === p.locationId)?.name || 'N/A' },
     { 
       key: 'actions', 
-      header: 'Ações', 
+      header: '', 
       render: (p: Producer) => (
-        <div className="flex gap-2">
-          <Button variant="ghost" size="icon" onClick={() => openEditForm(p)}>
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => openDeleteDialog(p)} className="text-destructive hover:text-destructive">
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
+        <Button variant="ghost" size="sm" onClick={() => openDetail(p)} className="gap-1">
+          <Eye className="h-4 w-4" />
+          <span className="hidden sm:inline">Ver</span>
+        </Button>
       )
     },
   ];
 
+  const selectedSettlement = selectedProducer ? settlements.find(s => s.id === selectedProducer.settlementId) : undefined;
+  const selectedLocation = selectedProducer ? locations.find(l => l.id === selectedProducer.locationId) : undefined;
+
   return (
     <AppLayout>
       <PageHeader title="Produtores" description="Gerenciar produtores">
-        <div className="flex gap-2 items-center flex-wrap">
-          <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nome ou CPF..." className="max-w-sm" />
-          <Select value={settlementFilter} onValueChange={setSettlementFilter}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filtrar por assentamento" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os assentamentos</SelectItem>
-              {settlements.map(s => (
-                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={() => { setEditingProducer(null); setFormOpen(true); }}>
-            <Plus className="h-4 w-4 mr-2" /> Novo
-          </Button>
-        </div>
+        <Button onClick={() => { setEditingProducer(null); setFormOpen(true); }}>
+          <Plus className="h-4 w-4 mr-2" /> Novo
+        </Button>
       </PageHeader>
+
+      <div className="flex gap-2 items-center flex-wrap mb-4">
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar..." className="flex-1 min-w-[150px]" />
+        <Select value={settlementFilter} onValueChange={setSettlementFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Assentamento" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            {settlements.map(s => (
+              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
       
       <DataTable 
         data={filtered} 
         columns={columns} 
         keyExtractor={(p) => p.id} 
         emptyMessage="Nenhum produtor encontrado" 
+      />
+
+      <ProducerDetailSheet
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        producer={selectedProducer}
+        settlement={selectedSettlement}
+        location={selectedLocation}
+        demandTypes={demandTypes}
+        onEdit={openEditForm}
+        onDelete={openDeleteDialog}
       />
 
       <ProducerForm

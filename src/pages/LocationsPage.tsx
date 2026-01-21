@@ -65,8 +65,9 @@ export default function LocationsPage() {
     setDeleteDialogOpen(true);
   };
 
+  // Colunas simplificadas para mobile
   const columns = [
-    { key: 'name', header: 'Localidade' },
+    { key: 'name', header: 'Localidade', render: (l: Location) => <span className="font-medium">{l.name}</span> },
     { 
       key: 'settlement', 
       header: 'Assentamento', 
@@ -74,9 +75,9 @@ export default function LocationsPage() {
     },
     { 
       key: 'actions', 
-      header: 'Ações', 
+      header: '', 
       render: (l: Location) => (
-        <div className="flex gap-2">
+        <div className="flex gap-1">
           <Button variant="ghost" size="icon" onClick={() => openEditForm(l)}>
             <Pencil className="h-4 w-4" />
           </Button>
@@ -91,24 +92,25 @@ export default function LocationsPage() {
   return (
     <AppLayout>
       <PageHeader title="Localidades" description="Gerenciar localidades">
-        <div className="flex gap-2 items-center flex-wrap">
-          <SearchInput value={search} onChange={setSearch} placeholder="Buscar localidade..." className="max-w-sm" />
-          <Select value={settlementFilter} onValueChange={setSettlementFilter}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filtrar por assentamento" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os assentamentos</SelectItem>
-              {settlements.map(s => (
-                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={() => { setEditingLocation(null); setFormOpen(true); }}>
-            <Plus className="h-4 w-4 mr-2" /> Nova
-          </Button>
-        </div>
+        <Button onClick={() => { setEditingLocation(null); setFormOpen(true); }}>
+          <Plus className="h-4 w-4 mr-2" /> Nova
+        </Button>
       </PageHeader>
+
+      <div className="flex gap-2 items-center flex-wrap mb-4">
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar localidade..." className="flex-1 min-w-[150px]" />
+        <Select value={settlementFilter} onValueChange={setSettlementFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Assentamento" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            {settlements.map(s => (
+              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
       
       <DataTable 
         data={filtered} 

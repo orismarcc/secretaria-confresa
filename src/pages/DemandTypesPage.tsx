@@ -5,7 +5,7 @@ import { useData } from '@/contexts/DataContext';
 import { DataTable } from '@/components/DataTable';
 import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { DemandTypeForm } from '@/components/forms/DemandTypeForm';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DemandType } from '@/types';
@@ -46,6 +46,11 @@ export default function DemandTypesPage() {
     }
   };
 
+  const handleToggleStatus = (demandType: DemandType) => {
+    updateDemandType(demandType.id, { isActive: !demandType.isActive });
+    toast.success(demandType.isActive ? 'Tipo desativado' : 'Tipo ativado');
+  };
+
   const openEditForm = (type: DemandType) => {
     setEditingType(type);
     setFormOpen(true);
@@ -56,21 +61,29 @@ export default function DemandTypesPage() {
     setDeleteDialogOpen(true);
   };
 
+  // Colunas simplificadas com switch de status
   const columns = [
-    { key: 'name', header: 'Nome' },
-    { key: 'description', header: 'Descrição', render: (d: DemandType) => d.description || '-' },
+    { key: 'name', header: 'Nome', render: (d: DemandType) => <span className="font-medium">{d.name}</span> },
     { 
-      key: 'isActive', 
+      key: 'status', 
       header: 'Status', 
-      render: (d: DemandType) => d.isActive 
-        ? <Badge variant="outline" className="bg-success/10 text-success border-success/30">Ativo</Badge> 
-        : <Badge variant="outline" className="bg-muted text-muted-foreground">Inativo</Badge> 
+      render: (d: DemandType) => (
+        <div className="flex items-center gap-2">
+          <Switch 
+            checked={d.isActive} 
+            onCheckedChange={() => handleToggleStatus(d)}
+          />
+          <span className={`text-sm ${d.isActive ? 'text-success' : 'text-muted-foreground'}`}>
+            {d.isActive ? 'Ativo' : 'Inativo'}
+          </span>
+        </div>
+      )
     },
     { 
       key: 'actions', 
-      header: 'Ações', 
+      header: '', 
       render: (d: DemandType) => (
-        <div className="flex gap-2">
+        <div className="flex gap-1">
           <Button variant="ghost" size="icon" onClick={() => openEditForm(d)}>
             <Pencil className="h-4 w-4" />
           </Button>
@@ -86,7 +99,7 @@ export default function DemandTypesPage() {
     <AppLayout>
       <PageHeader title="Tipos de Demanda" description="Categorias de atendimento">
         <div className="flex gap-2 items-center">
-          <SearchInput value={search} onChange={setSearch} placeholder="Buscar tipo..." className="max-w-sm" />
+          <SearchInput value={search} onChange={setSearch} placeholder="Buscar tipo..." className="flex-1 min-w-[150px]" />
           <Button onClick={() => { setEditingType(null); setFormOpen(true); }}>
             <Plus className="h-4 w-4 mr-2" /> Novo
           </Button>
