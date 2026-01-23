@@ -48,6 +48,18 @@ export interface Producer {
   createdAt: Date;
 }
 
+// Photo captured during service
+export interface ServicePhoto {
+  id: string;
+  serviceId: string;
+  producerId: string;
+  demandTypeId: string;
+  localBlobKey: string; // Key in IndexedDB
+  remoteUrl?: string; // URL after sync to cloud storage
+  capturedAt: Date;
+  syncStatus: 'pending' | 'synced' | 'error';
+}
+
 // Service (Atendimento)
 export interface Service {
   id: string;
