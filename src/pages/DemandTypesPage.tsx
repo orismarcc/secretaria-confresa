@@ -1,19 +1,35 @@
 import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
-import { useData } from '@/contexts/DataContext';
 import { DataTable } from '@/components/DataTable';
 import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { DemandTypeForm } from '@/components/forms/DemandTypeForm';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { DemandType } from '@/types';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  useDemandTypes,
+  useCreateDemandType,
+  useUpdateDemandType,
+  useDeleteDemandType
+} from '@/hooks/useSupabaseData';
+
+interface DemandType {
+  id: string;
+  name: string;
+  description?: string | null;
+  is_active?: boolean | null;
+  created_at?: string | null;
+}
 
 export default function DemandTypesPage() {
-  const { demandTypes, createDemandType, updateDemandType, deleteDemandType } = useData();
+  const { data: demandTypes = [], isLoading } = useDemandTypes();
+  const createDemandType = useCreateDemandType();
+  const updateDemandType = useUpdateDemandType();
+  const deleteDemandType = useDeleteDemandType();
+  
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editingType, setEditingType] = useState<DemandType | null>(null);
@@ -25,30 +41,33 @@ export default function DemandTypesPage() {
   );
 
   const handleCreate = (data: { name: string; description?: string; isActive: boolean }) => {
-    createDemandType(data.name, data.description);
-    toast.success('Tipo de demanda cadastrado com sucesso!');
+    createDemandType.mutate({ name: data.name, description: data.description });
+    setFormOpen(false);
   };
 
   const handleEdit = (data: { name: string; description?: string; isActive: boolean }) => {
     if (editingType) {
-      updateDemandType(editingType.id, data);
-      toast.success('Tipo de demanda atualizado com sucesso!');
+      updateDemandType.mutate({ 
+        id: editingType.id, 
+        name: data.name, 
+        description: data.description,
+        is_active: data.isActive 
+      });
       setEditingType(null);
+      setFormOpen(false);
     }
   };
 
   const handleDelete = () => {
     if (typeToDelete) {
-      deleteDemandType(typeToDelete.id);
-      toast.success('Tipo de demanda excluído com sucesso!');
+      deleteDemandType.mutate(typeToDelete.id);
       setTypeToDelete(null);
       setDeleteDialogOpen(false);
     }
   };
 
   const handleToggleStatus = (demandType: DemandType) => {
-    updateDemandType(demandType.id, { isActive: !demandType.isActive });
-    toast.success(demandType.isActive ? 'Tipo desativado' : 'Tipo ativado');
+    updateDemandType.mutate({ id: demandType.id, is_active: !demandType.is_active });
   };
 
   const openEditForm = (type: DemandType) => {
@@ -61,7 +80,18 @@ export default function DemandTypesPage() {
     setDeleteDialogOpen(true);
   };
 
-  // Colunas simplificadas com switch de status
+  // Map demand type for form compatibility
+  const mapDemandTypeForForm = (dt: DemandType | null) => {
+    if (!dt) return null;
+    return {
+      id: dt.id,
+      name: dt.name,
+      description: dt.description || undefined,
+      isActive: dt.is_active ?? true,
+      createdAt: new Date(dt.created_at || Date.now())
+    };
+  };
+
   const columns = [
     { key: 'name', header: 'Nome', render: (d: DemandType) => <span className="font-medium">{d.name}</span> },
     { 
@@ -70,11 +100,11 @@ export default function DemandTypesPage() {
       render: (d: DemandType) => (
         <div className="flex items-center gap-2">
           <Switch 
-            checked={d.isActive} 
+            checked={d.is_active ?? true} 
             onCheckedChange={() => handleToggleStatus(d)}
           />
-          <span className={`text-sm ${d.isActive ? 'text-success' : 'text-muted-foreground'}`}>
-            {d.isActive ? 'Ativo' : 'Inativo'}
+          <span className={`text-sm ${d.is_active ? 'text-success' : 'text-muted-foreground'}`}>
+            {d.is_active ? 'Ativo' : 'Inativo'}
           </span>
         </div>
       )
@@ -94,6 +124,18 @@ export default function DemandTypesPage() {
       )
     },
   ];
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <PageHeader title="Tipos de Demanda" description="Categorias de atendimento" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -116,7 +158,7 @@ export default function DemandTypesPage() {
       <DemandTypeForm
         open={formOpen}
         onOpenChange={setFormOpen}
-        demandType={editingType}
+        demandType={mapDemandTypeForForm(editingType)}
         onSubmit={editingType ? handleEdit : handleCreate}
       />
 

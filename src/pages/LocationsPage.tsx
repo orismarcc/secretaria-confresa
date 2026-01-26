@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
-import { useData } from '@/contexts/DataContext';
 import { DataTable } from '@/components/DataTable';
 import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
@@ -14,12 +13,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Location } from '@/types';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  useLocations,
+  useSettlements,
+  useCreateLocation,
+  useUpdateLocation,
+  useDeleteLocation
+} from '@/hooks/useSupabaseData';
+
+interface Location {
+  id: string;
+  name: string;
+  settlement_id: string;
+  settlements?: { name: string } | null;
+}
 
 export default function LocationsPage() {
-  const { locations, settlements, createLocation, updateLocation, deleteLocation } = useData();
+  const { data: locations = [], isLoading: locationsLoading } = useLocations();
+  const { data: settlements = [], isLoading: settlementsLoading } = useSettlements();
+  const createLocation = useCreateLocation();
+  const updateLocation = useUpdateLocation();
+  const deleteLocation = useDeleteLocation();
+  
   const [search, setSearch] = useState('');
   const [settlementFilter, setSettlementFilter] = useState<string>('all');
   const [formOpen, setFormOpen] = useState(false);
@@ -29,27 +46,26 @@ export default function LocationsPage() {
 
   const filtered = locations.filter(l => {
     const matchesSearch = l.name.toLowerCase().includes(search.toLowerCase());
-    const matchesSettlement = settlementFilter === 'all' || l.settlementId === settlementFilter;
+    const matchesSettlement = settlementFilter === 'all' || l.settlement_id === settlementFilter;
     return matchesSearch && matchesSettlement;
   });
 
   const handleCreate = (data: { name: string; settlementId: string }) => {
-    createLocation(data.name, data.settlementId);
-    toast.success('Localidade cadastrada com sucesso!');
+    createLocation.mutate({ name: data.name, settlement_id: data.settlementId });
+    setFormOpen(false);
   };
 
   const handleEdit = (data: { name: string; settlementId: string }) => {
     if (editingLocation) {
-      updateLocation(editingLocation.id, data);
-      toast.success('Localidade atualizada com sucesso!');
+      updateLocation.mutate({ id: editingLocation.id, name: data.name, settlement_id: data.settlementId });
       setEditingLocation(null);
+      setFormOpen(false);
     }
   };
 
   const handleDelete = () => {
     if (locationToDelete) {
-      deleteLocation(locationToDelete.id);
-      toast.success('Localidade excluída com sucesso!');
+      deleteLocation.mutate(locationToDelete.id);
       setLocationToDelete(null);
       setDeleteDialogOpen(false);
     }
@@ -65,13 +81,30 @@ export default function LocationsPage() {
     setDeleteDialogOpen(true);
   };
 
-  // Colunas simplificadas para mobile
+  // Map location for form compatibility
+  const mapLocationForForm = (loc: Location | null) => {
+    if (!loc) return null;
+    return {
+      id: loc.id,
+      name: loc.name,
+      settlementId: loc.settlement_id,
+      createdAt: new Date()
+    };
+  };
+
+  // Map settlements for form compatibility
+  const mappedSettlements = settlements.map(s => ({
+    id: s.id,
+    name: s.name,
+    createdAt: new Date(s.created_at || Date.now())
+  }));
+
   const columns = [
     { key: 'name', header: 'Localidade', render: (l: Location) => <span className="font-medium">{l.name}</span> },
     { 
       key: 'settlement', 
       header: 'Assentamento', 
-      render: (l: Location) => settlements.find(s => s.id === l.settlementId)?.name || 'N/A' 
+      render: (l: Location) => l.settlements?.name || settlements.find(s => s.id === l.settlement_id)?.name || 'N/A' 
     },
     { 
       key: 'actions', 
@@ -88,6 +121,20 @@ export default function LocationsPage() {
       )
     },
   ];
+
+  const isLoading = locationsLoading || settlementsLoading;
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <PageHeader title="Localidades" description="Gerenciar localidades" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -122,8 +169,8 @@ export default function LocationsPage() {
       <LocationForm
         open={formOpen}
         onOpenChange={setFormOpen}
-        location={editingLocation}
-        settlements={settlements}
+        location={mapLocationForForm(editingLocation)}
+        settlements={mappedSettlements}
         onSubmit={editingLocation ? handleEdit : handleCreate}
       />
 

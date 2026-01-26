@@ -1,18 +1,32 @@
 import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
-import { useData } from '@/contexts/DataContext';
 import { DataTable } from '@/components/DataTable';
 import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
 import { SettlementForm } from '@/components/forms/SettlementForm';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { Settlement } from '@/types';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  useSettlements,
+  useCreateSettlement,
+  useUpdateSettlement,
+  useDeleteSettlement
+} from '@/hooks/useSupabaseData';
+
+interface Settlement {
+  id: string;
+  name: string;
+  created_at?: string | null;
+}
 
 export default function SettlementsPage() {
-  const { settlements, createSettlement, updateSettlement, deleteSettlement } = useData();
+  const { data: settlements = [], isLoading } = useSettlements();
+  const createSettlement = useCreateSettlement();
+  const updateSettlement = useUpdateSettlement();
+  const deleteSettlement = useDeleteSettlement();
+  
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editingSettlement, setEditingSettlement] = useState<Settlement | null>(null);
@@ -24,22 +38,21 @@ export default function SettlementsPage() {
   );
 
   const handleCreate = (data: { name: string }) => {
-    createSettlement(data.name);
-    toast.success('Assentamento cadastrado com sucesso!');
+    createSettlement.mutate({ name: data.name });
+    setFormOpen(false);
   };
 
   const handleEdit = (data: { name: string }) => {
     if (editingSettlement) {
-      updateSettlement(editingSettlement.id, { name: data.name });
-      toast.success('Assentamento atualizado com sucesso!');
+      updateSettlement.mutate({ id: editingSettlement.id, name: data.name });
       setEditingSettlement(null);
+      setFormOpen(false);
     }
   };
 
   const handleDelete = () => {
     if (settlementToDelete) {
-      deleteSettlement(settlementToDelete.id);
-      toast.success('Assentamento excluído com sucesso!');
+      deleteSettlement.mutate(settlementToDelete.id);
       setSettlementToDelete(null);
       setDeleteDialogOpen(false);
     }
@@ -73,6 +86,18 @@ export default function SettlementsPage() {
     },
   ];
 
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <PageHeader title="Assentamentos" description="Gerenciar assentamentos" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <PageHeader title="Assentamentos" description="Gerenciar assentamentos">
@@ -94,7 +119,7 @@ export default function SettlementsPage() {
       <SettlementForm
         open={formOpen}
         onOpenChange={setFormOpen}
-        settlement={editingSettlement}
+        settlement={editingSettlement ? { ...editingSettlement, createdAt: new Date(editingSettlement.created_at || Date.now()) } : null}
         onSubmit={editingSettlement ? handleEdit : handleCreate}
       />
 
