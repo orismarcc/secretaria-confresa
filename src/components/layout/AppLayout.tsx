@@ -13,6 +13,7 @@ import {
   LogOut,
   Menu,
   X,
+  UserCog,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -26,6 +27,7 @@ const adminNavItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/services', label: 'Atendimentos', icon: ClipboardList },
   { path: '/producers', label: 'Produtores', icon: Users },
+  { path: '/operators', label: 'Operadores', icon: UserCog },
   { path: '/demand-types', label: 'Tipos de Demanda', icon: FileText },
   { path: '/settlements', label: 'Assentamentos', icon: Building2 },
   { path: '/locations', label: 'Localidades', icon: MapPin },

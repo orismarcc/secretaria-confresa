@@ -11,6 +11,7 @@ import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import ServicesPage from "./pages/ServicesPage";
 import ProducersPage from "./pages/ProducersPage";
+import OperatorsPage from "./pages/OperatorsPage";
 import DemandTypesPage from "./pages/DemandTypesPage";
 import SettlementsPage from "./pages/SettlementsPage";
 import LocationsPage from "./pages/LocationsPage";
@@ -41,6 +42,7 @@ function AppRoutes() {
       <Route path="/dashboard" element={<ProtectedRoute adminOnly><DashboardPage /></ProtectedRoute>} />
       <Route path="/services" element={<ProtectedRoute adminOnly><ServicesPage /></ProtectedRoute>} />
       <Route path="/producers" element={<ProtectedRoute adminOnly><ProducersPage /></ProtectedRoute>} />
+      <Route path="/operators" element={<ProtectedRoute adminOnly><OperatorsPage /></ProtectedRoute>} />
       <Route path="/demand-types" element={<ProtectedRoute adminOnly><DemandTypesPage /></ProtectedRoute>} />
       <Route path="/settlements" element={<ProtectedRoute adminOnly><SettlementsPage /></ProtectedRoute>} />
       <Route path="/locations" element={<ProtectedRoute adminOnly><LocationsPage /></ProtectedRoute>} />
