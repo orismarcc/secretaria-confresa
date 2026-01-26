@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
-import { useData } from '@/contexts/DataContext';
 import { DataTable } from '@/components/DataTable';
 import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
@@ -15,72 +14,167 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Producer } from '@/types';
 import { Plus, Eye } from 'lucide-react';
-import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  useProducers,
+  useSettlements,
+  useLocations,
+  useDemandTypes,
+  useCreateProducer,
+  useUpdateProducer,
+  useDeleteProducer
+} from '@/hooks/useSupabaseData';
+
+interface DbProducer {
+  id: string;
+  name: string;
+  cpf: string;
+  phone?: string | null;
+  settlement_id?: string | null;
+  location_id?: string | null;
+  property_name?: string | null;
+  property_size?: number | null;
+  dap_cap?: string | null;
+  created_at?: string | null;
+  settlements?: { name: string } | null;
+  locations?: { name: string } | null;
+}
 
 export default function ProducersPage() {
-  const { producers, settlements, locations, demandTypes, createProducer, updateProducer, deleteProducer } = useData();
+  const { data: producers = [], isLoading: producersLoading } = useProducers();
+  const { data: settlements = [] } = useSettlements();
+  const { data: locations = [] } = useLocations();
+  const { data: demandTypes = [] } = useDemandTypes();
+  const createProducer = useCreateProducer();
+  const updateProducer = useUpdateProducer();
+  const deleteProducer = useDeleteProducer();
+
   const [search, setSearch] = useState('');
   const [settlementFilter, setSettlementFilter] = useState<string>('all');
   const [formOpen, setFormOpen] = useState(false);
-  const [editingProducer, setEditingProducer] = useState<Producer | null>(null);
+  const [editingProducer, setEditingProducer] = useState<DbProducer | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [producerToDelete, setProducerToDelete] = useState<Producer | null>(null);
+  const [producerToDelete, setProducerToDelete] = useState<DbProducer | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [selectedProducer, setSelectedProducer] = useState<Producer | null>(null);
+  const [selectedProducer, setSelectedProducer] = useState<DbProducer | null>(null);
 
-  const filtered = producers.filter(p => {
+  const filtered = producers.filter((p: DbProducer) => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.cpf.includes(search);
-    const matchesSettlement = settlementFilter === 'all' || p.settlementId === settlementFilter;
+    const matchesSettlement = settlementFilter === 'all' || p.settlement_id === settlementFilter;
     return matchesSearch && matchesSettlement;
   });
 
-  const handleCreate = (data: Omit<Producer, 'id' | 'createdAt'>) => {
-    createProducer(data);
-    toast.success('Produtor cadastrado com sucesso!');
+  const handleCreate = (data: any) => {
+    createProducer.mutate({
+      name: data.name,
+      cpf: data.cpf,
+      phone: data.phone,
+      settlement_id: data.settlementId,
+      location_id: data.locationId,
+      property_name: data.propertyName,
+      property_size: data.propertySize,
+      dap_cap: data.dapCap,
+    });
+    setFormOpen(false);
   };
 
-  const handleEdit = (data: Omit<Producer, 'id' | 'createdAt'>) => {
+  const handleEdit = (data: any) => {
     if (editingProducer) {
-      updateProducer(editingProducer.id, data);
-      toast.success('Produtor atualizado com sucesso!');
+      updateProducer.mutate({
+        id: editingProducer.id,
+        name: data.name,
+        cpf: data.cpf,
+        phone: data.phone,
+        settlement_id: data.settlementId,
+        location_id: data.locationId,
+        property_name: data.propertyName,
+        property_size: data.propertySize,
+        dap_cap: data.dapCap,
+      });
       setEditingProducer(null);
+      setFormOpen(false);
     }
   };
 
   const handleDelete = () => {
     if (producerToDelete) {
-      deleteProducer(producerToDelete.id);
-      toast.success('Produtor excluído com sucesso!');
+      deleteProducer.mutate(producerToDelete.id);
       setProducerToDelete(null);
       setDeleteDialogOpen(false);
     }
   };
 
-  const openEditForm = (producer: Producer) => {
-    setEditingProducer(producer);
-    setFormOpen(true);
+  const openEditForm = (producer: any) => {
+    // Find the DB producer
+    const dbProducer = producers.find(p => p.id === producer.id);
+    if (dbProducer) {
+      setEditingProducer(dbProducer);
+      setFormOpen(true);
+    }
   };
 
-  const openDeleteDialog = (producer: Producer) => {
-    setProducerToDelete(producer);
-    setDeleteDialogOpen(true);
+  const openDeleteDialog = (producer: any) => {
+    const dbProducer = producers.find(p => p.id === producer.id);
+    if (dbProducer) {
+      setProducerToDelete(dbProducer);
+      setDeleteDialogOpen(true);
+    }
   };
 
-  const openDetail = (producer: Producer) => {
+  const openDetail = (producer: DbProducer) => {
     setSelectedProducer(producer);
     setDetailOpen(true);
   };
 
-  // Colunas simplificadas para mobile: Nome, Assentamento e botão Ver Informações
+  // Map producer for form/detail compatibility
+  const mapProducerForDisplay = (p: DbProducer | null) => {
+    if (!p) return null;
+    return {
+      id: p.id,
+      name: p.name,
+      cpf: p.cpf,
+      phone: p.phone || '',
+      settlementId: p.settlement_id || '',
+      locationId: p.location_id || '',
+      demandTypeIds: [],
+      createdAt: new Date(p.created_at || Date.now())
+    };
+  };
+
+  // Map data for form compatibility
+  const mappedSettlements = settlements.map(s => ({
+    id: s.id,
+    name: s.name,
+    createdAt: new Date(s.created_at || Date.now())
+  }));
+
+  const mappedLocations = locations.map(l => ({
+    id: l.id,
+    name: l.name,
+    settlementId: l.settlement_id,
+    createdAt: new Date(l.created_at || Date.now())
+  }));
+
+  const mappedDemandTypes = demandTypes.map(d => ({
+    id: d.id,
+    name: d.name,
+    description: d.description || undefined,
+    isActive: d.is_active ?? true,
+    createdAt: new Date(d.created_at || Date.now())
+  }));
+
   const columns = [
-    { key: 'name', header: 'Nome', render: (p: Producer) => <span className="font-medium">{p.name}</span> },
-    { key: 'settlement', header: 'Assentamento', render: (p: Producer) => settlements.find(s => s.id === p.settlementId)?.name || 'N/A' },
+    { key: 'name', header: 'Nome', render: (p: DbProducer) => <span className="font-medium">{p.name}</span> },
+    { 
+      key: 'settlement', 
+      header: 'Assentamento', 
+      render: (p: DbProducer) => p.settlements?.name || settlements.find(s => s.id === p.settlement_id)?.name || 'N/A' 
+    },
     { 
       key: 'actions', 
       header: '', 
-      render: (p: Producer) => (
+      render: (p: DbProducer) => (
         <Button variant="ghost" size="sm" onClick={() => openDetail(p)} className="gap-1">
           <Eye className="h-4 w-4" />
           <span className="hidden sm:inline">Ver</span>
@@ -89,8 +183,20 @@ export default function ProducersPage() {
     },
   ];
 
-  const selectedSettlement = selectedProducer ? settlements.find(s => s.id === selectedProducer.settlementId) : undefined;
-  const selectedLocation = selectedProducer ? locations.find(l => l.id === selectedProducer.locationId) : undefined;
+  const selectedSettlement = selectedProducer ? settlements.find(s => s.id === selectedProducer.settlement_id) : undefined;
+  const selectedLocation = selectedProducer ? locations.find(l => l.id === selectedProducer.location_id) : undefined;
+
+  if (producersLoading) {
+    return (
+      <AppLayout>
+        <PageHeader title="Produtores" description="Gerenciar produtores" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -125,10 +231,10 @@ export default function ProducersPage() {
       <ProducerDetailSheet
         open={detailOpen}
         onOpenChange={setDetailOpen}
-        producer={selectedProducer}
-        settlement={selectedSettlement}
-        location={selectedLocation}
-        demandTypes={demandTypes}
+        producer={mapProducerForDisplay(selectedProducer)}
+        settlement={selectedSettlement ? { id: selectedSettlement.id, name: selectedSettlement.name, createdAt: new Date() } : undefined}
+        location={selectedLocation ? { id: selectedLocation.id, name: selectedLocation.name, settlementId: selectedLocation.settlement_id, createdAt: new Date() } : undefined}
+        demandTypes={mappedDemandTypes}
         onEdit={openEditForm}
         onDelete={openDeleteDialog}
       />
@@ -136,10 +242,10 @@ export default function ProducersPage() {
       <ProducerForm
         open={formOpen}
         onOpenChange={setFormOpen}
-        producer={editingProducer}
-        settlements={settlements}
-        locations={locations}
-        demandTypes={demandTypes}
+        producer={mapProducerForDisplay(editingProducer)}
+        settlements={mappedSettlements}
+        locations={mappedLocations}
+        demandTypes={mappedDemandTypes}
         onSubmit={editingProducer ? handleEdit : handleCreate}
       />
 
