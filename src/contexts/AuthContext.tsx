@@ -1,86 +1,148 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, UserRole } from '@/types';
-import { sampleUsers, demoCredentials } from '@/data/mockData';
+import { User, Session } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
+import { UserRole } from '@/types';
 
 interface AuthContextType {
   user: User | null;
+  session: Session | null;
+  profile: { name: string; email: string } | null;
+  role: UserRole | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  logout: () => void;
+  signUp: (email: string, password: string, name: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
   hasRole: (role: UserRole) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const AUTH_STORAGE_KEY = 'agri_auth_user';
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<{ name: string; email: string } | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check for existing session
-    const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        // Defer Supabase calls with setTimeout to avoid deadlock
+        if (session?.user) {
+          setTimeout(() => {
+            fetchUserData(session.user.id);
+          }, 0);
+        } else {
+          setProfile(null);
+          setRole(null);
+          setIsLoading(false);
+        }
       }
-    }
-    setIsLoading(false);
+    );
+
+    // THEN check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        fetchUserData(session.user.id);
+      } else {
+        setIsLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  const fetchUserData = async (userId: string) => {
+    try {
+      // Fetch profile and role in parallel
+      const [profileRes, roleRes] = await Promise.all([
+        supabase.from('profiles').select('name, email').eq('id', userId).maybeSingle(),
+        supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle(),
+      ]);
+
+      if (profileRes.data) {
+        setProfile(profileRes.data);
+      }
+
+      if (roleRes.data) {
+        setRole(roleRes.data.role as UserRole);
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
     
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 500));
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     
-    // Check demo credentials
-    const isAdmin = email === demoCredentials.admin.email && password === demoCredentials.admin.password;
-    const isOperator = email === demoCredentials.operator.email && password === demoCredentials.operator.password;
-    
-    if (isAdmin) {
-      const adminUser = sampleUsers.find(u => u.role === 'admin');
-      if (adminUser) {
-        setUser(adminUser);
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(adminUser));
-        setIsLoading(false);
-        return { success: true };
-      }
+    if (error) {
+      setIsLoading(false);
+      return { success: false, error: error.message };
     }
     
-    if (isOperator) {
-      const operatorUser = sampleUsers.find(u => u.role === 'operator');
-      if (operatorUser) {
-        setUser(operatorUser);
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(operatorUser));
-        setIsLoading(false);
-        return { success: true };
+    return { success: true };
+  };
+
+  const signUp = async (email: string, password: string, name: string): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
+    
+    const redirectUrl = `${window.location.origin}/`;
+    
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: redirectUrl,
+        data: { name },
+      },
+    });
+    
+    if (error) {
+      setIsLoading(false);
+      if (error.message.includes('already registered')) {
+        return { success: false, error: 'Este email já está cadastrado' };
       }
+      return { success: false, error: error.message };
     }
     
     setIsLoading(false);
-    return { success: false, error: 'Email ou senha inválidos' };
+    return { success: true };
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem(AUTH_STORAGE_KEY);
+    setSession(null);
+    setProfile(null);
+    setRole(null);
   };
 
-  const hasRole = (role: UserRole): boolean => {
-    return user?.role === role;
+  const hasRole = (checkRole: UserRole): boolean => {
+    return role === checkRole;
   };
 
   return (
     <AuthContext.Provider value={{
       user,
+      session,
+      profile,
+      role,
       isAuthenticated: !!user,
       isLoading,
       login,
+      signUp,
       logout,
       hasRole,
     }}>
