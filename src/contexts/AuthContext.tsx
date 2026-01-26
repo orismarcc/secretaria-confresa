@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Fetch profile and role in parallel
       const [profileRes, roleRes] = await Promise.all([
         supabase.from('profiles').select('name, email').eq('id', userId).maybeSingle(),
-        supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle(),
+        supabase.from('user_roles').select('role, is_active').eq('user_id', userId).maybeSingle(),
       ]);
 
       if (profileRes.data) {
@@ -73,7 +73,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (roleRes.data) {
+        // Check if user is active
+        if (!roleRes.data.is_active) {
+          // User is deactivated, log them out
+          await supabase.auth.signOut();
+          setUser(null);
+          setSession(null);
+          setProfile(null);
+          setRole(null);
+          setIsLoading(false);
+          return;
+        }
         setRole(roleRes.data.role as UserRole);
+      } else {
+        // No role found - check if this is the first user (bootstrap)
+        const { data: bootstrapResult } = await supabase.rpc('bootstrap_first_admin', { _user_id: userId });
+        
+        if (bootstrapResult === true) {
+          // User was promoted to admin
+          setRole('admin');
+        }
       }
     } catch (error) {
       console.error('Error fetching user data:', error);

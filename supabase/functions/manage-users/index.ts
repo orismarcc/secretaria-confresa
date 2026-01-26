@@ -81,10 +81,10 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Assign operator role
+      // Assign operator role with is_active = true
       const { error: roleError } = await supabaseAdmin
         .from("user_roles")
-        .insert({ user_id: newUser.user.id, role: "operator" });
+        .insert({ user_id: newUser.user.id, role: "operator", is_active: true });
 
       if (roleError) {
         // Rollback: delete user if role assignment fails
@@ -142,33 +142,51 @@ Deno.serve(async (req) => {
     }
 
     if (method === "PUT") {
-      // Update operator name
-      const { userId, name } = await req.json();
+      // Update operator name or status
+      const { userId, name, is_active } = await req.json();
 
-      if (!userId || !name) {
-        return new Response(JSON.stringify({ error: "User ID and name are required" }), {
+      if (!userId) {
+        return new Response(JSON.stringify({ error: "User ID is required" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      // Update user metadata
-      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
-        user_metadata: { name },
-      });
-
-      if (updateError) {
-        return new Response(JSON.stringify({ error: updateError.message }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+      // Update user metadata if name provided
+      if (name !== undefined) {
+        const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+          user_metadata: { name },
         });
+
+        if (updateError) {
+          return new Response(JSON.stringify({ error: updateError.message }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Also update profiles table
+        await supabaseAdmin
+          .from("profiles")
+          .update({ name })
+          .eq("id", userId);
       }
 
-      // Also update profiles table
-      await supabaseAdmin
-        .from("profiles")
-        .update({ name })
-        .eq("id", userId);
+      // Update is_active status if provided
+      if (is_active !== undefined) {
+        const { error: statusError } = await supabaseAdmin
+          .from("user_roles")
+          .update({ is_active })
+          .eq("user_id", userId)
+          .eq("role", "operator");
+
+        if (statusError) {
+          return new Response(JSON.stringify({ error: statusError.message }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
 
       return new Response(JSON.stringify({ success: true }), {
         status: 200,
@@ -180,7 +198,7 @@ Deno.serve(async (req) => {
       // List all operators
       const { data: operators, error: listError } = await supabaseAdmin
         .from("user_roles")
-        .select("user_id, role, created_at")
+        .select("user_id, role, created_at, is_active")
         .eq("role", "operator");
 
       if (listError) {
@@ -204,6 +222,7 @@ Deno.serve(async (req) => {
           name: profile?.name || "Sem nome",
           email: profile?.email || "",
           created_at: profile?.created_at || op.created_at,
+          is_active: op.is_active,
         };
       });
 

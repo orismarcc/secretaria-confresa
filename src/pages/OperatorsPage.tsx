@@ -3,20 +3,22 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { DataTable } from '@/components/DataTable';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { OperatorForm } from '@/components/forms/OperatorForm';
-import { useOperators, useCreateOperator, useDeleteOperator, useUpdateOperator } from '@/hooks/useOperatorData';
+import { 
+  useOperators, 
+  useCreateOperator, 
+  useDeleteOperator, 
+  useUpdateOperator,
+  useToggleOperatorStatus,
+  Operator 
+} from '@/hooks/useOperatorData';
 import { Plus, Pencil, Trash2, UserCog } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-
-interface Operator {
-  id: string;
-  name: string;
-  email: string;
-  created_at: string;
-}
 
 export default function OperatorsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -27,6 +29,7 @@ export default function OperatorsPage() {
   const createOperator = useCreateOperator();
   const updateOperator = useUpdateOperator();
   const deleteOperator = useDeleteOperator();
+  const toggleStatus = useToggleOperatorStatus();
 
   const handleCreate = async (data: { name: string; email: string; password: string }) => {
     await createOperator.mutateAsync(data);
@@ -48,6 +51,10 @@ export default function OperatorsPage() {
     }
   };
 
+  const handleToggleStatus = (operator: Operator) => {
+    toggleStatus.mutate({ userId: operator.id, is_active: !operator.is_active });
+  };
+
   const columns = [
     {
       key: 'name',
@@ -63,6 +70,22 @@ export default function OperatorsPage() {
       key: 'email',
       header: 'Email',
       render: (row: Operator) => row.email,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (row: Operator) => (
+        <div className="flex items-center gap-2">
+          <Switch
+            checked={row.is_active}
+            onCheckedChange={() => handleToggleStatus(row)}
+            disabled={toggleStatus.isPending}
+          />
+          <Badge variant={row.is_active ? 'default' : 'secondary'}>
+            {row.is_active ? 'Ativo' : 'Inativo'}
+          </Badge>
+        </div>
+      ),
     },
     {
       key: 'created_at',
