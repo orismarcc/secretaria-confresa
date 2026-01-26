@@ -4,6 +4,14 @@ import { useToast } from '@/hooks/use-toast';
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-users`;
 
+export interface Operator {
+  id: string;
+  name: string;
+  email: string;
+  created_at: string;
+  is_active: boolean;
+}
+
 export function useOperators() {
   return useQuery({
     queryKey: ['operators'],
@@ -22,12 +30,7 @@ export function useOperators() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to fetch operators');
       
-      return data.operators as Array<{
-        id: string;
-        name: string;
-        email: string;
-        created_at: string;
-      }>;
+      return data.operators as Operator[];
     },
   });
 }
@@ -74,7 +77,7 @@ export function useUpdateOperator() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ userId, name }: { userId: string; name: string }) => {
+    mutationFn: async ({ userId, name, is_active }: { userId: string; name?: string; is_active?: boolean }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
@@ -84,7 +87,7 @@ export function useUpdateOperator() {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ userId, name }),
+        body: JSON.stringify({ userId, name, is_active }),
       });
 
       const data = await response.json();
@@ -99,6 +102,45 @@ export function useUpdateOperator() {
     onError: (error: Error) => {
       toast({ 
         title: 'Erro ao atualizar operador', 
+        description: error.message, 
+        variant: 'destructive' 
+      });
+    },
+  });
+}
+
+export function useToggleOperatorStatus() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ userId, is_active }: { userId: string; is_active: boolean }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const response = await fetch(FUNCTION_URL, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId, is_active }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to update status');
+      
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['operators'] });
+      toast({ 
+        title: variables.is_active ? 'Operador ativado!' : 'Operador desativado!',
+      });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: 'Erro ao alterar status', 
         description: error.message, 
         variant: 'destructive' 
       });
