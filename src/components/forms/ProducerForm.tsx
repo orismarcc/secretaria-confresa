@@ -33,7 +33,7 @@ const producerSchema = z.object({
   cpf: z.string().min(11, 'CPF inválido').max(14, 'CPF inválido'),
   phone: z.string().min(10, 'Telefone inválido').max(15, 'Telefone inválido'),
   settlementId: z.string().min(1, 'Selecione um assentamento'),
-  locationId: z.string().min(1, 'Selecione uma localidade'),
+  locationId: z.string().optional(),
   demandTypeIds: z.array(z.string()).min(1, 'Selecione pelo menos um tipo de demanda'),
 });
 
@@ -207,7 +207,7 @@ export function ProducerForm({
                 name="locationId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Localidade *</FormLabel>
+                    <FormLabel>Localidade</FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
                       value={field.value}
