@@ -1,11 +1,42 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Allowed origins for CORS
+const ALLOWED_ORIGINS = [
+  "https://id-preview--ab9805d7-56be-4fe0-abc1-4977c71d0fbe.lovable.app",
+  "http://localhost:5173",
+  "http://localhost:8080",
+];
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get("Origin") || "";
+  return {
+    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Credentials": "true",
+  };
+}
+
+// Input validation schemas
+const createUserSchema = z.object({
+  email: z.string().email("Email inválido").max(255, "Email muito longo"),
+  password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres").max(72, "Senha muito longa"),
+  name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres").max(100, "Nome muito longo").regex(/^[\p{L}\s'-]+$/u, "Nome contém caracteres inválidos"),
+});
+
+const updateUserSchema = z.object({
+  userId: z.string().uuid("ID de usuário inválido"),
+  name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres").max(100, "Nome muito longo").regex(/^[\p{L}\s'-]+$/u, "Nome contém caracteres inválidos").optional(),
+  is_active: z.boolean().optional(),
+});
+
+const deleteUserSchema = z.object({
+  userId: z.string().uuid("ID de usuário inválido"),
+});
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -41,12 +72,12 @@ Deno.serve(async (req) => {
     // Check if requesting user is admin
     const { data: roleData } = await supabaseAdmin
       .from("user_roles")
-      .select("role")
+      .select("role, is_active")
       .eq("user_id", user.id)
       .eq("role", "admin")
       .maybeSingle();
 
-    if (!roleData) {
+    if (!roleData || !roleData.is_active) {
       return new Response(JSON.stringify({ error: "Unauthorized - Admin only" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -56,15 +87,30 @@ Deno.serve(async (req) => {
     const method = req.method;
 
     if (method === "POST") {
-      // Create new operator
-      const { email, password, name } = await req.json();
-
-      if (!email || !password || !name) {
-        return new Response(JSON.stringify({ error: "Email, password and name are required" }), {
+      // Parse and validate input
+      let body;
+      try {
+        body = await req.json();
+      } catch {
+        return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      const parseResult = createUserSchema.safeParse(body);
+      if (!parseResult.success) {
+        const errors = parseResult.error.flatten();
+        return new Response(JSON.stringify({ 
+          error: "Dados inválidos", 
+          details: errors.fieldErrors 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { email, password, name } = parseResult.data;
 
       // Create user with admin API
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
@@ -108,14 +154,28 @@ Deno.serve(async (req) => {
     }
 
     if (method === "DELETE") {
-      const { userId } = await req.json();
-
-      if (!userId) {
-        return new Response(JSON.stringify({ error: "User ID is required" }), {
+      let body;
+      try {
+        body = await req.json();
+      } catch {
+        return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      const parseResult = deleteUserSchema.safeParse(body);
+      if (!parseResult.success) {
+        return new Response(JSON.stringify({ 
+          error: "Dados inválidos", 
+          details: parseResult.error.flatten().fieldErrors 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { userId } = parseResult.data;
 
       // Prevent admin from deleting themselves
       if (userId === user.id) {
@@ -142,15 +202,28 @@ Deno.serve(async (req) => {
     }
 
     if (method === "PUT") {
-      // Update operator name or status
-      const { userId, name, is_active } = await req.json();
-
-      if (!userId) {
-        return new Response(JSON.stringify({ error: "User ID is required" }), {
+      let body;
+      try {
+        body = await req.json();
+      } catch {
+        return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      const parseResult = updateUserSchema.safeParse(body);
+      if (!parseResult.success) {
+        return new Response(JSON.stringify({ 
+          error: "Dados inválidos", 
+          details: parseResult.error.flatten().fieldErrors 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { userId, name, is_active } = parseResult.data;
 
       // Update user metadata if name provided
       if (name !== undefined) {
@@ -238,6 +311,7 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     const error = err as Error;
+    const corsHeaders = getCorsHeaders(req);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
