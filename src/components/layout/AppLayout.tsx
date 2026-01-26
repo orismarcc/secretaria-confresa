@@ -13,10 +13,10 @@ import {
   LogOut,
   Menu,
   X,
-  Tractor,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import logoTransparent from '@/assets/logo-transparent.png';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -36,15 +36,15 @@ const operatorNavItems = [
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const { user, logout, hasRole } = useAuth();
+  const { profile, role, logout, hasRole } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navItems = hasRole('admin') ? adminNavItems : operatorNavItems;
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 
@@ -70,8 +70,12 @@ export function AppLayout({ children }: AppLayoutProps) {
               {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </Button>
             
-            <div className="flex items-center gap-2">
-              <Tractor className="h-7 w-7" />
+            <div className="flex items-center gap-3">
+              <img 
+                src={logoTransparent} 
+                alt="Logo" 
+                className="h-10 w-auto"
+              />
               <div className="hidden sm:block">
                 <h1 className="text-lg font-bold leading-none">Secretaria de Agricultura</h1>
                 <p className="text-xs opacity-80">Sistema de Gestão de Demandas</p>
@@ -83,9 +87,9 @@ export function AppLayout({ children }: AppLayoutProps) {
             <OnlineIndicator className="hidden sm:flex" />
             
             <div className="hidden md:flex items-center gap-2 text-sm">
-              <span className="opacity-80">{user?.name}</span>
+              <span className="opacity-80">{profile?.name || 'Usuário'}</span>
               <span className="px-2 py-0.5 rounded-full bg-primary-foreground/20 text-xs uppercase">
-                {user?.role === 'admin' ? 'Admin' : 'Operador'}
+                {role === 'admin' ? 'Admin' : 'Operador'}
               </span>
             </div>
             
@@ -138,8 +142,12 @@ export function AppLayout({ children }: AppLayoutProps) {
             />
             <aside className="absolute left-0 top-0 bottom-0 w-72 bg-sidebar text-sidebar-foreground animate-slide-in">
               <div className="p-4 border-b border-sidebar-border">
-                <div className="flex items-center gap-2">
-                  <Tractor className="h-6 w-6" />
+                <div className="flex items-center gap-3">
+                  <img 
+                    src={logoTransparent} 
+                    alt="Logo" 
+                    className="h-10 w-auto"
+                  />
                   <span className="font-bold">Menu</span>
                 </div>
               </div>
@@ -170,8 +178,8 @@ export function AppLayout({ children }: AppLayoutProps) {
               <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-sidebar-border">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-sm">{user?.name}</p>
-                    <p className="text-xs opacity-70">{user?.email}</p>
+                    <p className="font-medium text-sm">{profile?.name || 'Usuário'}</p>
+                    <p className="text-xs opacity-70">{profile?.email}</p>
                   </div>
                   <OnlineIndicator />
                 </div>
