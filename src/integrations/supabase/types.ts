@@ -14,16 +14,354 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      demand_types: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+        }
+        Relationships: []
+      }
+      locations: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          settlement_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          settlement_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          settlement_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "locations_settlement_id_fkey"
+            columns: ["settlement_id"]
+            isOneToOne: false
+            referencedRelation: "settlements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      producer_demands: {
+        Row: {
+          created_at: string | null
+          demand_type_id: string
+          id: string
+          producer_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          demand_type_id: string
+          id?: string
+          producer_id: string
+        }
+        Update: {
+          created_at?: string | null
+          demand_type_id?: string
+          id?: string
+          producer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "producer_demands_demand_type_id_fkey"
+            columns: ["demand_type_id"]
+            isOneToOne: false
+            referencedRelation: "demand_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "producer_demands_producer_id_fkey"
+            columns: ["producer_id"]
+            isOneToOne: false
+            referencedRelation: "producers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      producers: {
+        Row: {
+          cpf: string
+          created_at: string | null
+          dap_cap: string | null
+          id: string
+          location_id: string | null
+          name: string
+          phone: string | null
+          property_name: string | null
+          property_size: number | null
+          settlement_id: string | null
+        }
+        Insert: {
+          cpf: string
+          created_at?: string | null
+          dap_cap?: string | null
+          id?: string
+          location_id?: string | null
+          name: string
+          phone?: string | null
+          property_name?: string | null
+          property_size?: number | null
+          settlement_id?: string | null
+        }
+        Update: {
+          cpf?: string
+          created_at?: string | null
+          dap_cap?: string | null
+          id?: string
+          location_id?: string | null
+          name?: string
+          phone?: string | null
+          property_name?: string | null
+          property_size?: number | null
+          settlement_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "producers_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "producers_settlement_id_fkey"
+            columns: ["settlement_id"]
+            isOneToOne: false
+            referencedRelation: "settlements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      service_photos: {
+        Row: {
+          captured_at: string | null
+          created_at: string | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          service_id: string
+          storage_path: string
+        }
+        Insert: {
+          captured_at?: string | null
+          created_at?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          service_id: string
+          storage_path: string
+        }
+        Update: {
+          captured_at?: string | null
+          created_at?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          service_id?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_photos_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      services: {
+        Row: {
+          completed_at: string | null
+          completion_notes: string | null
+          created_at: string | null
+          demand_type_id: string
+          id: string
+          latitude: number | null
+          location_id: string | null
+          longitude: number | null
+          notes: string | null
+          operator_id: string | null
+          priority: string
+          producer_id: string
+          scheduled_date: string
+          settlement_id: string | null
+          status: string
+          sync_status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          completion_notes?: string | null
+          created_at?: string | null
+          demand_type_id: string
+          id?: string
+          latitude?: number | null
+          location_id?: string | null
+          longitude?: number | null
+          notes?: string | null
+          operator_id?: string | null
+          priority?: string
+          producer_id: string
+          scheduled_date: string
+          settlement_id?: string | null
+          status?: string
+          sync_status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          completion_notes?: string | null
+          created_at?: string | null
+          demand_type_id?: string
+          id?: string
+          latitude?: number | null
+          location_id?: string | null
+          longitude?: number | null
+          notes?: string | null
+          operator_id?: string | null
+          priority?: string
+          producer_id?: string
+          scheduled_date?: string
+          settlement_id?: string | null
+          status?: string
+          sync_status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "services_demand_type_id_fkey"
+            columns: ["demand_type_id"]
+            isOneToOne: false
+            referencedRelation: "demand_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "services_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "services_producer_id_fkey"
+            columns: ["producer_id"]
+            isOneToOne: false
+            referencedRelation: "producers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "services_settlement_id_fkey"
+            columns: ["settlement_id"]
+            isOneToOne: false
+            referencedRelation: "settlements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      settlements: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "operator"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +488,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "operator"],
+    },
   },
 } as const
