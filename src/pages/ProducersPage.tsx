@@ -40,6 +40,7 @@ interface DbProducer {
   created_at?: string | null;
   settlements?: { name: string } | null;
   locations?: { name: string } | null;
+  producer_demands?: { demand_type_id: string }[] | null;
 }
 
 export default function ProducersPage() {
@@ -76,6 +77,7 @@ export default function ProducersPage() {
       property_name: data.propertyName,
       property_size: data.propertySize,
       dap_cap: data.dapCap,
+      demandTypeIds: data.demandTypeIds,
     });
     setFormOpen(false);
   };
@@ -92,6 +94,7 @@ export default function ProducersPage() {
         property_name: data.propertyName,
         property_size: data.propertySize,
         dap_cap: data.dapCap,
+        demandTypeIds: data.demandTypeIds,
       });
       setEditingProducer(null);
       setFormOpen(false);
@@ -131,6 +134,7 @@ export default function ProducersPage() {
   // Map producer for form/detail compatibility
   const mapProducerForDisplay = (p: DbProducer | null) => {
     if (!p) return null;
+    const demandTypeIds = p.producer_demands?.map(d => d.demand_type_id) || [];
     return {
       id: p.id,
       name: p.name,
@@ -139,7 +143,7 @@ export default function ProducersPage() {
       settlementId: p.settlement_id || '',
       locationId: p.location_id || '',
       locationName: p.location_name || '',
-      demandTypeIds: [],
+      demandTypeIds,
       createdAt: new Date(p.created_at || Date.now())
     };
   };

@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { LucideIcon } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -29,30 +30,27 @@ const iconStyles = {
   info: 'bg-info/20 text-info',
 };
 
-export function StatsCard({ 
-  title, 
-  value, 
-  icon: Icon, 
-  description, 
-  variant = 'default',
-  className 
-}: StatsCardProps) {
-  return (
-    <Card className={cn('card-interactive', variantStyles[variant], className)}>
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
-            <p className="text-3xl font-bold tracking-tight">{value}</p>
-            {description && (
-              <p className="text-xs text-muted-foreground">{description}</p>
-            )}
+export const StatsCard = forwardRef<HTMLDivElement, StatsCardProps>(
+  ({ title, value, icon: Icon, description, variant = 'default', className }, ref) => {
+    return (
+      <Card ref={ref} className={cn('card-interactive', variantStyles[variant], className)}>
+        <CardContent className="p-6">
+          <div className="flex items-start justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">{title}</p>
+              <p className="text-3xl font-bold tracking-tight">{value}</p>
+              {description && (
+                <p className="text-xs text-muted-foreground">{description}</p>
+              )}
+            </div>
+            <div className={cn('p-3 rounded-xl', iconStyles[variant])}>
+              <Icon className="h-6 w-6" />
+            </div>
           </div>
-          <div className={cn('p-3 rounded-xl', iconStyles[variant])}>
-            <Icon className="h-6 w-6" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+        </CardContent>
+      </Card>
+    );
+  }
+);
+
+StatsCard.displayName = 'StatsCard';
