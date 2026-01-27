@@ -43,7 +43,8 @@ export interface Producer {
   cpf: string;
   phone: string;
   settlementId: string;
-  locationId: string;
+  locationId?: string;
+  locationName?: string;
   demandTypeIds: string[]; // Categories the producer is linked to
   createdAt: Date;
 }

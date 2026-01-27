@@ -33,7 +33,7 @@ const producerSchema = z.object({
   cpf: z.string().min(11, 'CPF inválido').max(14, 'CPF inválido'),
   phone: z.string().min(10, 'Telefone inválido').max(15, 'Telefone inválido'),
   settlementId: z.string().min(1, 'Selecione um assentamento'),
-  locationId: z.string().optional(),
+  locationName: z.string().optional(),
   demandTypeIds: z.array(z.string()).min(1, 'Selecione pelo menos um tipo de demanda'),
 });
 
@@ -65,13 +65,12 @@ export function ProducerForm({
       cpf: producer?.cpf || '',
       phone: producer?.phone || '',
       settlementId: producer?.settlementId || '',
-      locationId: producer?.locationId || '',
+      locationName: producer?.locationName || '',
       demandTypeIds: producer?.demandTypeIds || [],
     },
   });
 
   const selectedSettlementId = form.watch('settlementId');
-  const filteredLocations = locations.filter(l => l.settlementId === selectedSettlementId);
 
   useEffect(() => {
     if (producer) {
@@ -80,7 +79,7 @@ export function ProducerForm({
         cpf: producer.cpf,
         phone: producer.phone,
         settlementId: producer.settlementId,
-        locationId: producer.locationId,
+        locationName: producer.locationName || '',
         demandTypeIds: producer.demandTypeIds,
       });
     } else {
@@ -89,7 +88,7 @@ export function ProducerForm({
         cpf: '',
         phone: '',
         settlementId: '',
-        locationId: '',
+        locationName: '',
         demandTypeIds: [],
       });
     }
@@ -183,7 +182,6 @@ export function ProducerForm({
                     <Select 
                       onValueChange={(value) => {
                         field.onChange(value);
-                        form.setValue('locationId', '');
                       }} 
                       value={field.value}
                     >
@@ -204,26 +202,13 @@ export function ProducerForm({
               />
               <FormField
                 control={form.control}
-                name="locationId"
+                name="locationName"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Localidade</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      value={field.value}
-                      disabled={!selectedSettlementId}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder={selectedSettlementId ? "Selecione" : "Selecione um assentamento primeiro"} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {filteredLocations.map((l) => (
-                          <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <Input placeholder="Digite a localidade" {...field} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

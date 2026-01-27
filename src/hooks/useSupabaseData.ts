@@ -294,6 +294,7 @@ export function useCreateProducer() {
       phone?: string;
       settlement_id?: string;
       location_id?: string;
+      location_name?: string;
       property_name?: string;
       property_size?: number;
       dap_cap?: string;
