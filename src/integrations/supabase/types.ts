@@ -110,6 +110,7 @@ export type Database = {
           dap_cap: string | null
           id: string
           location_id: string | null
+          location_name: string | null
           name: string
           phone: string | null
           property_name: string | null
@@ -122,6 +123,7 @@ export type Database = {
           dap_cap?: string | null
           id?: string
           location_id?: string | null
+          location_name?: string | null
           name: string
           phone?: string | null
           property_name?: string | null
@@ -134,6 +136,7 @@ export type Database = {
           dap_cap?: string | null
           id?: string
           location_id?: string | null
+          location_name?: string | null
           name?: string
           phone?: string | null
           property_name?: string | null

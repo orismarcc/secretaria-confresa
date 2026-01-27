@@ -33,6 +33,7 @@ interface DbProducer {
   phone?: string | null;
   settlement_id?: string | null;
   location_id?: string | null;
+  location_name?: string | null;
   property_name?: string | null;
   property_size?: number | null;
   dap_cap?: string | null;
@@ -71,7 +72,7 @@ export default function ProducersPage() {
       cpf: data.cpf,
       phone: data.phone,
       settlement_id: data.settlementId,
-      location_id: data.locationId,
+      location_name: data.locationName,
       property_name: data.propertyName,
       property_size: data.propertySize,
       dap_cap: data.dapCap,
@@ -87,7 +88,7 @@ export default function ProducersPage() {
         cpf: data.cpf,
         phone: data.phone,
         settlement_id: data.settlementId,
-        location_id: data.locationId,
+        location_name: data.locationName,
         property_name: data.propertyName,
         property_size: data.propertySize,
         dap_cap: data.dapCap,
@@ -137,6 +138,7 @@ export default function ProducersPage() {
       phone: p.phone || '',
       settlementId: p.settlement_id || '',
       locationId: p.location_id || '',
+      locationName: p.location_name || '',
       demandTypeIds: [],
       createdAt: new Date(p.created_at || Date.now())
     };
