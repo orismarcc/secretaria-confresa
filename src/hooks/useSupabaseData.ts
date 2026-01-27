@@ -275,11 +275,28 @@ export function useProducers() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('producers')
-        .select('*, settlements(name), locations(name)')
+        .select('*, settlements(name), locations(name), producer_demands(demand_type_id)')
         .order('name');
       if (error) throw error;
       return data;
     },
+  });
+}
+
+// Get producer demands
+export function useProducerDemands(producerId: string | undefined) {
+  return useQuery({
+    queryKey: ['producer_demands', producerId],
+    queryFn: async () => {
+      if (!producerId) return [];
+      const { data, error } = await supabase
+        .from('producer_demands')
+        .select('demand_type_id')
+        .eq('producer_id', producerId);
+      if (error) throw error;
+      return data.map(d => d.demand_type_id);
+    },
+    enabled: !!producerId,
   });
 }
 
@@ -298,17 +315,34 @@ export function useCreateProducer() {
       property_name?: string;
       property_size?: number;
       dap_cap?: string;
+      demandTypeIds?: string[];
     }) => {
+      const { demandTypeIds, ...producerData } = producer;
+      
       const { data, error } = await supabase
         .from('producers')
-        .insert(producer)
+        .insert(producerData)
         .select()
         .single();
       if (error) throw error;
+
+      // Insert producer demands if provided
+      if (demandTypeIds && demandTypeIds.length > 0) {
+        const demands = demandTypeIds.map(demandTypeId => ({
+          producer_id: data.id,
+          demand_type_id: demandTypeId,
+        }));
+        const { error: demandError } = await supabase
+          .from('producer_demands')
+          .insert(demands);
+        if (demandError) throw demandError;
+      }
+
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['producers'] });
+      queryClient.invalidateQueries({ queryKey: ['producer_demands'] });
       toast({ title: 'Produtor cadastrado!' });
     },
     onError: (error: Error) => {
@@ -322,7 +356,7 @@ export function useUpdateProducer() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; [key: string]: unknown }) => {
+    mutationFn: async ({ id, demandTypeIds, ...updates }: { id: string; demandTypeIds?: string[]; [key: string]: unknown }) => {
       const { data, error } = await supabase
         .from('producers')
         .update(updates)
@@ -330,10 +364,33 @@ export function useUpdateProducer() {
         .select()
         .single();
       if (error) throw error;
+
+      // Update producer demands if provided
+      if (demandTypeIds !== undefined) {
+        // Delete existing demands
+        await supabase
+          .from('producer_demands')
+          .delete()
+          .eq('producer_id', id);
+
+        // Insert new demands
+        if (demandTypeIds.length > 0) {
+          const demands = demandTypeIds.map(demandTypeId => ({
+            producer_id: id,
+            demand_type_id: demandTypeId,
+          }));
+          const { error: demandError } = await supabase
+            .from('producer_demands')
+            .insert(demands);
+          if (demandError) throw demandError;
+        }
+      }
+
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['producers'] });
+      queryClient.invalidateQueries({ queryKey: ['producer_demands'] });
       toast({ title: 'Produtor atualizado!' });
     },
     onError: (error: Error) => {
@@ -348,11 +405,14 @@ export function useDeleteProducer() {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      // Delete producer demands first
+      await supabase.from('producer_demands').delete().eq('producer_id', id);
       const { error } = await supabase.from('producers').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['producers'] });
+      queryClient.invalidateQueries({ queryKey: ['producer_demands'] });
       toast({ title: 'Produtor removido!' });
     },
     onError: (error: Error) => {
