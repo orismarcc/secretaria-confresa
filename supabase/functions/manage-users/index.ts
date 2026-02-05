@@ -4,7 +4,7 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 // CORS headers - allow all origins for simplicity
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 };
 
@@ -128,6 +128,20 @@ Deno.serve(async (req) => {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+
+      // Create profile record for the operator
+      const { error: profileError } = await supabaseAdmin
+        .from("profiles")
+        .upsert({ 
+          id: newUser.user.id, 
+          email: email, 
+          name: name 
+        });
+
+      if (profileError) {
+        console.error("Failed to create profile:", profileError);
+        // Don't rollback for profile error, just log it
       }
 
       return new Response(JSON.stringify({ 
@@ -270,15 +284,43 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Get profiles for all operators
+      // Get profiles for all operators first
       const userIds = operators.map(op => op.user_id);
       const { data: profiles } = await supabaseAdmin
         .from("profiles")
         .select("id, name, email, created_at")
         .in("id", userIds);
 
-      const operatorsWithProfiles = operators.map(op => {
+      // For operators without profiles, fetch from auth.users
+      const operatorsWithProfiles = await Promise.all(operators.map(async (op) => {
         const profile = profiles?.find(p => p.id === op.user_id);
+        
+        // If no profile found, try to get from auth.users
+        if (!profile || !profile.name || profile.name === "Sem nome") {
+          const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(op.user_id);
+          if (authUser?.user) {
+            const name = authUser.user.user_metadata?.name || "Sem nome";
+            const email = authUser.user.email || "";
+            
+            // Create/update profile for this user
+            await supabaseAdmin
+              .from("profiles")
+              .upsert({ 
+                id: op.user_id, 
+                email: email, 
+                name: name 
+              });
+            
+            return {
+              id: op.user_id,
+              name: name,
+              email: email,
+              created_at: authUser.user.created_at || op.created_at,
+              is_active: op.is_active,
+            };
+          }
+        }
+        
         return {
           id: op.user_id,
           name: profile?.name || "Sem nome",
@@ -286,7 +328,7 @@ Deno.serve(async (req) => {
           created_at: profile?.created_at || op.created_at,
           is_active: op.is_active,
         };
-      });
+      }));
 
       return new Response(JSON.stringify({ operators: operatorsWithProfiles }), {
         status: 200,
