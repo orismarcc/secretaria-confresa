@@ -226,15 +226,16 @@ export default function ServicesPage() {
     };
   };
 
-  // Map data for form compatibility
-  const mappedProducers = producers.map(p => ({
+  // Map data for form compatibility - include producer demands for filtering
+  const mappedProducers = producers.map((p: any) => ({
     id: p.id,
     name: p.name,
     cpf: p.cpf,
     phone: p.phone || '',
     settlementId: p.settlement_id || '',
     locationId: p.location_id || '',
-    demandTypeIds: [],
+    locationName: p.location_name || '',
+    demandTypeIds: p.producer_demands?.map((d: { demand_type_id: string }) => d.demand_type_id) || [],
     createdAt: new Date(p.created_at || Date.now())
   }));
 

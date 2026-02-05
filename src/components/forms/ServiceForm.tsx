@@ -180,7 +180,7 @@ export function ServiceForm({
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                     <div><strong>Telefone:</strong> {selectedProducer.phone}</div>
                     <div><strong>Assentamento:</strong> {settlements.find(s => s.id === selectedProducer.settlementId)?.name}</div>
-                    <div><strong>Localidade:</strong> {locations.find(l => l.id === selectedProducer.locationId)?.name}</div>
+                    <div><strong>Localidade:</strong> {selectedProducer.locationName || 'Não informada'}</div>
                   </div>
                 </div>
               )}
