@@ -20,6 +20,7 @@ import {
 } from '@/hooks/useSupabaseData';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface DbService {
   id: string;
@@ -44,6 +45,7 @@ interface DbService {
 export default function OperatorPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   
   const { data: pendingServices = [], isLoading } = usePendingServices();
   const { data: settlements = [] } = useSettlements();
@@ -71,9 +73,14 @@ export default function OperatorPage() {
     };
   }, [queryClient]);
 
-  const handleStatusChange = (id: string, newStatus: 'pending' | 'in_progress' | 'completed') => {
-    updateService.mutate({ id, status: newStatus });
-    toast({ title: 'Atendimento iniciado!' });
+  const handleStartService = (id: string) => {
+    // When operator starts a service, assign it to themselves
+    updateService.mutate({ 
+      id, 
+      status: 'in_progress',
+      operator_id: user?.id 
+    });
+    toast({ title: 'Atendimento iniciado! Atribuído a você.' });
   };
 
   const handleOpenFinalize = (service: DbService) => {
@@ -211,7 +218,7 @@ export default function OperatorPage() {
                     {service.status === 'pending' && (
                       <Button 
                         className="flex-1" 
-                        onClick={() => handleStatusChange(service.id, 'in_progress')}
+                        onClick={() => handleStartService(service.id)}
                         disabled={updateService.isPending}
                       >
                         Iniciar
