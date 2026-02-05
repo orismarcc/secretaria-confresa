@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ServiceDetailView } from '@/components/ServiceDetailView';
 import {
   useServices,
   useProducers,
@@ -304,6 +305,7 @@ export default function ServicesPage() {
   const detailDemandType = detailService ? demandTypes.find(d => d.id === detailService.demand_type_id) : null;
   const detailSettlement = detailService ? settlements.find(s => s.id === detailService.settlement_id) : null;
   const detailLocation = detailService ? locations.find(l => l.id === detailService.location_id) : null;
+  const detailProducerFull = detailService ? producers.find(p => p.id === detailService.producer_id) : null;
 
   if (servicesLoading) {
     return (
@@ -367,73 +369,20 @@ export default function ServicesPage() {
           </SheetHeader>
           
           {detailService && (
-            <div className="mt-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Status</span>
-                <StatusBadge status={detailService.status as 'pending' | 'in_progress' | 'completed'} />
-              </div>
-
-              <Separator />
-
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm text-muted-foreground">Produtor</p>
-                  <p className="font-medium">{detailProducer?.name || detailService.producers?.name || 'N/A'}</p>
-                  <p className="text-sm text-muted-foreground">{detailProducer?.cpf}</p>
-                </div>
-
-                <div>
-                  <p className="text-sm text-muted-foreground">Tipo de Demanda</p>
-                  <p className="font-medium">{detailDemandType?.name || detailService.demand_types?.name || 'N/A'}</p>
-                </div>
-
-                <div>
-                  <p className="text-sm text-muted-foreground">Localização</p>
-                  <p className="font-medium">{detailSettlement?.name || detailService.settlements?.name || 'N/A'}</p>
-                  <p className="text-sm">{detailLocation?.name || detailService.locations?.name || 'N/A'}</p>
-                </div>
-
-                <div>
-                  <p className="text-sm text-muted-foreground">Data Agendada</p>
-                  <p className="font-medium">
-                    {format(new Date(detailService.scheduled_date), 'dd/MM/yyyy', { locale: ptBR })}
-                  </p>
-                </div>
-
-                {detailService.notes && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Observações</p>
-                    <p className="font-medium">{detailService.notes}</p>
-                  </div>
-                )}
-              </div>
-
-              <Separator />
-
-              <div className="flex flex-col gap-2">
-                {detailService.status !== 'completed' && (
-                  <Button 
-                    onClick={() => openArchiveDialog(detailService)}
-                    className="w-full bg-success hover:bg-success/90"
-                  >
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Finalizar Atendimento
-                  </Button>
-                )}
-                <Button variant="outline" onClick={() => openEditForm(detailService)} className="w-full">
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Editar
-                </Button>
-                <Button 
-                  variant="destructive" 
-                  onClick={() => openDeleteDialog(detailService)}
-                  className="w-full"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Excluir
-                </Button>
-              </div>
-            </div>
+            <ServiceDetailView
+              service={detailService}
+              producer={detailProducerFull ? {
+                name: detailProducerFull.name,
+                cpf: detailProducerFull.cpf,
+                location_name: detailProducerFull.location_name || undefined,
+              } : null}
+              demandType={detailDemandType ? { name: detailDemandType.name } : null}
+              settlement={detailSettlement ? { name: detailSettlement.name } : null}
+              location={detailLocation ? { name: detailLocation.name } : null}
+              onEdit={() => openEditForm(detailService)}
+              onDelete={() => openDeleteDialog(detailService)}
+              onFinalize={detailService.status !== 'completed' ? () => openArchiveDialog(detailService) : undefined}
+            />
           )}
         </SheetContent>
       </Sheet>

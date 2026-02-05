@@ -18,6 +18,7 @@ import {
   useLocations,
   useUpdateService
 } from '@/hooks/useSupabaseData';
+import { useUploadServicePhoto } from '@/hooks/usePhotoSync';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
@@ -51,6 +52,7 @@ export default function OperatorPage() {
   const { data: settlements = [] } = useSettlements();
   const { data: locations = [] } = useLocations();
   const updateService = useUpdateService();
+  const uploadPhoto = useUploadServicePhoto();
   
   const [selectedService, setSelectedService] = useState<DbService | null>(null);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
@@ -95,20 +97,35 @@ export default function OperatorPage() {
   }) => {
     if (!selectedService) return;
     
+    // Upload photo to Supabase Storage if captured
+    if (data.photo) {
+      import('@/lib/imageStorage').then(({ getPhotoBlob }) => {
+        getPhotoBlob(data.photo!.localBlobKey).then((blob) => {
+          if (blob) {
+            uploadPhoto.mutate({
+              photoBlob: blob,
+              serviceId: selectedService.id,
+              localPhotoId: data.photo!.id,
+              latitude: data.latitude,
+              longitude: data.longitude,
+            });
+          }
+        });
+      });
+    }
+    
     updateService.mutate({
       id: selectedService.id,
       status: 'completed',
       completed_at: new Date().toISOString(),
       latitude: data.latitude,
       longitude: data.longitude,
-      sync_status: data.photo ? 'pending' : 'synced',
+      sync_status: 'synced',
     });
     
     toast({
       title: 'Atendimento finalizado!',
-      description: data.photo 
-        ? 'Foto salva. Sincronizará quando online.' 
-        : 'Atendimento concluído com sucesso.',
+      description: 'Atendimento concluído com sucesso.',
     });
     
     setSelectedService(null);
@@ -202,7 +219,7 @@ export default function OperatorPage() {
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <MapPin className="h-4 w-4" />
-                      {settlement?.name || service.settlements?.name || 'N/A'} - {location?.name || service.locations?.name || 'N/A'}
+                      {settlement?.name || service.settlements?.name || 'N/A'} - {(service.producers as any)?.location_name || location?.name || service.locations?.name || 'N/A'}
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <User className="h-4 w-4" />
