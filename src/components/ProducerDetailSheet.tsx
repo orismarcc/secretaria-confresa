@@ -6,7 +6,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Pencil, Trash2, MapPin, Phone, User, FileText } from 'lucide-react';
+import { Pencil, Trash2, MapPin, Phone, User, FileText, Home } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 interface ProducerDetailSheetProps {
@@ -83,9 +83,16 @@ export function ProducerDetailSheet({
             <div className="flex items-start gap-3">
               <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
               <div>
-                <p className="text-sm text-muted-foreground">Localização</p>
+                <p className="text-sm text-muted-foreground">Assentamento</p>
                 <p className="font-medium">{settlement?.name || 'N/A'}</p>
-                <p className="text-sm text-muted-foreground">{location?.name || 'N/A'}</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <Home className="h-5 w-5 text-muted-foreground mt-0.5" />
+              <div>
+                <p className="text-sm text-muted-foreground">Localidade</p>
+                <p className="font-medium">{producer.locationName || 'Não informada'}</p>
               </div>
             </div>
           </div>

@@ -46,6 +46,9 @@ export interface Producer {
   locationId?: string;
   locationName?: string;
   demandTypeIds: string[]; // Categories the producer is linked to
+  propertyName?: string;
+  propertySize?: number;
+  dapCap?: string;
   createdAt: Date;
 }
 
