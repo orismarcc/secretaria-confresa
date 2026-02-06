@@ -57,12 +57,30 @@
    const { photos, isLoading: photosLoading } = useCombinedServicePhotos(service.id);
    const isCompleted = service.status === 'completed';
  
-   const openInMaps = () => {
-     if (service.latitude && service.longitude) {
-       const url = `https://www.google.com/maps?q=${service.latitude},${service.longitude}`;
-       window.open(url, '_blank');
-     }
-   };
+  const openInMaps = () => {
+    if (service.latitude && service.longitude) {
+      // Try geo: URI first (works on mobile), fallback to Google Maps web
+      const geoUrl = `geo:${service.latitude},${service.longitude}?q=${service.latitude},${service.longitude}`;
+      const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${service.latitude},${service.longitude}`;
+      
+      // Create a temporary link to test geo: support
+      const link = document.createElement('a');
+      link.href = geoUrl;
+      
+      // On mobile devices, geo: should work. On desktop, use Google Maps
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        window.location.href = geoUrl;
+        // Fallback to Google Maps after a short delay if geo: doesn't work
+        setTimeout(() => {
+          window.open(googleMapsUrl, '_blank', 'noopener,noreferrer');
+        }, 500);
+      } else {
+        window.open(googleMapsUrl, '_blank', 'noopener,noreferrer');
+      }
+    }
+  };
  
    return (
      <div className="mt-6 space-y-4">
@@ -159,21 +177,21 @@
                  <p className="text-sm text-muted-foreground">Fotos do Atendimento</p>
                </div>
                
-               {photosLoading ? (
-                 <Skeleton className="h-32 w-full rounded-lg" />
-               ) : photos.length > 0 ? (
-                 <div className="grid grid-cols-2 gap-2">
-                   {photos.map((photo) => (
-                     <div key={photo.id} className="aspect-square rounded-lg overflow-hidden border">
-                       <img 
-                         src={photo.url} 
-                         alt="Foto do atendimento"
-                         className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                         onClick={() => window.open(photo.url, '_blank')}
-                       />
-                     </div>
-                   ))}
-                 </div>
+                {photosLoading ? (
+                  <Skeleton className="h-48 w-32 rounded-lg" />
+                ) : photos.length > 0 ? (
+                  <div className="flex gap-2 overflow-x-auto pb-2">
+                    {photos.map((photo) => (
+                      <div key={photo.id} className="aspect-[9/16] h-48 flex-shrink-0 rounded-lg overflow-hidden border">
+                        <img 
+                          src={photo.url} 
+                          alt="Foto do atendimento"
+                          className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => window.open(photo.url, '_blank')}
+                        />
+                      </div>
+                    ))}
+                  </div>
                ) : (
                  <div className="bg-muted rounded-lg p-4 text-center text-sm text-muted-foreground">
                    Nenhuma foto registrada

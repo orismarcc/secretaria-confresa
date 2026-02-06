@@ -96,18 +96,45 @@ export function useCamera(): UseCameraReturn {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       
-      // Set canvas size to match video
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      const videoWidth = video.videoWidth;
+      const videoHeight = video.videoHeight;
       
-      // Draw current video frame to canvas
+      // Force portrait orientation (9:16 aspect ratio)
+      // If the video is landscape, we'll crop to portrait
+      let sourceX = 0;
+      let sourceY = 0;
+      let sourceWidth = videoWidth;
+      let sourceHeight = videoHeight;
+      
+      const isLandscape = videoWidth > videoHeight;
+      
+      if (isLandscape) {
+        // Crop from center to get portrait
+        const targetRatio = 9 / 16;
+        const newWidth = videoHeight * targetRatio;
+        sourceX = (videoWidth - newWidth) / 2;
+        sourceWidth = newWidth;
+      }
+      
+      // Set canvas to portrait dimensions (1080x1920 or proportional)
+      const outputWidth = 1080;
+      const outputHeight = 1920;
+      canvas.width = outputWidth;
+      canvas.height = outputHeight;
+      
+      // Draw current video frame to canvas with portrait orientation
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         setError('Erro ao capturar imagem');
         return null;
       }
       
-      ctx.drawImage(video, 0, 0);
+      // Draw and scale to fill the portrait canvas
+      ctx.drawImage(
+        video, 
+        sourceX, sourceY, sourceWidth, sourceHeight,
+        0, 0, outputWidth, outputHeight
+      );
       
       // Convert canvas to blob
       return new Promise((resolve) => {
@@ -126,6 +153,7 @@ export function useCamera(): UseCameraReturn {
   }, []);
 
   // Fallback: capture from file input (for devices without camera API)
+  // Forces portrait orientation (9:16 aspect ratio) for Instagram Stories
   const captureFromFile = useCallback(async (file: File): Promise<Blob | null> => {
     if (!file.type.startsWith('image/')) {
       setError('Arquivo deve ser uma imagem');
@@ -133,36 +161,58 @@ export function useCamera(): UseCameraReturn {
     }
 
     try {
-      // Compress/resize if needed
       return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const maxSize = 1920;
           
-          let { width, height } = img;
+          // Target portrait dimensions (9:16 aspect ratio for Stories)
+          const outputWidth = 1080;
+          const outputHeight = 1920;
+          const targetRatio = outputWidth / outputHeight; // 0.5625
           
-          if (width > maxSize || height > maxSize) {
-            if (width > height) {
-              height = (height / width) * maxSize;
-              width = maxSize;
-            } else {
-              width = (width / height) * maxSize;
-              height = maxSize;
-            }
-          }
-          
-          canvas.width = width;
-          canvas.height = height;
+          canvas.width = outputWidth;
+          canvas.height = outputHeight;
           
           const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
+          if (!ctx) {
+            setError('Erro ao processar imagem');
+            resolve(null);
+            return;
+          }
+          
+          const imgRatio = img.width / img.height;
+          
+          let sourceX = 0;
+          let sourceY = 0;
+          let sourceWidth = img.width;
+          let sourceHeight = img.height;
+          
+          if (imgRatio > targetRatio) {
+            // Image is wider - crop sides
+            sourceWidth = img.height * targetRatio;
+            sourceX = (img.width - sourceWidth) / 2;
+          } else {
+            // Image is taller - crop top/bottom
+            sourceHeight = img.width / targetRatio;
+            sourceY = (img.height - sourceHeight) / 2;
+          }
+          
+          // Draw cropped and scaled to portrait canvas
+          ctx.drawImage(
+            img,
+            sourceX, sourceY, sourceWidth, sourceHeight,
+            0, 0, outputWidth, outputHeight
+          );
           
           canvas.toBlob(
             (blob) => resolve(blob),
             'image/jpeg',
             0.85
           );
+          
+          // Cleanup
+          URL.revokeObjectURL(img.src);
         };
         
         img.onerror = () => {
