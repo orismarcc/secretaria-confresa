@@ -7,10 +7,10 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ServiceWithRelations, ServicePhoto } from '@/types';
+import { ServiceWithRelations } from '@/types';
 import { useCamera } from '@/hooks/useCamera';
 import { useGeolocation } from '@/hooks/useGeolocation';
-import { savePhotoBlob } from '@/lib/imageStorage';
+import { supabase } from '@/integrations/supabase/client';
 import { Camera, MapPin, Check, X, RotateCcw, Upload, Loader2 } from 'lucide-react';
 
 interface FinalizeServiceModalProps {
@@ -18,7 +18,7 @@ interface FinalizeServiceModalProps {
   onOpenChange: (open: boolean) => void;
   service: ServiceWithRelations | null;
   onFinalize: (data: {
-    photo?: ServicePhoto;
+    photoStoragePath?: string;
     latitude?: number;
     longitude?: number;
   }) => void;
@@ -148,21 +148,46 @@ export function FinalizeServiceModal({
     setIsProcessing(true);
     
     try {
-      let savedPhoto: ServicePhoto | undefined;
+      let photoStoragePath: string | undefined;
       
-      // Save photo to IndexedDB if captured
+      // Upload photo directly to Supabase Storage
       if (photoBlob) {
-        savedPhoto = await savePhotoBlob(
-          photoBlob,
-          service.id,
-          service.producerId,
-          service.demandTypeId
-        );
+        const timestamp = Date.now();
+        const filename = `${service.id}/${timestamp}.jpg`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('service-photos')
+          .upload(filename, photoBlob, {
+            contentType: 'image/jpeg',
+            cacheControl: '3600',
+          });
+        
+        if (uploadError) {
+          console.error('Erro ao fazer upload da foto:', uploadError);
+          throw uploadError;
+        }
+        
+        photoStoragePath = filename;
+        
+        // Create record in service_photos table
+        const { error: dbError } = await supabase
+          .from('service_photos')
+          .insert({
+            service_id: service.id,
+            storage_path: filename,
+            latitude: capturedCoords?.latitude,
+            longitude: capturedCoords?.longitude,
+            captured_at: new Date().toISOString(),
+          });
+        
+        if (dbError) {
+          console.error('Erro ao salvar registro da foto:', dbError);
+        }
       }
       
       // Call the finalize handler with captured data
       onFinalize({
-        photo: savedPhoto,
+        photoStoragePath,
         latitude: capturedCoords?.latitude,
         longitude: capturedCoords?.longitude,
       });
@@ -240,10 +265,10 @@ export function FinalizeServiceModal({
               </>
             )}
 
-            {/* Camera View */}
+            {/* Camera View - Portrait Mode for Stories */}
             {showCamera && (
               <div className="space-y-4">
-                <div className="relative aspect-[4/3] bg-black rounded-lg overflow-hidden">
+                <div className="relative aspect-[9/16] max-h-[60vh] bg-black rounded-lg overflow-hidden mx-auto">
                   <video
                     ref={videoRef}
                     autoPlay
@@ -289,10 +314,10 @@ export function FinalizeServiceModal({
               </div>
             )}
 
-            {/* Photo Preview */}
+            {/* Photo Preview - Portrait Mode */}
             {photoPreview && (
               <div className="space-y-4">
-                <div className="relative aspect-[4/3] rounded-lg overflow-hidden border">
+                <div className="relative aspect-[9/16] max-h-[50vh] rounded-lg overflow-hidden border mx-auto">
                   <img
                     src={photoPreview}
                     alt="Preview"
