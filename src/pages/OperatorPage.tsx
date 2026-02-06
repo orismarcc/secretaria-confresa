@@ -4,7 +4,6 @@ import { PageHeader } from '@/components/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/StatusBadge';
-import { ServicePhoto } from '@/types';
 import { MapPin, Phone, User, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -18,7 +17,6 @@ import {
   useLocations,
   useUpdateService
 } from '@/hooks/useSupabaseData';
-import { useUploadServicePhoto } from '@/hooks/usePhotoSync';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
@@ -52,7 +50,6 @@ export default function OperatorPage() {
   const { data: settlements = [] } = useSettlements();
   const { data: locations = [] } = useLocations();
   const updateService = useUpdateService();
-  const uploadPhoto = useUploadServicePhoto();
   
   const [selectedService, setSelectedService] = useState<DbService | null>(null);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
@@ -91,29 +88,13 @@ export default function OperatorPage() {
   };
 
   const handleFinalize = (data: {
-    photo?: ServicePhoto;
+    photoStoragePath?: string;
     latitude?: number;
     longitude?: number;
   }) => {
     if (!selectedService) return;
     
-    // Upload photo to Supabase Storage if captured
-    if (data.photo) {
-      import('@/lib/imageStorage').then(({ getPhotoBlob }) => {
-        getPhotoBlob(data.photo!.localBlobKey).then((blob) => {
-          if (blob) {
-            uploadPhoto.mutate({
-              photoBlob: blob,
-              serviceId: selectedService.id,
-              localPhotoId: data.photo!.id,
-              latitude: data.latitude,
-              longitude: data.longitude,
-            });
-          }
-        });
-      });
-    }
-    
+    // Photo is already uploaded in the modal, just update the service
     updateService.mutate({
       id: selectedService.id,
       status: 'completed',
