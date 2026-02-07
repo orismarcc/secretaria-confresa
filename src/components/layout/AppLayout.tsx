@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   UserCog,
+  BarChart3,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -25,6 +26,7 @@ interface AppLayoutProps {
 
 const adminNavItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/analytics', label: 'Análises', icon: BarChart3 },
   { path: '/services', label: 'Atendimentos', icon: ClipboardList },
   { path: '/producers', label: 'Produtores', icon: Users },
   { path: '/operators', label: 'Operadores', icon: UserCog },
