@@ -18,7 +18,7 @@ import {
 } from 'recharts';
 import { format, parseISO, startOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { TrendingUp, MapPin, ClipboardList, Trophy, Medal, Award } from 'lucide-react';
+import { TrendingUp, MapPin, ClipboardList, Trophy, Medal, Award, Tractor } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Custom tooltip component
@@ -160,6 +160,13 @@ export default function AnalyticsPage() {
       .slice(0, 3);
   }, [services, demandTypes]);
 
+  // Total worked area (only from completed services with worked_area)
+  const totalWorkedArea = useMemo(() => {
+    return services
+      .filter(s => s.status === 'completed' && (s as any).worked_area)
+      .reduce((acc, s) => acc + (Number((s as any).worked_area) || 0), 0);
+  }, [services]);
+
   const positionIcons = [Trophy, Medal, Award];
   const positionColors = [
     "bg-amber-500/20 text-amber-500",
@@ -187,6 +194,25 @@ export default function AnalyticsPage() {
         </div>
       ) : (
         <div className="space-y-6">
+          {/* Total Worked Area Metric Card */}
+          <Card className="overflow-hidden bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-background">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg shadow-amber-500/30">
+                  <Tractor className="h-8 w-8 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                    Total de Área Trabalhada com Grade
+                  </p>
+                  <p className="text-4xl font-black text-foreground">
+                    {totalWorkedArea.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xl font-medium text-muted-foreground">ha</span>
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Charts Section */}
           <div className="grid gap-6 lg:grid-cols-2">
             {/* Completed Services Chart */}

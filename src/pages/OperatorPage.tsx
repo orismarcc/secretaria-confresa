@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/StatusBadge';
-import { MapPin, Phone, User, Calendar } from 'lucide-react';
+import { MapPin, Phone, User, Calendar, GripVertical } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { OnlineIndicator } from '@/components/ConnectionStatus';
@@ -15,11 +15,31 @@ import {
   usePendingServices,
   useSettlements,
   useLocations,
-  useUpdateService
+  useUpdateService,
+  useUpdateServicePositions
 } from '@/hooks/useSupabaseData';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { cn } from '@/lib/utils';
 
 interface DbService {
   id: string;
@@ -35,10 +55,119 @@ interface DbService {
   operator_id?: string | null;
   latitude?: number | null;
   longitude?: number | null;
-  producers?: { name: string; cpf: string; phone?: string | null } | null;
+  position?: number | null;
+  producers?: { name: string; cpf: string; phone?: string | null; location_name?: string | null } | null;
   demand_types?: { name: string } | null;
   settlements?: { name: string } | null;
   locations?: { name: string } | null;
+}
+
+// Sortable Card Component for Operator
+interface SortableOperatorCardProps {
+  service: DbService;
+  settlementName: string;
+  locationName: string;
+  onStart: (id: string) => void;
+  onFinalize: (service: DbService) => void;
+  isPending: boolean;
+}
+
+function SortableOperatorCard({
+  service,
+  settlementName,
+  locationName,
+  onStart,
+  onFinalize,
+  isPending,
+}: SortableOperatorCardProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: service.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <Card
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "overflow-hidden transition-all",
+        isDragging && "opacity-50 shadow-lg scale-[1.02] z-50"
+      )}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-start gap-2">
+          {/* Drag Handle */}
+          <button
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-muted touch-none mt-1"
+            aria-label="Arrastar para reordenar"
+          >
+            <GripVertical className="h-5 w-5 text-muted-foreground" />
+          </button>
+
+          <div className="flex-1">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="font-semibold text-lg">{service.producers?.name || 'N/A'}</p>
+                <p className="text-sm text-primary">{service.demand_types?.name}</p>
+              </div>
+              <StatusBadge status={service.status as 'pending' | 'in_progress' | 'completed'} />
+            </div>
+            
+            <div className="grid gap-2 text-sm mb-4">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Calendar className="h-4 w-4" />
+                {format(new Date(service.scheduled_date), "dd/MM/yyyy", { locale: ptBR })}
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <MapPin className="h-4 w-4" />
+                {settlementName} - {locationName}
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <User className="h-4 w-4" />
+                {service.producers?.cpf || 'N/A'}
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Phone className="h-4 w-4" />
+                {service.producers?.phone || 'N/A'}
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              {service.status === 'pending' && (
+                <Button 
+                  className="flex-1" 
+                  onClick={() => onStart(service.id)}
+                  disabled={isPending}
+                >
+                  Iniciar
+                </Button>
+              )}
+              {service.status === 'in_progress' && (
+                <Button 
+                  className="flex-1 bg-success hover:bg-success/90" 
+                  onClick={() => onFinalize(service)}
+                  disabled={isPending}
+                >
+                  Finalizar
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function OperatorPage() {
@@ -46,13 +175,42 @@ export default function OperatorPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   
-  const { data: pendingServices = [], isLoading } = usePendingServices();
+  const { data: pendingServicesRaw = [], isLoading } = usePendingServices();
   const { data: settlements = [] } = useSettlements();
   const { data: locations = [] } = useLocations();
   const updateService = useUpdateService();
+  const updatePositions = useUpdateServicePositions();
   
   const [selectedService, setSelectedService] = useState<DbService | null>(null);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
+
+  // Drag and drop sensors with touch support for mobile
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Sort pending services by position
+  const pendingServices = useMemo(() => {
+    return [...pendingServicesRaw].sort((a, b) => {
+      const posA = (a as DbService).position ?? 999999;
+      const posB = (b as DbService).position ?? 999999;
+      if (posA !== posB) return posA - posB;
+      return new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime();
+    });
+  }, [pendingServicesRaw]);
 
   // Setup realtime subscription
   useEffect(() => {
@@ -73,7 +231,6 @@ export default function OperatorPage() {
   }, [queryClient]);
 
   const handleStartService = (id: string) => {
-    // When operator starts a service, assign it to themselves
     updateService.mutate({ 
       id, 
       status: 'in_progress',
@@ -94,7 +251,6 @@ export default function OperatorPage() {
   }) => {
     if (!selectedService) return;
     
-    // Photo is already uploaded in the modal, just update the service
     updateService.mutate({
       id: selectedService.id,
       status: 'completed',
@@ -112,6 +268,27 @@ export default function OperatorPage() {
     setSelectedService(null);
     setShowFinalizeModal(false);
   };
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = pendingServices.findIndex((s) => s.id === active.id);
+      const newIndex = pendingServices.findIndex((s) => s.id === over.id);
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const reordered = arrayMove(pendingServices, oldIndex, newIndex);
+        
+        const updates = reordered.map((service, index) => ({
+          id: service.id,
+          position: index + 1,
+        }));
+        
+        updatePositions.mutate(updates);
+        toast({ title: 'Ordem atualizada!' });
+      }
+    }
+  }, [pendingServices, updatePositions, toast]);
 
   // Map service for modal compatibility
   const mapServiceForModal = (s: DbService | null) => {
@@ -171,72 +348,41 @@ export default function OperatorPage() {
 
   return (
     <AppLayout>
-      <PageHeader title="Meus Atendimentos" description="Próximos serviços programados">
+      <PageHeader title="Meus Atendimentos" description="Próximos serviços programados (arraste para reordenar)">
         <OnlineIndicator />
       </PageHeader>
 
       {pendingServices.length === 0 ? (
         <Card><CardContent className="py-12 text-center text-muted-foreground">Nenhum atendimento pendente</CardContent></Card>
       ) : (
-        <div className="space-y-4">
-          {pendingServices.map((service: DbService) => {
-            const settlement = settlements.find(s => s.id === service.settlement_id);
-            const location = locations.find(l => l.id === service.location_id);
-            return (
-              <Card key={service.id} className="overflow-hidden">
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <p className="font-semibold text-lg">{service.producers?.name || 'N/A'}</p>
-                      <p className="text-sm text-primary">{service.demand_types?.name}</p>
-                    </div>
-                    <StatusBadge status={service.status as 'pending' | 'in_progress' | 'completed'} />
-                  </div>
-                  
-                  <div className="grid gap-2 text-sm mb-4">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Calendar className="h-4 w-4" />
-                      {format(new Date(service.scheduled_date), "dd/MM/yyyy", { locale: ptBR })}
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <MapPin className="h-4 w-4" />
-                      {settlement?.name || service.settlements?.name || 'N/A'} - {(service.producers as any)?.location_name || location?.name || service.locations?.name || 'N/A'}
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <User className="h-4 w-4" />
-                      {service.producers?.cpf || 'N/A'}
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Phone className="h-4 w-4" />
-                      {service.producers?.phone || 'N/A'}
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    {service.status === 'pending' && (
-                      <Button 
-                        className="flex-1" 
-                        onClick={() => handleStartService(service.id)}
-                        disabled={updateService.isPending}
-                      >
-                        Iniciar
-                      </Button>
-                    )}
-                    {service.status === 'in_progress' && (
-                      <Button 
-                        className="flex-1 bg-success hover:bg-success/90" 
-                        onClick={() => handleOpenFinalize(service)}
-                        disabled={updateService.isPending}
-                      >
-                        Finalizar
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={pendingServices.map(s => s.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-4">
+              {pendingServices.map((service: DbService) => {
+                const settlement = settlements.find(s => s.id === service.settlement_id);
+                const location = locations.find(l => l.id === service.location_id);
+                return (
+                  <SortableOperatorCard
+                    key={service.id}
+                    service={service}
+                    settlementName={settlement?.name || service.settlements?.name || 'N/A'}
+                    locationName={service.producers?.location_name || location?.name || service.locations?.name || 'N/A'}
+                    onStart={handleStartService}
+                    onFinalize={handleOpenFinalize}
+                    isPending={updateService.isPending}
+                  />
+                );
+              })}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       <FinalizeServiceModal

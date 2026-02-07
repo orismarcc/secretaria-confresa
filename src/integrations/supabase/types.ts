@@ -109,8 +109,10 @@ export type Database = {
           created_at: string | null
           dap_cap: string | null
           id: string
+          latitude: number | null
           location_id: string | null
           location_name: string | null
+          longitude: number | null
           name: string
           phone: string | null
           property_name: string | null
@@ -122,8 +124,10 @@ export type Database = {
           created_at?: string | null
           dap_cap?: string | null
           id?: string
+          latitude?: number | null
           location_id?: string | null
           location_name?: string | null
+          longitude?: number | null
           name: string
           phone?: string | null
           property_name?: string | null
@@ -135,8 +139,10 @@ export type Database = {
           created_at?: string | null
           dap_cap?: string | null
           id?: string
+          latitude?: number | null
           location_id?: string | null
           location_name?: string | null
+          longitude?: number | null
           name?: string
           phone?: string | null
           property_name?: string | null
@@ -234,6 +240,7 @@ export type Database = {
           longitude: number | null
           notes: string | null
           operator_id: string | null
+          position: number | null
           priority: string
           producer_id: string
           scheduled_date: string
@@ -241,6 +248,7 @@ export type Database = {
           status: string
           sync_status: string | null
           updated_at: string | null
+          worked_area: number | null
         }
         Insert: {
           completed_at?: string | null
@@ -253,6 +261,7 @@ export type Database = {
           longitude?: number | null
           notes?: string | null
           operator_id?: string | null
+          position?: number | null
           priority?: string
           producer_id: string
           scheduled_date: string
@@ -260,6 +269,7 @@ export type Database = {
           status?: string
           sync_status?: string | null
           updated_at?: string | null
+          worked_area?: number | null
         }
         Update: {
           completed_at?: string | null
@@ -272,6 +282,7 @@ export type Database = {
           longitude?: number | null
           notes?: string | null
           operator_id?: string | null
+          position?: number | null
           priority?: string
           producer_id?: string
           scheduled_date?: string
@@ -279,6 +290,7 @@ export type Database = {
           status?: string
           sync_status?: string | null
           updated_at?: string | null
+          worked_area?: number | null
         }
         Relationships: [
           {
