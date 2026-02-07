@@ -37,6 +37,8 @@ interface DbProducer {
   property_name?: string | null;
   property_size?: number | null;
   dap_cap?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   created_at?: string | null;
   settlements?: { name: string } | null;
   locations?: { name: string } | null;
@@ -77,6 +79,8 @@ export default function ProducersPage() {
       property_name: data.propertyName,
       property_size: data.propertySize,
       dap_cap: data.dapCap,
+      latitude: data.latitude ? parseFloat(data.latitude) : null,
+      longitude: data.longitude ? parseFloat(data.longitude) : null,
       demandTypeIds: data.demandTypeIds,
     });
     setFormOpen(false);
@@ -94,6 +98,8 @@ export default function ProducersPage() {
         property_name: data.propertyName,
         property_size: data.propertySize,
         dap_cap: data.dapCap,
+        latitude: data.latitude ? parseFloat(data.latitude) : null,
+        longitude: data.longitude ? parseFloat(data.longitude) : null,
         demandTypeIds: data.demandTypeIds,
       });
       setEditingProducer(null);
@@ -144,6 +150,8 @@ export default function ProducersPage() {
       locationId: p.location_id || '',
       locationName: p.location_name || '',
       demandTypeIds,
+      latitude: p.latitude,
+      longitude: p.longitude,
       createdAt: new Date(p.created_at || Date.now())
     };
   };

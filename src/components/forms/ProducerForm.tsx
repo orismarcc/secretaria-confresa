@@ -35,6 +35,8 @@ const producerSchema = z.object({
   settlementId: z.string().min(1, 'Selecione um assentamento'),
   locationName: z.string().optional(),
   demandTypeIds: z.array(z.string()).min(1, 'Selecione pelo menos um tipo de demanda'),
+  latitude: z.string().optional(),
+  longitude: z.string().optional(),
 });
 
 type ProducerFormData = z.infer<typeof producerSchema>;
@@ -67,6 +69,8 @@ export function ProducerForm({
       settlementId: producer?.settlementId || '',
       locationName: producer?.locationName || '',
       demandTypeIds: producer?.demandTypeIds || [],
+      latitude: (producer as any)?.latitude?.toString() || '',
+      longitude: (producer as any)?.longitude?.toString() || '',
     },
   });
 
@@ -81,6 +85,8 @@ export function ProducerForm({
         settlementId: producer.settlementId,
         locationName: producer.locationName || '',
         demandTypeIds: producer.demandTypeIds,
+        latitude: (producer as any)?.latitude?.toString() || '',
+        longitude: (producer as any)?.longitude?.toString() || '',
       });
     } else {
       form.reset({
@@ -90,6 +96,8 @@ export function ProducerForm({
         settlementId: '',
         locationName: '',
         demandTypeIds: [],
+        latitude: '',
+        longitude: '',
       });
     }
   }, [producer, form]);
@@ -213,6 +221,48 @@ export function ProducerForm({
                   </FormItem>
                 )}
               />
+            </div>
+
+            {/* GPS Coordinates Section */}
+            <div className="border rounded-lg p-4 bg-muted/30">
+              <p className="text-sm font-medium mb-3">Coordenadas GPS (opcional)</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="latitude"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Latitude</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="-12.345678" 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="longitude"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Longitude</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="-45.678901" 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Exemplo: Latitude: -12.345678, Longitude: -45.678901
+              </p>
             </div>
 
             <FormField

@@ -1,24 +1,37 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { StatsCard } from '@/components/StatsCard';
 import { ClipboardList, Clock, Loader2, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { StatusBadge } from '@/components/StatusBadge';
-import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
   useDashboardStats, 
   useServices, 
   useProducers, 
   useDemandTypes,
-  useUpdateService 
+  useUpdateService,
+  useUpdateServicePositions
 } from '@/hooks/useSupabaseData';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { SortableServiceItem } from '@/components/SortableServiceItem';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -29,6 +42,19 @@ export default function DashboardPage() {
   const { data: producers = [] } = useProducers();
   const { data: demandTypes = [] } = useDemandTypes();
   const updateService = useUpdateService();
+  const updatePositions = useUpdateServicePositions();
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Setup realtime subscription for services
   useEffect(() => {
@@ -49,10 +75,17 @@ export default function DashboardPage() {
     };
   }, [queryClient]);
 
-  // Filter pending/in_progress and sort by scheduled_date (oldest first)
-  const pendingServices = services
-    .filter(s => s.status === 'pending' || s.status === 'in_progress')
-    .sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime());
+  // Filter pending/in_progress and sort by position then scheduled_date
+  const pendingServices = useMemo(() => {
+    return services
+      .filter(s => s.status === 'pending' || s.status === 'in_progress')
+      .sort((a, b) => {
+        const posA = (a as any).position ?? 999999;
+        const posB = (b as any).position ?? 999999;
+        if (posA !== posB) return posA - posB;
+        return new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime();
+      });
+  }, [services]);
 
   const handleFinalize = (serviceId: string) => {
     updateService.mutate({ 
@@ -61,6 +94,27 @@ export default function DashboardPage() {
       completed_at: new Date().toISOString() 
     });
   };
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = pendingServices.findIndex((s) => s.id === active.id);
+      const newIndex = pendingServices.findIndex((s) => s.id === over.id);
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const reordered = arrayMove(pendingServices, oldIndex, newIndex);
+        
+        // Update positions in database
+        const updates = reordered.map((service, index) => ({
+          id: service.id,
+          position: index + 1,
+        }));
+        
+        updatePositions.mutate(updates);
+      }
+    }
+  }, [pendingServices, updatePositions]);
 
   const isLoading = statsLoading || servicesLoading;
 
@@ -90,7 +144,10 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>Atendimentos Pendentes</span>
+              <div className="flex items-center gap-2">
+                <span>Atendimentos Pendentes</span>
+                <span className="text-xs text-muted-foreground font-normal">(arraste para reordenar)</span>
+              </div>
               <button onClick={() => navigate('/services')} className="text-sm text-primary hover:underline">Ver todos</button>
             </CardTitle>
           </CardHeader>
@@ -104,36 +161,33 @@ export default function DashboardPage() {
             ) : pendingServices.length === 0 ? (
               <p className="text-muted-foreground text-center py-4">Nenhum atendimento pendente</p>
             ) : (
-              <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                {pendingServices.map((service) => {
-                  const producer = producers.find(p => p.id === service.producer_id);
-                  const demandType = demandTypes.find(d => d.id === service.demand_type_id);
-                  return (
-                    <div key={service.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{producer?.name || service.producers?.name || 'N/A'}</p>
-                        <p className="text-sm text-muted-foreground truncate">{demandType?.name || service.demand_types?.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(new Date(service.scheduled_date), "dd/MM/yyyy", { locale: ptBR })}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <StatusBadge status={service.status as 'pending' | 'in_progress' | 'completed'} />
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          className="text-green-600 border-green-600 hover:bg-green-50 hover:text-green-700"
-                          onClick={() => handleFinalize(service.id)}
-                          disabled={updateService.isPending}
-                        >
-                          <CheckCircle2 className="h-4 w-4 mr-1" />
-                          Finalizar
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={pendingServices.map(s => s.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                    {pendingServices.map((service) => {
+                      const producer = producers.find(p => p.id === service.producer_id);
+                      const demandType = demandTypes.find(d => d.id === service.demand_type_id);
+                      return (
+                        <SortableServiceItem
+                          key={service.id}
+                          service={service}
+                          producerName={producer?.name || (service as any).producers?.name || 'N/A'}
+                          demandTypeName={demandType?.name || (service as any).demand_types?.name || 'N/A'}
+                          onFinalize={handleFinalize}
+                          isFinalizePending={updateService.isPending}
+                        />
+                      );
+                    })}
+                  </div>
+                </SortableContext>
+              </DndContext>
             )}
           </CardContent>
         </Card>

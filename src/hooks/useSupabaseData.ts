@@ -315,6 +315,8 @@ export function useCreateProducer() {
       property_name?: string;
       property_size?: number;
       dap_cap?: string;
+      latitude?: number | null;
+      longitude?: number | null;
       demandTypeIds?: string[];
     }) => {
       const { demandTypeIds, ...producerData } = producer;
@@ -444,9 +446,36 @@ export function usePendingServices() {
         .from('services')
         .select('*, producers(name, cpf, phone, location_name), demand_types(name), settlements(name), locations(name)')
         .neq('status', 'completed')
+        .order('position', { ascending: true })
         .order('scheduled_date', { ascending: true });
       if (error) throw error;
       return data;
+    },
+  });
+}
+
+// Bulk update service positions
+export function useUpdateServicePositions() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (updates: { id: string; position: number }[]) => {
+      // Update each service position
+      const promises = updates.map(({ id, position }) =>
+        supabase
+          .from('services')
+          .update({ position })
+          .eq('id', id)
+      );
+      const results = await Promise.all(promises);
+      const errors = results.filter(r => r.error);
+      if (errors.length > 0) {
+        throw new Error('Erro ao reordenar atendimentos');
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['services'] });
+      queryClient.invalidateQueries({ queryKey: ['services', 'pending'] });
     },
   });
 }
