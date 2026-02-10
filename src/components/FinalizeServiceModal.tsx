@@ -11,6 +11,8 @@ import { ServiceWithRelations } from '@/types';
 import { useCamera } from '@/hooks/useCamera';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { supabase } from '@/integrations/supabase/client';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Camera, MapPin, Check, X, RotateCcw, Upload, Loader2 } from 'lucide-react';
 
 interface FinalizeServiceModalProps {
@@ -21,6 +23,7 @@ interface FinalizeServiceModalProps {
     photoStoragePath?: string;
     latitude?: number;
     longitude?: number;
+    workedArea?: number;
   }) => void;
 }
 
@@ -38,6 +41,7 @@ export function FinalizeServiceModal({
   const [capturedCoords, setCapturedCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [workedArea, setWorkedArea] = useState<string>('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -69,6 +73,7 @@ export function FinalizeServiceModal({
       setPhotoPreview(null);
       setCapturedCoords(null);
       setShowCamera(false);
+      setWorkedArea('');
     } else {
       stopCamera();
     }
@@ -186,10 +191,12 @@ export function FinalizeServiceModal({
       }
       
       // Call the finalize handler with captured data
+      const parsedArea = parseFloat(workedArea);
       onFinalize({
         photoStoragePath,
         latitude: capturedCoords?.latitude,
         longitude: capturedCoords?.longitude,
+        workedArea: !isNaN(parsedArea) && parsedArea > 0 ? parsedArea : undefined,
       });
       
       onOpenChange(false);
@@ -421,22 +428,44 @@ export function FinalizeServiceModal({
               </p>
             </div>
 
-            <div className="bg-muted p-4 rounded-lg space-y-2">
-              <p className="text-sm">
-                <strong>Produtor:</strong> {service.producer?.name}
-              </p>
-              <p className="text-sm">
-                <strong>Serviço:</strong> {service.demandType?.name}
-              </p>
-              <p className="text-sm">
-                <strong>Foto:</strong> {photoBlob ? '✓ Capturada' : 'Não tirada'}
-              </p>
-              <p className="text-sm">
-                <strong>GPS:</strong>{' '}
-                {capturedCoords
-                  ? `${capturedCoords.latitude.toFixed(4)}, ${capturedCoords.longitude.toFixed(4)}`
-                  : 'Não capturado'}
-              </p>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="worked-area">Área Trabalhada (ha)</Label>
+                <Input
+                  id="worked-area"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="Ex: 2.5"
+                  value={workedArea}
+                  onChange={(e) => setWorkedArea(e.target.value)}
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Opcional - informe a área trabalhada em hectares</p>
+              </div>
+
+              <div className="bg-muted p-4 rounded-lg space-y-2">
+                <p className="text-sm">
+                  <strong>Produtor:</strong> {service.producer?.name}
+                </p>
+                <p className="text-sm">
+                  <strong>Serviço:</strong> {service.demandType?.name}
+                </p>
+                <p className="text-sm">
+                  <strong>Foto:</strong> {photoBlob ? '✓ Capturada' : 'Não tirada'}
+                </p>
+                <p className="text-sm">
+                  <strong>GPS:</strong>{' '}
+                  {capturedCoords
+                    ? `${capturedCoords.latitude.toFixed(4)}, ${capturedCoords.longitude.toFixed(4)}`
+                    : 'Não capturado'}
+                </p>
+                {workedArea && parseFloat(workedArea) > 0 && (
+                  <p className="text-sm">
+                    <strong>Área:</strong> {parseFloat(workedArea).toLocaleString('pt-BR')} ha
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="flex gap-2">
