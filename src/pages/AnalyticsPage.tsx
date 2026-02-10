@@ -160,12 +160,14 @@ export default function AnalyticsPage() {
       .slice(0, 3);
   }, [services, demandTypes]);
 
-  // Total worked area (only from completed services with worked_area)
+  // Total worked area (only from completed services with "Grade" demand type)
   const totalWorkedArea = useMemo(() => {
+    const gradeDemandType = demandTypes.find(d => d.name?.toLowerCase().includes('grade'));
+    if (!gradeDemandType) return 0;
     return services
-      .filter(s => s.status === 'completed' && (s as any).worked_area)
+      .filter(s => s.status === 'completed' && s.demand_type_id === gradeDemandType.id && (s as any).worked_area)
       .reduce((acc, s) => acc + (Number((s as any).worked_area) || 0), 0);
-  }, [services]);
+  }, [services, demandTypes]);
 
   const positionIcons = [Trophy, Medal, Award];
   const positionColors = [

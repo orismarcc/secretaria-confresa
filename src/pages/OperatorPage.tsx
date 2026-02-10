@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/StatusBadge';
-import { MapPin, Phone, User, Calendar, GripVertical } from 'lucide-react';
+import { MapPin, Phone, User, Calendar, GripVertical, Navigation } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { OnlineIndicator } from '@/components/ConnectionStatus';
@@ -56,7 +56,7 @@ interface DbService {
   latitude?: number | null;
   longitude?: number | null;
   position?: number | null;
-  producers?: { name: string; cpf: string; phone?: string | null; location_name?: string | null } | null;
+  producers?: { name: string; cpf: string; phone?: string | null; location_name?: string | null; latitude?: number | null; longitude?: number | null } | null;
   demand_types?: { name: string } | null;
   settlements?: { name: string } | null;
   locations?: { name: string } | null;
@@ -144,6 +144,28 @@ function SortableOperatorCard({
             </div>
             
             <div className="flex gap-2">
+              {service.producers?.latitude && service.producers?.longitude && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  asChild
+                >
+                  <a
+                    href={`geo:${service.producers.latitude},${service.producers.longitude}?q=${service.producers.latitude},${service.producers.longitude}`}
+                    onClick={(e) => {
+                      // Fallback to Google Maps on desktop
+                      if (!/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+                        e.preventDefault();
+                        window.open(`https://www.google.com/maps?q=${service.producers!.latitude},${service.producers!.longitude}`, '_blank');
+                      }
+                    }}
+                  >
+                    <Navigation className="h-4 w-4" />
+                    Maps
+                  </a>
+                </Button>
+              )}
               {service.status === 'pending' && (
                 <Button 
                   className="flex-1" 
