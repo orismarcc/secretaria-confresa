@@ -444,7 +444,7 @@ export function usePendingServices() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('services')
-        .select('*, producers(name, cpf, phone, location_name), demand_types(name), settlements(name), locations(name)')
+        .select('*, producers(name, cpf, phone, location_name, latitude, longitude), demand_types(name), settlements(name), locations(name)')
         .neq('status', 'completed')
         .order('position', { ascending: true })
         .order('scheduled_date', { ascending: true });
