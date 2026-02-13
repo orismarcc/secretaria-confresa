@@ -198,17 +198,17 @@ export default function AnalyticsPage() {
         <div className="space-y-6">
           {/* Total Worked Area Metric Card */}
           <Card className="overflow-hidden bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-background">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg shadow-amber-500/30">
-                  <Tractor className="h-8 w-8 text-white" />
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg shadow-amber-500/30 shrink-0">
+                  <Tractor className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">
                     Total de Área Trabalhada com Grade
                   </p>
-                  <p className="text-4xl font-black text-foreground">
-                    {totalWorkedArea.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xl font-medium text-muted-foreground">ha</span>
+                  <p className="text-2xl sm:text-4xl font-black text-foreground">
+                    {totalWorkedArea.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-base sm:text-xl font-medium text-muted-foreground">ha</span>
                   </p>
                 </div>
               </div>
@@ -216,7 +216,7 @@ export default function AnalyticsPage() {
           </Card>
 
           {/* Charts Section */}
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
             {/* Completed Services Chart */}
             <Card className="overflow-hidden">
               <CardHeader className="border-b bg-gradient-to-r from-success/10 to-success/5">
@@ -230,8 +230,8 @@ export default function AnalyticsPage() {
                   </div>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-6">
-                <div className="h-[300px]">
+              <CardContent className="pt-4 sm:pt-6 px-2 sm:px-6">
+                <div className="h-[220px] sm:h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={monthlyData}>
                       <defs>
@@ -279,8 +279,8 @@ export default function AnalyticsPage() {
                   </div>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-6">
-                <div className="h-[300px]">
+              <CardContent className="pt-4 sm:pt-6 px-2 sm:px-6">
+                <div className="h-[220px] sm:h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={monthlyData}>
                       <defs>
@@ -327,8 +327,8 @@ export default function AnalyticsPage() {
                 </div>
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-6">
-              <div className="h-[300px]">
+            <CardContent className="pt-4 sm:pt-6 px-2 sm:px-6">
+              <div className="h-[220px] sm:h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={monthlyData} barCategoryGap="20%">
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
@@ -366,7 +366,7 @@ export default function AnalyticsPage() {
           </Card>
 
           {/* Rankings Section */}
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
             {/* Top Settlements */}
             <Card className="overflow-hidden">
               <CardHeader className="border-b bg-gradient-to-r from-amber-500/10 to-yellow-500/5">

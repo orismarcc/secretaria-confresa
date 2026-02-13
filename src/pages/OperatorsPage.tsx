@@ -99,7 +99,8 @@ export default function OperatorsPage() {
     {
       key: 'email',
       header: 'Email',
-      render: (row: Operator) => row.email,
+      className: 'hidden sm:table-cell',
+      render: (row: Operator) => <span className="truncate max-w-[200px] block">{row.email}</span>,
     },
     {
       key: 'completed',

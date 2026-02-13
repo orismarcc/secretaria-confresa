@@ -140,9 +140,9 @@ export default function DemandTypesPage() {
   return (
     <AppLayout>
       <PageHeader title="Tipos de Demanda" description="Categorias de atendimento">
-        <div className="flex gap-2 items-center">
-          <SearchInput value={search} onChange={setSearch} placeholder="Buscar tipo..." className="flex-1 min-w-[150px]" />
-          <Button onClick={() => { setEditingType(null); setFormOpen(true); }}>
+        <div className="flex gap-2 items-center flex-wrap">
+          <SearchInput value={search} onChange={setSearch} placeholder="Buscar tipo..." className="flex-1 min-w-[120px]" />
+          <Button onClick={() => { setEditingType(null); setFormOpen(true); }} className="shrink-0">
             <Plus className="h-4 w-4 mr-2" /> Novo
           </Button>
         </div>
