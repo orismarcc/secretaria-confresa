@@ -193,7 +193,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 p-4 md:p-6 safe-area-bottom">
+        <main className="flex-1 p-3 sm:p-4 md:p-6 safe-area-bottom overflow-x-hidden">
           <div className="animate-fade-in">
             {children}
           </div>

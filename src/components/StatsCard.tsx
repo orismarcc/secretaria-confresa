@@ -34,17 +34,17 @@ export const StatsCard = forwardRef<HTMLDivElement, StatsCardProps>(
   ({ title, value, icon: Icon, description, variant = 'default', className }, ref) => {
     return (
       <Card ref={ref} className={cn('card-interactive', variantStyles[variant], className)}>
-        <CardContent className="p-6">
+        <CardContent className="p-4 sm:p-6">
           <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">{title}</p>
-              <p className="text-3xl font-bold tracking-tight">{value}</p>
+            <div className="space-y-1 min-w-0">
+              <p className="text-xs sm:text-sm font-medium text-muted-foreground truncate">{title}</p>
+              <p className="text-2xl sm:text-3xl font-bold tracking-tight">{value}</p>
               {description && (
                 <p className="text-xs text-muted-foreground">{description}</p>
               )}
             </div>
-            <div className={cn('p-3 rounded-xl', iconStyles[variant])}>
-              <Icon className="h-6 w-6" />
+            <div className={cn('p-2 sm:p-3 rounded-xl shrink-0', iconStyles[variant])}>
+              <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
           </div>
         </CardContent>

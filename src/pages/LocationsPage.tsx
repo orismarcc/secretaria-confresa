@@ -147,7 +147,7 @@ export default function LocationsPage() {
       <div className="flex gap-2 items-center flex-wrap mb-4">
         <SearchInput value={search} onChange={setSearch} placeholder="Buscar localidade..." className="flex-1 min-w-[150px]" />
         <Select value={settlementFilter} onValueChange={setSettlementFilter}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[140px] sm:w-[180px]">
             <SelectValue placeholder="Assentamento" />
           </SelectTrigger>
           <SelectContent>

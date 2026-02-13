@@ -282,6 +282,7 @@ export default function ServicesPage() {
     { 
       key: 'settlement', 
       header: 'Assentamento', 
+      className: 'hidden sm:table-cell',
       render: (s: DbService) => {
         const st = settlements.find(set => set.id === s.settlement_id);
         return st?.name || s.settlements?.name || 'N/A';
@@ -341,9 +342,9 @@ export default function ServicesPage() {
       </Tabs>
 
       <div className="flex gap-2 items-center flex-wrap mb-4">
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por produtor..." className="flex-1 min-w-[200px]" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por produtor..." className="flex-1 min-w-[140px]" />
         <Select value={demandTypeFilter} onValueChange={setDemandTypeFilter}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[140px] sm:w-[180px]">
             <SelectValue placeholder="Tipo" />
           </SelectTrigger>
           <SelectContent>

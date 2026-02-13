@@ -122,7 +122,7 @@ export default function DashboardPage() {
     <AppLayout>
       <PageHeader title="Dashboard" description="Visão geral do sistema" />
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 mb-6">
         {isLoading ? (
           <>
             <Skeleton className="h-24" />
@@ -140,7 +140,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">

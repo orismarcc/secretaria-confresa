@@ -78,18 +78,19 @@ export function SortableServiceItem({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1.5 sm:gap-2 flex-shrink-0">
         <StatusBadge status={service.status as 'pending' | 'in_progress' | 'completed'} />
         {onFinalize && (
           <Button 
             size="sm" 
             variant="outline"
-            className="text-green-600 border-green-600 hover:bg-green-50 hover:text-green-700"
+            className="text-green-600 border-green-600 hover:bg-green-50 hover:text-green-700 text-xs sm:text-sm"
             onClick={() => onFinalize(service.id)}
             disabled={isFinalizePending}
           >
-            <CheckCircle2 className="h-4 w-4 mr-1" />
-            Finalizar
+            <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1" />
+            <span className="hidden sm:inline">Finalizar</span>
+            <span className="sm:hidden">OK</span>
           </Button>
         )}
       </div>
