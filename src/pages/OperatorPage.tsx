@@ -270,7 +270,6 @@ export default function OperatorPage() {
     photoStoragePath?: string;
     latitude?: number;
     longitude?: number;
-    workedArea?: number;
   }) => {
     if (!selectedService) return;
     
@@ -280,7 +279,6 @@ export default function OperatorPage() {
       completed_at: new Date().toISOString(),
       latitude: data.latitude,
       longitude: data.longitude,
-      worked_area: data.workedArea,
       sync_status: 'synced',
     });
     
