@@ -135,6 +135,7 @@ export default function ServicesPage() {
       scheduled_date: data.scheduledDate,
       notes: data.notes,
       priority: data.priority || 'medium',
+      worked_area: data.workedArea || null,
     });
     setFormOpen(false);
   };

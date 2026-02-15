@@ -493,6 +493,7 @@ export function useCreateService() {
       scheduled_date: string;
       notes?: string;
       priority?: string;
+      worked_area?: number | null;
     }) => {
       const { data, error } = await supabase
         .from('services')
