@@ -152,6 +152,8 @@ export default function ServicesPage() {
         scheduled_date: data.scheduledDate,
         notes: data.notes,
         status: data.status,
+        priority: data.priority || editingService.priority,
+        worked_area: data.workedArea || null,
         completed_at: data.status === 'completed' && editingService.status !== 'completed' 
           ? new Date().toISOString() 
           : editingService.completed_at,
