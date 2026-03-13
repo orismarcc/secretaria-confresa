@@ -43,8 +43,13 @@ export default function LoginPage() {
     
     if (loginResult.success) {
       toast({ title: 'Login realizado com sucesso!' });
-      navigate('/dashboard');
+      navigate('/');
     } else {
+      const translatedError = loginResult.error?.includes('Invalid login credentials')
+        ? 'Email ou senha incorretos'
+        : loginResult.error?.includes('Email not confirmed')
+        ? 'Email não confirmado. Verifique sua caixa de entrada.'
+        : loginResult.error || 'Erro desconhecido';
       toast({ title: 'Erro no login', description: loginResult.error, variant: 'destructive' });
     }
     
