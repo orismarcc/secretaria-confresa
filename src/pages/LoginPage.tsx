@@ -50,7 +50,7 @@ export default function LoginPage() {
         : loginResult.error?.includes('Email not confirmed')
         ? 'Email não confirmado. Verifique sua caixa de entrada.'
         : loginResult.error || 'Erro desconhecido';
-      toast({ title: 'Erro no login', description: loginResult.error, variant: 'destructive' });
+      toast({ title: 'Erro no login', description: translatedError, variant: 'destructive' });
     }
     
     setIsLoading(false);

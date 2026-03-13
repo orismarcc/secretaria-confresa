@@ -99,10 +99,25 @@
            <p className="text-sm text-muted-foreground">{producer?.cpf}</p>
          </div>
  
-         <div>
-           <p className="text-sm text-muted-foreground">Tipo de Demanda</p>
-           <p className="font-medium">{demandType?.name || service.demand_types?.name || 'N/A'}</p>
-         </div>
+        <div>
+          <p className="text-sm text-muted-foreground">Tipo de Demanda</p>
+          <p className="font-medium">{demandType?.name || service.demand_types?.name || 'N/A'}</p>
+        </div>
+
+        <div className="flex gap-4">
+          {service.worked_area != null && service.worked_area > 0 && (
+            <div>
+              <p className="text-sm text-muted-foreground">Área Trabalhada</p>
+              <p className="font-medium">{service.worked_area} ha</p>
+            </div>
+          )}
+          <div>
+            <p className="text-sm text-muted-foreground">Prioridade</p>
+            <p className="font-medium">
+              {service.priority === 'high' ? '🔴 Alta' : service.priority === 'medium' ? '🟡 Média' : '🟢 Baixa'}
+            </p>
+          </div>
+        </div>
  
          <div>
            <p className="text-sm text-muted-foreground">Localização</p>
