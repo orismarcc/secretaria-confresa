@@ -17,24 +17,25 @@
  } from 'lucide-react';
  
  interface ServiceDetailViewProps {
-   service: {
-     id: string;
-     producer_id: string;
-     demand_type_id: string;
-     settlement_id?: string | null;
-     location_id?: string | null;
-     status: string;
-     scheduled_date: string;
-     completed_at?: string | null;
-     notes?: string | null;
-     priority: string;
-     latitude?: number | null;
-     longitude?: number | null;
-     producers?: { name: string; cpf?: string } | null;
-     demand_types?: { name: string } | null;
-     settlements?: { name: string } | null;
-     locations?: { name: string } | null;
-   };
+  service: {
+    id: string;
+    producer_id: string;
+    demand_type_id: string;
+    settlement_id?: string | null;
+    location_id?: string | null;
+    status: string;
+    scheduled_date: string;
+    completed_at?: string | null;
+    notes?: string | null;
+    priority: string;
+    worked_area?: number | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    producers?: { name: string; cpf?: string } | null;
+    demand_types?: { name: string } | null;
+    settlements?: { name: string } | null;
+    locations?: { name: string } | null;
+  };
    producer?: { name: string; cpf: string; location_name?: string } | null;
    demandType?: { name: string } | null;
    settlement?: { name: string } | null;
