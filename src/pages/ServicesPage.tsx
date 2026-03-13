@@ -152,6 +152,8 @@ export default function ServicesPage() {
         scheduled_date: data.scheduledDate,
         notes: data.notes,
         status: data.status,
+        priority: data.priority || editingService.priority,
+        worked_area: data.workedArea || null,
         completed_at: data.status === 'completed' && editingService.status !== 'completed' 
           ? new Date().toISOString() 
           : editingService.completed_at,
@@ -217,13 +219,8 @@ export default function ServicesPage() {
       scheduledDate: new Date(s.scheduled_date),
       completedDate: s.completed_at ? new Date(s.completed_at) : undefined,
       notes: s.notes || undefined,
-      priority: s.priority as 'low' | 'medium' | 'high',
-      purpose: '',
-      workedArea: 0,
-      machinery: '',
-      operatorName: '',
-      chassisCode: '',
-      termSigned: false,
+      priority: (s.priority || 'medium') as 'low' | 'medium' | 'high',
+      workedArea: s.worked_area || 0,
       createdAt: new Date(s.created_at || Date.now()),
       updatedAt: new Date(s.updated_at || Date.now()),
     };

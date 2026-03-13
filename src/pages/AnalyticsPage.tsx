@@ -165,8 +165,8 @@ export default function AnalyticsPage() {
     const gradeDemandType = demandTypes.find(d => d.name?.toLowerCase().includes('grade'));
     if (!gradeDemandType) return 0;
     return services
-      .filter(s => s.status === 'completed' && s.demand_type_id === gradeDemandType.id && (s as any).worked_area)
-      .reduce((acc, s) => acc + (Number((s as any).worked_area) || 0), 0);
+      .filter(s => s.status === 'completed' && s.demand_type_id === gradeDemandType.id && s.worked_area)
+      .reduce((acc, s) => acc + (Number(s.worked_area) || 0), 0);
   }, [services, demandTypes]);
 
   const positionIcons = [Trophy, Medal, Award];
