@@ -219,9 +219,8 @@ export default function ServicesPage() {
       scheduledDate: new Date(s.scheduled_date),
       completedDate: s.completed_at ? new Date(s.completed_at) : undefined,
       notes: s.notes || undefined,
-      priority: s.priority as 'low' | 'medium' | 'high',
+      priority: (s.priority || 'medium') as 'low' | 'medium' | 'high',
       workedArea: s.worked_area || 0,
-      priority: s.priority || 'medium',
       createdAt: new Date(s.created_at || Date.now()),
       updatedAt: new Date(s.updated_at || Date.now()),
     };
