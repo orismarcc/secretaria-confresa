@@ -160,6 +160,8 @@ export default function ServicesPage() {
         status: data.status,
         priority: data.priority || editingService.priority,
         worked_area: data.workedArea || null,
+        operator_id: data.operatorId && data.operatorId !== 'none' ? data.operatorId : null,
+        machinery_id: data.machineryId && data.machineryId !== 'none' ? data.machineryId : null,
         completed_at: data.status === 'completed' && editingService.status !== 'completed' 
           ? new Date().toISOString() 
           : editingService.completed_at,
