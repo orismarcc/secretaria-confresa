@@ -494,6 +494,8 @@ export function useCreateService() {
       notes?: string;
       priority?: string;
       worked_area?: number | null;
+      operator_id?: string | null;
+      machinery_id?: string | null;
     }) => {
       const { data, error } = await supabase
         .from('services')
