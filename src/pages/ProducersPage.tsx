@@ -91,12 +91,8 @@ export default function ProducersPage() {
         phone: data.phone,
         settlement_id: data.settlementId,
         location_name: data.locationName,
-        property_name: data.propertyName,
-        property_size: data.propertySize,
-        dap_cap: data.dapCap,
         latitude: data.latitude ? parseFloat(data.latitude) : null,
         longitude: data.longitude ? parseFloat(data.longitude) : null,
-        demandTypeIds: data.demandTypeIds,
       });
       setEditingProducer(null);
       setFormOpen(false);
