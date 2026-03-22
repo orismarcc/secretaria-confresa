@@ -140,6 +140,8 @@ export default function ServicesPage() {
       notes: data.notes,
       priority: data.priority || 'medium',
       worked_area: data.workedArea || null,
+      operator_id: data.operatorId && data.operatorId !== 'none' ? data.operatorId : null,
+      machinery_id: data.machineryId && data.machineryId !== 'none' ? data.machineryId : null,
     });
     setFormOpen(false);
   };
