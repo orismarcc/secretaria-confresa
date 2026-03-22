@@ -7,7 +7,7 @@ import {
   LayoutDashboard,
   ClipboardList,
   Users,
-  MapPin,
+  Wrench,
   Building2,
   FileText,
   LogOut,
