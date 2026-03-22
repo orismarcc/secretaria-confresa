@@ -32,7 +32,7 @@ const adminNavItems = [
   { path: '/operators', label: 'Operadores', icon: UserCog },
   { path: '/demand-types', label: 'Tipos de Demanda', icon: FileText },
   { path: '/settlements', label: 'Assentamentos', icon: Building2 },
-  { path: '/locations', label: 'Localidades', icon: MapPin },
+  { path: '/machinery', label: 'Maquinários', icon: Wrench },
 ];
 
 const operatorNavItems = [

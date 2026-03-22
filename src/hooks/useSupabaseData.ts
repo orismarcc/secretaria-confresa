@@ -557,6 +557,89 @@ export function useDeleteService() {
   });
 }
 
+// ============= MACHINERY =============
+export function useMachinery() {
+  return useQuery({
+    queryKey: ['machinery'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('machinery')
+        .select('*')
+        .order('name');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useCreateMachinery() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (item: { name: string; patrimony_number: string; chassis?: string | null }) => {
+      const { data, error } = await supabase
+        .from('machinery')
+        .insert(item)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['machinery'] });
+      toast({ title: 'Maquinário cadastrado!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao cadastrar maquinário', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useUpdateMachinery() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string; [key: string]: unknown }) => {
+      const { data, error } = await supabase
+        .from('machinery')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['machinery'] });
+      toast({ title: 'Maquinário atualizado!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useDeleteMachinery() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('machinery').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['machinery'] });
+      toast({ title: 'Maquinário removido!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao remover', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
 // ============= DASHBOARD STATS =============
 export function useDashboardStats() {
   return useQuery({
