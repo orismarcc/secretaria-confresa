@@ -409,6 +409,8 @@ export default function ServicesPage() {
         settlements={mappedSettlements}
         locations={mappedLocations}
         demandTypes={mappedDemandTypes}
+        operators={(operators || []).filter(op => op.is_active).map(op => ({ id: op.id, name: op.name }))}
+        machinery={(machinery || []).filter((m: any) => m.is_active).map((m: any) => ({ id: m.id, name: m.name, patrimony_number: m.patrimony_number }))}
         onSubmit={editingService ? handleEdit : handleCreate}
       />
 
