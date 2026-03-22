@@ -235,11 +235,7 @@ export function ServiceForm({
     onOpenChange(false);
   };
 
-  const availableDemandTypes = selectedProducer
-    ? demandTypes.filter(
-        (d) => selectedProducer.demandTypeIds.includes(d.id) && d.isActive
-      )
-    : demandTypes.filter((d) => d.isActive);
+  const availableDemandTypes = demandTypes.filter((d) => d.isActive);
 
   const activeOperators = operators;
   const activeMachinery = machinery;
