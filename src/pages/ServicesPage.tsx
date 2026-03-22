@@ -229,6 +229,8 @@ export default function ServicesPage() {
       notes: s.notes || undefined,
       priority: (s.priority || 'medium') as 'low' | 'medium' | 'high',
       workedArea: s.worked_area || 0,
+      operatorId: (s as any).operator_id || '',
+      machineryId: (s as any).machinery_id || '',
       createdAt: new Date(s.created_at || Date.now()),
       updatedAt: new Date(s.updated_at || Date.now()),
     };
