@@ -72,6 +72,8 @@ export default function ServicesPage() {
   const { data: demandTypes = [] } = useDemandTypes();
   const { data: settlements = [] } = useSettlements();
   const { data: locations = [] } = useLocations();
+  const { data: machinery = [] } = useMachinery();
+  const { data: operators = [] } = useOperators();
   const createService = useCreateService();
   const updateService = useUpdateService();
   const deleteService = useDeleteService();
