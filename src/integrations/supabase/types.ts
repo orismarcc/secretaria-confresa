@@ -67,6 +67,33 @@ export type Database = {
           },
         ]
       }
+      machinery: {
+        Row: {
+          chassis: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean
+          name: string
+          patrimony_number: string
+        }
+        Insert: {
+          chassis?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          patrimony_number: string
+        }
+        Update: {
+          chassis?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          patrimony_number?: string
+        }
+        Relationships: []
+      }
       producer_demands: {
         Row: {
           created_at: string | null
@@ -238,6 +265,7 @@ export type Database = {
           latitude: number | null
           location_id: string | null
           longitude: number | null
+          machinery_id: string | null
           notes: string | null
           operator_id: string | null
           position: number | null
@@ -259,6 +287,7 @@ export type Database = {
           latitude?: number | null
           location_id?: string | null
           longitude?: number | null
+          machinery_id?: string | null
           notes?: string | null
           operator_id?: string | null
           position?: number | null
@@ -280,6 +309,7 @@ export type Database = {
           latitude?: number | null
           location_id?: string | null
           longitude?: number | null
+          machinery_id?: string | null
           notes?: string | null
           operator_id?: string | null
           position?: number | null
@@ -305,6 +335,13 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "services_machinery_id_fkey"
+            columns: ["machinery_id"]
+            isOneToOne: false
+            referencedRelation: "machinery"
             referencedColumns: ["id"]
           },
           {

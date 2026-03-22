@@ -33,10 +33,12 @@ import {
   useDemandTypes,
   useSettlements,
   useLocations,
+  useMachinery,
   useCreateService,
   useUpdateService,
   useDeleteService
 } from '@/hooks/useSupabaseData';
+import { useOperators } from '@/hooks/useOperatorData';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -70,6 +72,8 @@ export default function ServicesPage() {
   const { data: demandTypes = [] } = useDemandTypes();
   const { data: settlements = [] } = useSettlements();
   const { data: locations = [] } = useLocations();
+  const { data: machinery = [] } = useMachinery();
+  const { data: operators = [] } = useOperators();
   const createService = useCreateService();
   const updateService = useUpdateService();
   const deleteService = useDeleteService();
@@ -136,6 +140,8 @@ export default function ServicesPage() {
       notes: data.notes,
       priority: data.priority || 'medium',
       worked_area: data.workedArea || null,
+      operator_id: data.operatorId && data.operatorId !== 'none' ? data.operatorId : null,
+      machinery_id: data.machineryId && data.machineryId !== 'none' ? data.machineryId : null,
     });
     setFormOpen(false);
   };
@@ -154,6 +160,8 @@ export default function ServicesPage() {
         status: data.status,
         priority: data.priority || editingService.priority,
         worked_area: data.workedArea || null,
+        operator_id: data.operatorId && data.operatorId !== 'none' ? data.operatorId : null,
+        machinery_id: data.machineryId && data.machineryId !== 'none' ? data.machineryId : null,
         completed_at: data.status === 'completed' && editingService.status !== 'completed' 
           ? new Date().toISOString() 
           : editingService.completed_at,
@@ -221,6 +229,8 @@ export default function ServicesPage() {
       notes: s.notes || undefined,
       priority: (s.priority || 'medium') as 'low' | 'medium' | 'high',
       workedArea: s.worked_area || 0,
+      operatorId: (s as any).operator_id || '',
+      machineryId: (s as any).machinery_id || '',
       createdAt: new Date(s.created_at || Date.now()),
       updatedAt: new Date(s.updated_at || Date.now()),
     };
@@ -399,6 +409,8 @@ export default function ServicesPage() {
         settlements={mappedSettlements}
         locations={mappedLocations}
         demandTypes={mappedDemandTypes}
+        operators={(operators || []).filter(op => op.is_active).map(op => ({ id: op.id, name: op.name }))}
+        machinery={(machinery || []).filter((m: any) => m.is_active).map((m: any) => ({ id: m.id, name: m.name, patrimony_number: m.patrimony_number }))}
         onSubmit={editingService ? handleEdit : handleCreate}
       />
 
