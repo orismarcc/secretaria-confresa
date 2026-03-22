@@ -251,7 +251,6 @@ export default function ProducersPage() {
         producer={mapProducerForDisplay(editingProducer)}
         settlements={mappedSettlements}
         locations={mappedLocations}
-        demandTypes={mappedDemandTypes}
         onSubmit={editingProducer ? handleEdit : handleCreate}
       />
 

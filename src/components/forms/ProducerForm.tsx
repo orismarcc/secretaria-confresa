@@ -4,7 +4,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Form,
   FormControl,
@@ -26,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Producer, Settlement, Location, DemandType } from '@/types';
+import { Producer, Settlement, Location } from '@/types';
 
 const producerSchema = z.object({
   name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres').max(100, 'Nome muito longo'),
@@ -34,7 +33,6 @@ const producerSchema = z.object({
   phone: z.string().min(10, 'Telefone inválido').max(15, 'Telefone inválido'),
   settlementId: z.string().min(1, 'Selecione um assentamento'),
   locationName: z.string().optional(),
-  demandTypeIds: z.array(z.string()).min(1, 'Selecione pelo menos um tipo de demanda'),
   latitude: z.string().optional(),
   longitude: z.string().optional(),
 });
@@ -47,7 +45,6 @@ interface ProducerFormProps {
   producer?: Producer | null;
   settlements: Settlement[];
   locations: Location[];
-  demandTypes: DemandType[];
   onSubmit: (data: ProducerFormData) => void;
 }
 
@@ -57,7 +54,6 @@ export function ProducerForm({
   producer, 
   settlements, 
   locations, 
-  demandTypes,
   onSubmit 
 }: ProducerFormProps) {
   const form = useForm<ProducerFormData>({
@@ -68,13 +64,10 @@ export function ProducerForm({
       phone: producer?.phone || '',
       settlementId: producer?.settlementId || '',
       locationName: producer?.locationName || '',
-      demandTypeIds: producer?.demandTypeIds || [],
       latitude: (producer as any)?.latitude?.toString() || '',
       longitude: (producer as any)?.longitude?.toString() || '',
     },
   });
-
-  const selectedSettlementId = form.watch('settlementId');
 
   useEffect(() => {
     if (producer) {
@@ -84,7 +77,6 @@ export function ProducerForm({
         phone: producer.phone,
         settlementId: producer.settlementId,
         locationName: producer.locationName || '',
-        demandTypeIds: producer.demandTypeIds,
         latitude: (producer as any)?.latitude?.toString() || '',
         longitude: (producer as any)?.longitude?.toString() || '',
       });
@@ -95,7 +87,6 @@ export function ProducerForm({
         phone: '',
         settlementId: '',
         locationName: '',
-        demandTypeIds: [],
         latitude: '',
         longitude: '',
       });
@@ -187,12 +178,7 @@ export function ProducerForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Assentamento *</FormLabel>
-                    <Select 
-                      onValueChange={(value) => {
-                        field.onChange(value);
-                      }} 
-                      value={field.value}
-                    >
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Selecione" />
@@ -234,10 +220,7 @@ export function ProducerForm({
                     <FormItem>
                       <FormLabel>Latitude</FormLabel>
                       <FormControl>
-                        <Input 
-                          placeholder="-12.345678" 
-                          {...field} 
-                        />
+                        <Input placeholder="-12.345678" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -250,10 +233,7 @@ export function ProducerForm({
                     <FormItem>
                       <FormLabel>Longitude</FormLabel>
                       <FormControl>
-                        <Input 
-                          placeholder="-45.678901" 
-                          {...field} 
-                        />
+                        <Input placeholder="-45.678901" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -264,44 +244,6 @@ export function ProducerForm({
                 Exemplo: Latitude: -12.345678, Longitude: -45.678901
               </p>
             </div>
-
-            <FormField
-              control={form.control}
-              name="demandTypeIds"
-              render={() => (
-                <FormItem>
-                  <FormLabel>Tipos de Demanda *</FormLabel>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    {demandTypes.filter(d => d.isActive).map((dt) => (
-                      <FormField
-                        key={dt.id}
-                        control={form.control}
-                        name="demandTypeIds"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value?.includes(dt.id)}
-                                onCheckedChange={(checked) => {
-                                  const current = field.value || [];
-                                  if (checked) {
-                                    field.onChange([...current, dt.id]);
-                                  } else {
-                                    field.onChange(current.filter((id) => id !== dt.id));
-                                  }
-                                }}
-                              />
-                            </FormControl>
-                            <FormLabel className="font-normal cursor-pointer">{dt.name}</FormLabel>
-                          </FormItem>
-                        )}
-                      />
-                    ))}
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <div className="flex justify-end gap-2 pt-4">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
