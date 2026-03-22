@@ -33,10 +33,12 @@ import {
   useDemandTypes,
   useSettlements,
   useLocations,
+  useMachinery,
   useCreateService,
   useUpdateService,
   useDeleteService
 } from '@/hooks/useSupabaseData';
+import { useOperators } from '@/hooks/useOperatorData';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 
