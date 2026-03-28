@@ -206,11 +206,11 @@ export default function ProducersPage() {
 
   return (
     <AppLayout>
-      <PageHeader title="Produtores" description="Gerenciar produtores">
-        <Button onClick={() => { setEditingProducer(null); setFormOpen(true); }}>
-          <Plus className="h-4 w-4 mr-2" /> Novo
-        </Button>
-      </PageHeader>
+      <PageHeader
+        title="Produtores"
+        description="Gerenciar produtores"
+        action={{ label: 'Novo', onClick: () => { setEditingProducer(null); setFormOpen(true); }, icon: <Plus className="h-4 w-4 mr-2" /> }}
+      />
 
       <div className="flex gap-2 items-center flex-wrap mb-4">
         <SearchInput value={search} onChange={setSearch} placeholder="Buscar..." className="flex-1 min-w-[150px]" />

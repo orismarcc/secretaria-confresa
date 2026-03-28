@@ -84,7 +84,7 @@ export function SortableServiceItem({
           <Button 
             size="sm" 
             variant="outline"
-            className="text-green-600 border-green-600 hover:bg-green-50 hover:text-green-700 text-xs sm:text-sm"
+            className="text-success border-success hover:bg-success/10 text-xs sm:text-sm"
             onClick={() => onFinalize(service.id)}
             disabled={isFinalizePending}
           >

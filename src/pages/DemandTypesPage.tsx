@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { DemandTypeForm } from '@/components/forms/DemandTypeForm';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { Badge } from '@/components/ui/badge';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -99,13 +100,13 @@ export default function DemandTypesPage() {
       header: 'Status', 
       render: (d: DemandType) => (
         <div className="flex items-center gap-2">
-          <Switch 
-            checked={d.is_active ?? true} 
+          <Switch
+            checked={d.is_active ?? true}
             onCheckedChange={() => handleToggleStatus(d)}
           />
-          <span className={`text-sm ${d.is_active ? 'text-success' : 'text-muted-foreground'}`}>
+          <Badge variant="outline" className={d.is_active ? 'status-completed' : ''}>
             {d.is_active ? 'Ativo' : 'Inativo'}
-          </span>
+          </Badge>
         </div>
       )
     },
@@ -139,15 +140,16 @@ export default function DemandTypesPage() {
 
   return (
     <AppLayout>
-      <PageHeader title="Tipos de Demanda" description="Categorias de atendimento">
-        <div className="flex gap-2 items-center flex-wrap">
-          <SearchInput value={search} onChange={setSearch} placeholder="Buscar tipo..." className="flex-1 min-w-[120px]" />
-          <Button onClick={() => { setEditingType(null); setFormOpen(true); }} className="shrink-0">
-            <Plus className="h-4 w-4 mr-2" /> Novo
-          </Button>
-        </div>
-      </PageHeader>
-      
+      <PageHeader
+        title="Tipos de Demanda"
+        description="Categorias de atendimento"
+        action={{ label: 'Novo', onClick: () => { setEditingType(null); setFormOpen(true); }, icon: <Plus className="h-4 w-4 mr-2" /> }}
+      />
+
+      <div className="mb-4">
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar tipo..." className="max-w-sm" />
+      </div>
+
       <DataTable 
         data={filtered} 
         columns={columns} 

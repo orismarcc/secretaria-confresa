@@ -275,34 +275,47 @@ export default function ServicesPage() {
   }));
 
   const columns = [
-    { 
-      key: 'producer', 
-      header: 'Produtor', 
+    {
+      key: 'producer',
+      header: 'Produtor',
       render: (s: DbService) => {
         const producer = producers.find(p => p.id === s.producer_id);
         return <span className="font-medium">{producer?.name || s.producers?.name || 'N/A'}</span>;
       }
     },
-    { 
-      key: 'demandType', 
-      header: 'Tipo', 
+    {
+      key: 'demandType',
+      header: 'Tipo',
+      className: 'hidden md:table-cell',
       render: (s: DbService) => {
         const dt = demandTypes.find(d => d.id === s.demand_type_id);
-        return dt?.name || s.demand_types?.name || 'N/A';
+        return <span className="text-sm">{dt?.name || s.demand_types?.name || 'N/A'}</span>;
       }
     },
-    { 
-      key: 'settlement', 
-      header: 'Assentamento', 
-      className: 'hidden sm:table-cell',
+    {
+      key: 'settlement',
+      header: 'Assentamento',
+      className: 'hidden lg:table-cell',
       render: (s: DbService) => {
         const st = settlements.find(set => set.id === s.settlement_id);
-        return st?.name || s.settlements?.name || 'N/A';
+        return <span className="text-sm">{st?.name || s.settlements?.name || 'N/A'}</span>;
       }
     },
-    { 
-      key: 'actions', 
-      header: '', 
+    {
+      key: 'status',
+      header: 'Status',
+      render: (s: DbService) => (
+        <div className="flex flex-col gap-1">
+          <StatusBadge status={s.status as 'pending' | 'in_progress' | 'completed'} />
+          <span className="text-xs text-muted-foreground">
+            {format(new Date(s.scheduled_date), 'dd/MM/yy', { locale: ptBR })}
+          </span>
+        </div>
+      )
+    },
+    {
+      key: 'actions',
+      header: '',
       render: (s: DbService) => (
         <Button variant="ghost" size="icon" onClick={() => openDetail(s)}>
           <Eye className="h-4 w-4" />
@@ -335,11 +348,11 @@ export default function ServicesPage() {
 
   return (
     <AppLayout>
-      <PageHeader title="Atendimentos" description="Gerenciar atendimentos">
-        <Button onClick={() => { setEditingService(null); setFormOpen(true); }}>
-          <Plus className="h-4 w-4 mr-2" /> Novo
-        </Button>
-      </PageHeader>
+      <PageHeader
+        title="Atendimentos"
+        description="Gerenciar atendimentos"
+        action={{ label: 'Novo', onClick: () => { setEditingService(null); setFormOpen(true); }, icon: <Plus className="h-4 w-4 mr-2" /> }}
+      />
 
       <Tabs value={statusFilter} onValueChange={setStatusFilter} className="mb-4">
         <TabsList>

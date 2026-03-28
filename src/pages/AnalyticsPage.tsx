@@ -18,7 +18,7 @@ import {
 } from 'recharts';
 import { format, parseISO, startOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { TrendingUp, MapPin, ClipboardList, Trophy, Medal, Award, Tractor } from 'lucide-react';
+import { TrendingUp, MapPin, ClipboardList, Tractor } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Custom tooltip component
@@ -38,42 +38,71 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-// Ranking card component
+// Ranking item component
 interface RankingItemProps {
   position: number;
   name: string;
   count: number;
-  icon: React.ElementType;
-  colorClass: string;
+  maxCount: number;
 }
 
-function RankingItem({ position, name, count, icon: Icon, colorClass }: RankingItemProps) {
+const rankConfig = [
+  {
+    label: '1°',
+    cardClass: 'bg-warning/5 border-warning/30',
+    badgeClass: 'bg-warning text-warning-foreground',
+    barClass: 'bg-warning',
+    textClass: 'text-warning',
+  },
+  {
+    label: '2°',
+    cardClass: 'bg-primary/5 border-primary/20',
+    badgeClass: 'bg-primary text-primary-foreground',
+    barClass: 'bg-primary',
+    textClass: 'text-primary',
+  },
+  {
+    label: '3°',
+    cardClass: 'bg-secondary/5 border-secondary/20',
+    badgeClass: 'bg-secondary text-secondary-foreground',
+    barClass: 'bg-secondary',
+    textClass: 'text-secondary',
+  },
+];
+
+function RankingItem({ position, name, count, maxCount }: RankingItemProps) {
+  const config = rankConfig[position - 1];
+  const pct = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0;
+
   return (
     <div className={cn(
-      "flex items-center gap-4 p-4 rounded-xl transition-all duration-300 hover:scale-[1.02]",
-      position === 1 && "bg-gradient-to-r from-amber-500/20 to-yellow-500/10 border border-amber-500/30",
-      position === 2 && "bg-gradient-to-r from-slate-400/20 to-slate-300/10 border border-slate-400/30",
-      position === 3 && "bg-gradient-to-r from-orange-600/20 to-orange-500/10 border border-orange-600/30"
+      'flex items-center gap-4 p-4 rounded-xl border transition-all hover:-translate-y-0.5 hover:shadow-sm',
+      config.cardClass
     )}>
       <div className={cn(
-        "flex items-center justify-center w-12 h-12 rounded-full",
-        colorClass
+        'flex items-center justify-center w-11 h-11 rounded-full text-sm font-black shrink-0 shadow-sm',
+        config.badgeClass
       )}>
-        <Icon className="h-6 w-6" />
+        {config.label}
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold text-foreground truncate">{name}</p>
-        <p className="text-sm text-muted-foreground">
-          {count} {count === 1 ? 'cadastro' : 'cadastros'}
+
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="font-semibold text-foreground truncate">{name}</p>
+          <span className={cn('text-2xl font-black tabular-nums shrink-0', config.textClass)}>
+            {count}
+          </span>
+        </div>
+        <div className="h-1.5 rounded-full bg-border overflow-hidden">
+          <div
+            className={cn('h-full rounded-full transition-all duration-700', config.barClass)}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {count} {count === 1 ? 'atendimento' : 'atendimentos'}
+          {position > 1 && ` · ${pct}% em relação ao 1°`}
         </p>
-      </div>
-      <div className={cn(
-        "text-3xl font-black",
-        position === 1 && "text-amber-500",
-        position === 2 && "text-slate-400",
-        position === 3 && "text-orange-600"
-      )}>
-        #{position}
       </div>
     </div>
   );
@@ -169,12 +198,6 @@ export default function AnalyticsPage() {
       .reduce((acc, s) => acc + (Number(s.worked_area) || 0), 0);
   }, [services, demandTypes]);
 
-  const positionIcons = [Trophy, Medal, Award];
-  const positionColors = [
-    "bg-amber-500/20 text-amber-500",
-    "bg-slate-400/20 text-slate-400", 
-    "bg-orange-600/20 text-orange-600"
-  ];
 
   return (
     <AppLayout>
@@ -393,8 +416,7 @@ export default function AnalyticsPage() {
                         position={index + 1}
                         name={settlement.name}
                         count={settlement.count}
-                        icon={positionIcons[index]}
-                        colorClass={positionColors[index]}
+                        maxCount={topSettlements[0].count}
                       />
                     ))
                   )}
@@ -428,8 +450,7 @@ export default function AnalyticsPage() {
                         position={index + 1}
                         name={demand.name}
                         count={demand.count}
-                        icon={positionIcons[index]}
-                        colorClass={positionColors[index]}
+                        maxCount={topDemandTypes[0].count}
                       />
                     ))
                   )}

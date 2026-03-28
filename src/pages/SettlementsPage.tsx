@@ -100,15 +100,16 @@ export default function SettlementsPage() {
 
   return (
     <AppLayout>
-      <PageHeader title="Assentamentos" description="Gerenciar assentamentos">
-        <div className="flex gap-2 items-center flex-wrap">
-          <SearchInput value={search} onChange={setSearch} placeholder="Buscar assentamento..." className="flex-1 min-w-[120px]" />
-          <Button onClick={() => { setEditingSettlement(null); setFormOpen(true); }} className="shrink-0">
-            <Plus className="h-4 w-4 mr-2" /> Novo
-          </Button>
-        </div>
-      </PageHeader>
-      
+      <PageHeader
+        title="Assentamentos"
+        description="Gerenciar assentamentos"
+        action={{ label: 'Novo', onClick: () => { setEditingSettlement(null); setFormOpen(true); }, icon: <Plus className="h-4 w-4 mr-2" /> }}
+      />
+
+      <div className="mb-4">
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar assentamento..." className="max-w-sm" />
+      </div>
+
       <DataTable 
         data={filtered} 
         columns={columns} 

@@ -125,7 +125,7 @@ export default function OperatorsPage() {
             onCheckedChange={() => handleToggleStatus(row)}
             disabled={toggleStatus.isPending}
           />
-          <Badge variant={row.is_active ? 'default' : 'secondary'}>
+          <Badge variant="outline" className={row.is_active ? 'status-completed' : ''}>
             {row.is_active ? 'Ativo' : 'Inativo'}
           </Badge>
         </div>

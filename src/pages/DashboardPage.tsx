@@ -2,8 +2,10 @@ import { useEffect, useMemo, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { StatsCard } from '@/components/StatsCard';
-import { ClipboardList, Clock, Loader2, CheckCircle2 } from 'lucide-react';
+import { ClipboardList, Clock, Loader2, CheckCircle2, Users } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
 import { useNavigate } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -114,6 +116,10 @@ export default function DashboardPage() {
 
   const isLoading = statsLoading || servicesLoading;
 
+  const completionRate = stats?.totalServices
+    ? Math.round(((stats.completedServices || 0) / stats.totalServices) * 100)
+    : 0;
+
   return (
     <AppLayout>
       <PageHeader title="Dashboard" description="Visão geral do sistema" />
@@ -188,10 +194,28 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle>Resumo</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-center">
-              <p className="text-4xl font-bold text-primary">{stats?.totalProducers || 0}</p>
-              <p className="text-muted-foreground">produtores cadastrados</p>
+          <CardContent className="space-y-6">
+            <div className="flex items-center gap-4">
+              <div className="p-4 rounded-xl bg-primary/10 shrink-0">
+                <Users className="h-8 w-8 text-primary" />
+              </div>
+              <div>
+                <p className="text-4xl font-bold">{stats?.totalProducers || 0}</p>
+                <p className="text-sm text-muted-foreground">produtores cadastrados</p>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Taxa de conclusão</span>
+                <span className="font-semibold">{completionRate}%</span>
+              </div>
+              <Progress value={completionRate} className="h-2" />
+              <p className="text-xs text-muted-foreground">
+                {stats?.completedServices || 0} de {stats?.totalServices || 0} atendimentos finalizados
+              </p>
             </div>
           </CardContent>
         </Card>

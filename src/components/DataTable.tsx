@@ -1,6 +1,15 @@
 import { ReactNode } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface DataTableProps<T> {
   data: T[];
@@ -28,54 +37,43 @@ export function DataTable<T>({
   title,
   description,
 }: DataTableProps<T>) {
-  const content = (
-    <>
-      {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : data.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          {emptyMessage}
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                {columns.map((col) => (
-                  <th
-                    key={col.key}
-                    className={`text-left p-2 sm:p-4 text-xs sm:text-sm font-medium text-muted-foreground ${col.className || ''}`}
-                  >
-                    {col.header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((item) => (
-                <tr
-                  key={keyExtractor(item)}
-                  onClick={() => onRowClick?.(item)}
-                  className={`border-b last:border-0 transition-colors hover:bg-muted/50 ${
-                    onRowClick ? 'cursor-pointer' : ''
-                  }`}
-                >
-                  {columns.map((col) => (
-                    <td key={col.key} className={`p-2 sm:p-4 text-sm ${col.className || ''}`}>
-                      {col.render 
-                        ? col.render(item) 
-                        : String((item as Record<string, unknown>)[col.key] ?? '')}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </>
+  const tableContent = isLoading ? (
+    <div className="flex items-center justify-center py-12">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  ) : data.length === 0 ? (
+    <div className="text-center py-12 text-muted-foreground text-sm">
+      {emptyMessage}
+    </div>
+  ) : (
+    <Table>
+      <TableHeader>
+        <TableRow className="hover:bg-transparent">
+          {columns.map((col) => (
+            <TableHead key={col.key} className={col.className}>
+              {col.header}
+            </TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {data.map((item) => (
+          <TableRow
+            key={keyExtractor(item)}
+            onClick={() => onRowClick?.(item)}
+            className={cn(onRowClick && 'cursor-pointer')}
+          >
+            {columns.map((col) => (
+              <TableCell key={col.key} className={col.className}>
+                {col.render
+                  ? col.render(item)
+                  : String((item as Record<string, unknown>)[col.key] ?? '')}
+              </TableCell>
+            ))}
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 
   if (title) {
@@ -85,12 +83,14 @@ export function DataTable<T>({
           <CardTitle>{title}</CardTitle>
           {description && <CardDescription>{description}</CardDescription>}
         </CardHeader>
-        <CardContent className="p-0">
-          {content}
-        </CardContent>
+        <CardContent className="p-0">{tableContent}</CardContent>
       </Card>
     );
   }
 
-  return <div className="bg-card rounded-lg border">{content}</div>;
+  return (
+    <Card>
+      <CardContent className="p-0">{tableContent}</CardContent>
+    </Card>
+  );
 }

@@ -103,22 +103,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
-    
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    
+
     if (error) {
       setIsLoading(false);
-      return { success: false, error: error.message };
+      // Map Supabase error codes to safe user-facing messages
+      const code = error.message?.toLowerCase() ?? '';
+      if (code.includes('invalid login') || code.includes('invalid credentials') || code.includes('wrong password')) {
+        return { success: false, error: 'Email ou senha incorretos.' };
+      }
+      if (code.includes('email not confirmed')) {
+        return { success: false, error: 'Email não confirmado. Verifique sua caixa de entrada.' };
+      }
+      if (code.includes('too many requests') || code.includes('rate limit')) {
+        return { success: false, error: 'Muitas tentativas. Aguarde alguns minutos.' };
+      }
+      return { success: false, error: 'Não foi possível fazer login. Tente novamente.' };
     }
-    
+
     return { success: true };
   };
 
   const signUp = async (email: string, password: string, name: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
-    
+
     const redirectUrl = `${window.location.origin}/`;
-    
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -127,15 +138,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         data: { name },
       },
     });
-    
+
     if (error) {
       setIsLoading(false);
-      if (error.message.includes('already registered')) {
-        return { success: false, error: 'Este email já está cadastrado' };
+      const code = error.message?.toLowerCase() ?? '';
+      if (code.includes('already registered') || code.includes('already exists')) {
+        return { success: false, error: 'Este email já está cadastrado.' };
       }
-      return { success: false, error: error.message };
+      if (code.includes('weak password') || code.includes('password')) {
+        return { success: false, error: 'Senha muito fraca. Use ao menos 6 caracteres.' };
+      }
+      // Generic fallback — never expose raw Supabase error
+      return { success: false, error: 'Não foi possível criar a conta. Tente novamente.' };
     }
-    
+
     setIsLoading(false);
     return { success: true };
   };

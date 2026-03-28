@@ -138,11 +138,11 @@ export default function LocationsPage() {
 
   return (
     <AppLayout>
-      <PageHeader title="Localidades" description="Gerenciar localidades">
-        <Button onClick={() => { setEditingLocation(null); setFormOpen(true); }}>
-          <Plus className="h-4 w-4 mr-2" /> Nova
-        </Button>
-      </PageHeader>
+      <PageHeader
+        title="Localidades"
+        description="Gerenciar localidades"
+        action={{ label: 'Nova', onClick: () => { setEditingLocation(null); setFormOpen(true); }, icon: <Plus className="h-4 w-4 mr-2" /> }}
+      />
 
       <div className="flex gap-2 items-center flex-wrap mb-4">
         <SearchInput value={search} onChange={setSearch} placeholder="Buscar localidade..." className="flex-1 min-w-[150px]" />

@@ -133,7 +133,7 @@ export default function MachineryPage() {
             checked={m.is_active}
             onCheckedChange={() => handleToggleActive(m)}
           />
-          <Badge variant={m.is_active ? 'default' : 'secondary'}>
+          <Badge variant="outline" className={m.is_active ? 'status-completed' : ''}>
             {m.is_active ? 'Ativo' : 'Inativo'}
           </Badge>
         </div>
@@ -174,11 +174,11 @@ export default function MachineryPage() {
 
   return (
     <AppLayout>
-      <PageHeader title="Maquinários" description="Gerenciar maquinários para os serviços">
-        <Button onClick={openCreateForm}>
-          <Plus className="h-4 w-4 mr-2" /> Novo
-        </Button>
-      </PageHeader>
+      <PageHeader
+        title="Maquinários"
+        description="Gerenciar maquinários para os serviços"
+        action={{ label: 'Novo', onClick: openCreateForm, icon: <Plus className="h-4 w-4 mr-2" /> }}
+      />
 
       <div className="mb-4">
         <SearchInput value={search} onChange={setSearch} placeholder="Buscar maquinário..." className="max-w-md" />
