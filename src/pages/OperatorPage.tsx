@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/StatusBadge';
-import { MapPin, Phone, User, Calendar, GripVertical, Navigation } from 'lucide-react';
+import { MapPin, Phone, Calendar, GripVertical, Navigation, User } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { OnlineIndicator } from '@/components/ConnectionStatus';
@@ -21,6 +21,8 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSyncPendingPhotos } from '@/hooks/usePhotoSync';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import {
   DndContext,
   closestCenter,
@@ -56,10 +58,11 @@ interface DbService {
   latitude?: number | null;
   longitude?: number | null;
   position?: number | null;
-  producers?: { name: string; cpf: string; phone?: string | null; location_name?: string | null; latitude?: number | null; longitude?: number | null } | null;
+  producers?: { name: string; phone?: string | null; location_name?: string | null; latitude?: number | null; longitude?: number | null } | null;
   demand_types?: { name: string } | null;
   settlements?: { name: string } | null;
   locations?: { name: string } | null;
+  profiles?: { name: string } | null;
 }
 
 // Sortable Card Component for Operator
@@ -121,7 +124,15 @@ function SortableOperatorCard({
                 <p className="font-semibold text-lg">{service.producers?.name || 'N/A'}</p>
                 <p className="text-sm text-primary">{service.demand_types?.name}</p>
               </div>
-              <StatusBadge status={service.status as 'pending' | 'in_progress' | 'completed'} />
+              <div className="flex flex-col items-end gap-1">
+                <StatusBadge status={service.status as 'pending' | 'in_progress' | 'completed'} />
+                {service.status === 'in_progress' && service.profiles?.name && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <User className="h-3 w-3" />
+                    {service.profiles.name}
+                  </span>
+                )}
+              </div>
             </div>
             
             <div className="grid gap-2 text-sm mb-4">
@@ -132,10 +143,6 @@ function SortableOperatorCard({
               <div className="flex items-center gap-2 text-muted-foreground">
                 <MapPin className="h-4 w-4" />
                 {settlementName} - {locationName}
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <User className="h-4 w-4" />
-                {service.producers?.cpf || 'N/A'}
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Phone className="h-4 w-4" />
@@ -202,9 +209,19 @@ export default function OperatorPage() {
   const { data: locations = [] } = useLocations();
   const updateService = useUpdateService();
   const updatePositions = useUpdateServicePositions();
-  
+  const syncPendingPhotos = useSyncPendingPhotos();
+  const isOnline = useOnlineStatus();
+
   const [selectedService, setSelectedService] = useState<DbService | null>(null);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
+
+  // Auto-sync pending offline photos when reconnected
+  useEffect(() => {
+    if (isOnline) {
+      syncPendingPhotos.mutate();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOnline]);
 
   // Drag and drop sensors with touch support for mobile
   const sensors = useSensors(
@@ -270,15 +287,17 @@ export default function OperatorPage() {
     photoStoragePath?: string;
     latitude?: number;
     longitude?: number;
+    completion_notes?: string;
   }) => {
     if (!selectedService) return;
-    
+
     updateService.mutate({
       id: selectedService.id,
       status: 'completed',
       completed_at: new Date().toISOString(),
       latitude: data.latitude,
       longitude: data.longitude,
+      completion_notes: data.completion_notes,
       sync_status: 'synced',
     });
     
@@ -337,7 +356,7 @@ export default function OperatorPage() {
       producer: s.producers ? {
         id: s.producer_id,
         name: s.producers.name,
-        cpf: s.producers.cpf,
+        cpf: '',
         phone: s.producers.phone || '',
         settlementId: s.settlement_id || '',
         locationId: s.location_id || '',

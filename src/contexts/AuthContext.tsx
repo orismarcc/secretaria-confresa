@@ -94,8 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRole('admin');
         }
       }
-    } catch (error) {
-      console.error('Error fetching user data:', error);
+    } catch {
+      // silent — errors surface via Supabase auth state
     } finally {
       setIsLoading(false);
     }

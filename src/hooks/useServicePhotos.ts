@@ -69,8 +69,8 @@
            })
          );
          setPhotos(photosWithUrls.filter(p => p.url));
-       } catch (error) {
-         console.error('Error loading local photos:', error);
+       } catch {
+         // noop
        } finally {
          setIsLoading(false);
        }

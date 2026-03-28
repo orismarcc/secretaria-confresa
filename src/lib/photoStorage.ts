@@ -12,7 +12,6 @@ export async function getSignedPhotoUrl(storagePath: string): Promise<string | n
     .createSignedUrl(storagePath, 3600); // 1 hour expiry
   
   if (error) {
-    console.error('Error creating signed URL:', error);
     return null;
   }
   
@@ -54,7 +53,7 @@ export async function uploadServicePhoto(
   filename?: string
 ): Promise<{ path: string; error: Error | null }> {
   const ext = filename?.split('.').pop() || 'jpg';
-  const path = `${serviceId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+  const path = `${serviceId}/${crypto.randomUUID()}.${ext}`;
   
   const { error } = await supabase.storage
     .from('service-photos')
@@ -64,7 +63,6 @@ export async function uploadServicePhoto(
     });
   
   if (error) {
-    console.error('Error uploading photo:', error);
     return { path: '', error };
   }
   
@@ -80,7 +78,6 @@ export async function deleteServicePhoto(storagePath: string): Promise<boolean> 
     .remove([storagePath]);
   
   if (error) {
-    console.error('Error deleting photo:', error);
     return false;
   }
   

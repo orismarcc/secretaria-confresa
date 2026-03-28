@@ -62,11 +62,10 @@
        queryClient.invalidateQueries({ queryKey: ['service_photos'] });
      },
      onError: (error: Error) => {
-       console.error('Photo upload error:', error);
-       toast({ 
-         title: 'Erro ao enviar foto', 
-         description: error.message, 
-         variant: 'destructive' 
+       toast({
+         title: 'Erro ao enviar foto',
+         description: error.message,
+         variant: 'destructive',
        });
      },
    });
@@ -99,8 +98,7 @@
            });
            
            syncedCount++;
-         } catch (error) {
-           console.error('Error syncing photo:', photo.id, error);
+         } catch {
            await updatePhotoSyncStatus(photo.id, 'error');
            errorCount++;
          }

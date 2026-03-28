@@ -13,7 +13,9 @@ import { useGeolocation } from '@/hooks/useGeolocation';
 import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Camera, MapPin, Check, X, RotateCcw, Upload, Loader2 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Camera, MapPin, Check, X, RotateCcw, Upload, Loader2, AlertCircle } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface FinalizeServiceModalProps {
   open: boolean;
@@ -23,6 +25,7 @@ interface FinalizeServiceModalProps {
     photoStoragePath?: string;
     latitude?: number;
     longitude?: number;
+    completion_notes?: string;
   }) => void;
 }
 
@@ -38,8 +41,11 @@ export function FinalizeServiceModal({
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [capturedCoords, setCapturedCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [completionNotes, setCompletionNotes] = useState('');
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const { toast } = useToast();
   
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -71,6 +77,8 @@ export function FinalizeServiceModal({
       setPhotoBlob(null);
       setPhotoPreview(null);
       setCapturedCoords(null);
+      setCompletionNotes('');
+      setUploadError(null);
       setShowCamera(false);
       
     } else {
@@ -148,60 +156,52 @@ export function FinalizeServiceModal({
 
   const handleConfirmFinalize = async () => {
     if (!service) return;
-    
+
     setIsProcessing(true);
-    
-    try {
-      let photoStoragePath: string | undefined;
-      
-      // Upload photo directly to Supabase Storage
-      if (photoBlob) {
-        const timestamp = Date.now();
-        const filename = `${service.id}/${timestamp}.jpg`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('service-photos')
-          .upload(filename, photoBlob, {
-            contentType: 'image/jpeg',
-            cacheControl: '3600',
-          });
-        
-        if (uploadError) {
-          console.error('Erro ao fazer upload da foto:', uploadError);
-          throw uploadError;
-        }
-        
+    setUploadError(null);
+
+    let photoStoragePath: string | undefined;
+
+    // Upload photo — failure is non-blocking: warn the user but still finalize
+    if (photoBlob) {
+      const filename = `${service.id}/${crypto.randomUUID()}.jpg`;
+
+      const { error: storageError } = await supabase.storage
+        .from('service-photos')
+        .upload(filename, photoBlob, {
+          contentType: 'image/jpeg',
+          cacheControl: '3600',
+        });
+
+      if (storageError) {
+        toast({
+          title: 'Foto não enviada',
+          description: 'Falha ao enviar a foto. O atendimento será finalizado sem ela.',
+          variant: 'destructive',
+        });
+      } else {
         photoStoragePath = filename;
-        
-        // Create record in service_photos table
-        const { error: dbError } = await supabase
-          .from('service_photos')
-          .insert({
-            service_id: service.id,
-            storage_path: filename,
-            latitude: capturedCoords?.latitude,
-            longitude: capturedCoords?.longitude,
-            captured_at: new Date().toISOString(),
-          });
-        
-        if (dbError) {
-          console.error('Erro ao salvar registro da foto:', dbError);
-        }
+
+        // Record in DB — failure logged but doesn't block finalization
+        await supabase.from('service_photos').insert({
+          service_id: service.id,
+          storage_path: filename,
+          latitude: capturedCoords?.latitude,
+          longitude: capturedCoords?.longitude,
+          captured_at: new Date().toISOString(),
+        });
       }
-      
-      // Call the finalize handler with captured data
-      onFinalize({
-        photoStoragePath,
-        latitude: capturedCoords?.latitude,
-        longitude: capturedCoords?.longitude,
-      });
-      
-      onOpenChange(false);
-    } catch (err) {
-      console.error('Erro ao finalizar:', err);
-    } finally {
-      setIsProcessing(false);
     }
+
+    onFinalize({
+      photoStoragePath,
+      latitude: capturedCoords?.latitude,
+      longitude: capturedCoords?.longitude,
+      completion_notes: completionNotes.trim() || undefined,
+    });
+
+    setIsProcessing(false);
+    onOpenChange(false);
   };
 
   const handleClose = () => {
@@ -447,6 +447,17 @@ export function FinalizeServiceModal({
                   </p>
                 )}
               </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="completion_notes">Notas de finalização (opcional)</Label>
+              <Textarea
+                id="completion_notes"
+                placeholder="Descreva o serviço realizado..."
+                value={completionNotes}
+                onChange={(e) => setCompletionNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
 
             <div className="flex gap-2">
               <Button

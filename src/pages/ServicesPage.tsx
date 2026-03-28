@@ -52,7 +52,10 @@ interface DbService {
   scheduled_date: string;
   completed_at?: string | null;
   notes?: string | null;
+  completion_notes?: string | null;
   priority: string;
+  operator_id?: string | null;
+  machinery_id?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   created_at?: string | null;
@@ -62,6 +65,7 @@ interface DbService {
   demand_types?: { name: string } | null;
   settlements?: { name: string } | null;
   locations?: { name: string } | null;
+  machinery?: { name: string; patrimony_number: string } | null;
 }
 
 export default function ServicesPage() {
@@ -229,8 +233,8 @@ export default function ServicesPage() {
       notes: s.notes || undefined,
       priority: (s.priority || 'medium') as 'low' | 'medium' | 'high',
       workedArea: s.worked_area || 0,
-      operatorId: (s as any).operator_id || '',
-      machineryId: (s as any).machinery_id || '',
+      operatorId: s.operator_id || '',
+      machineryId: s.machinery_id || '',
       createdAt: new Date(s.created_at || Date.now()),
       updatedAt: new Date(s.updated_at || Date.now()),
     };

@@ -430,7 +430,7 @@ export function useServices() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('services')
-        .select('*, producers(name, location_name), demand_types(name), settlements(name), locations(name)')
+        .select('*, producers(name, location_name), demand_types(name), settlements(name), locations(name), machinery(name, patrimony_number)')
         .order('scheduled_date', { ascending: true });
       if (error) throw error;
       return data;
@@ -444,7 +444,7 @@ export function usePendingServices() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('services')
-        .select('*, producers(name, cpf, phone, location_name, latitude, longitude), demand_types(name), settlements(name), locations(name)')
+        .select('*, producers(name, phone, location_name, latitude, longitude), demand_types(name), settlements(name), locations(name), profiles!operator_id(name)')
         .neq('status', 'completed')
         .order('position', { ascending: true })
         .order('scheduled_date', { ascending: true });
@@ -454,24 +454,16 @@ export function usePendingServices() {
   });
 }
 
-// Bulk update service positions
+// Bulk update service positions via single RPC call
 export function useUpdateServicePositions() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (updates: { id: string; position: number }[]) => {
-      // Update each service position
-      const promises = updates.map(({ id, position }) =>
-        supabase
-          .from('services')
-          .update({ position })
-          .eq('id', id)
-      );
-      const results = await Promise.all(promises);
-      const errors = results.filter(r => r.error);
-      if (errors.length > 0) {
-        throw new Error('Erro ao reordenar atendimentos');
-      }
+      const { error } = await supabase.rpc('batch_update_service_positions', {
+        updates: updates,
+      });
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] });

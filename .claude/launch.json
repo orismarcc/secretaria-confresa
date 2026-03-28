@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Dev (Vite)",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "dev"],
+      "port": 8080
+    },
+    {
+      "name": "Preview (Vite build)",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "preview"],
+      "port": 4173
+    },
+    {
+      "name": "Test (Vitest)",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "test:watch"],
+      "port": 51204
+    }
+  ]
+}

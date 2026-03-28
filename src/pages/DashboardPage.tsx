@@ -6,11 +6,9 @@ import { ClipboardList, Clock, Loader2, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
-import { 
-  useDashboardStats, 
-  useServices, 
-  useProducers, 
-  useDemandTypes,
+import {
+  useDashboardStats,
+  useServices,
   useUpdateService,
   useUpdateServicePositions
 } from '@/hooks/useSupabaseData';
@@ -39,8 +37,6 @@ export default function DashboardPage() {
   
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
   const { data: services = [], isLoading: servicesLoading } = useServices();
-  const { data: producers = [] } = useProducers();
-  const { data: demandTypes = [] } = useDemandTypes();
   const updateService = useUpdateService();
   const updatePositions = useUpdateServicePositions();
 
@@ -171,20 +167,16 @@ export default function DashboardPage() {
                   strategy={verticalListSortingStrategy}
                 >
                   <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                    {pendingServices.map((service) => {
-                      const producer = producers.find(p => p.id === service.producer_id);
-                      const demandType = demandTypes.find(d => d.id === service.demand_type_id);
-                      return (
-                        <SortableServiceItem
-                          key={service.id}
-                          service={service}
-                          producerName={producer?.name || (service as any).producers?.name || 'N/A'}
-                          demandTypeName={demandType?.name || (service as any).demand_types?.name || 'N/A'}
-                          onFinalize={handleFinalize}
-                          isFinalizePending={updateService.isPending}
-                        />
-                      );
-                    })}
+                    {pendingServices.map((service) => (
+                      <SortableServiceItem
+                        key={service.id}
+                        service={service}
+                        producerName={(service as any).producers?.name || 'N/A'}
+                        demandTypeName={(service as any).demand_types?.name || 'N/A'}
+                        onFinalize={handleFinalize}
+                        isFinalizePending={updateService.isPending}
+                      />
+                    ))}
                   </div>
                 </SortableContext>
               </DndContext>
