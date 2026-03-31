@@ -551,6 +551,23 @@ export function useDeleteService() {
   });
 }
 
+export function useServicesByProducer(producerId: string | undefined) {
+  return useQuery({
+    queryKey: ['services', 'producer', producerId],
+    queryFn: async () => {
+      if (!producerId) return [];
+      const { data, error } = await supabase
+        .from('services')
+        .select('*, demand_types(name), settlements(name), profiles!operator_id(name)')
+        .eq('producer_id', producerId)
+        .order('scheduled_date', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!producerId,
+  });
+}
+
 // ============= MACHINERY =============
 export function useMachinery() {
   return useQuery({

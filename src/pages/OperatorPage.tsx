@@ -136,10 +136,18 @@ function SortableOperatorCard({
             </div>
             
             <div className="grid gap-2 text-sm mb-4">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                {format(new Date(service.scheduled_date), "dd/MM/yyyy", { locale: ptBR })}
-              </div>
+              {(() => {
+                const isOverdue = service.status === 'pending' && new Date(service.scheduled_date) < new Date(new Date().toDateString());
+                return (
+                  <div className={cn('flex items-center gap-2', isOverdue ? 'text-destructive' : 'text-muted-foreground')}>
+                    <Calendar className="h-4 w-4" />
+                    <span className={isOverdue ? 'font-medium' : ''}>
+                      {isOverdue && '⚠ '}
+                      {format(new Date(service.scheduled_date), 'dd/MM/yyyy', { locale: ptBR })}
+                    </span>
+                  </div>
+                );
+              })()}
               <div className="flex items-center gap-2 text-muted-foreground">
                 <MapPin className="h-4 w-4" />
                 {settlementName} - {locationName}

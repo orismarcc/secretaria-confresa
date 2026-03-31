@@ -17,7 +17,10 @@ import {
 } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Plus, Pencil, Trash2, Archive, CheckCircle, Eye } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Plus, Pencil, Trash2, Archive, CheckCircle, Eye, FileDown } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import {
   Sheet,
   SheetContent,
@@ -304,14 +307,18 @@ export default function ServicesPage() {
     {
       key: 'status',
       header: 'Status',
-      render: (s: DbService) => (
-        <div className="flex flex-col gap-1">
-          <StatusBadge status={s.status as 'pending' | 'in_progress' | 'completed'} />
-          <span className="text-xs text-muted-foreground">
-            {format(new Date(s.scheduled_date), 'dd/MM/yy', { locale: ptBR })}
-          </span>
-        </div>
-      )
+      render: (s: DbService) => {
+        const isOverdue = s.status === 'pending' && new Date(s.scheduled_date) < new Date(new Date().toDateString());
+        return (
+          <div className="flex flex-col gap-1">
+            <StatusBadge status={s.status as 'pending' | 'in_progress' | 'completed'} />
+            <span className={cn('text-xs', isOverdue ? 'text-destructive font-medium' : 'text-muted-foreground')}>
+              {isOverdue && '⚠ '}
+              {format(new Date(s.scheduled_date), 'dd/MM/yy', { locale: ptBR })}
+            </span>
+          </div>
+        );
+      }
     },
     {
       key: 'actions',
@@ -333,6 +340,52 @@ export default function ServicesPage() {
   const detailSettlement = detailService ? settlements.find(s => s.id === detailService.settlement_id) : null;
   const detailLocation = detailService ? locations.find(l => l.id === detailService.location_id) : null;
   const detailProducerFull = detailService ? producers.find(p => p.id === detailService.producer_id) : null;
+
+  const handleExportPDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Secretaria de Agricultura', pageWidth / 2, 18, { align: 'center' });
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Relatório de Atendimentos', pageWidth / 2, 26, { align: 'center' });
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    const tabLabel = statusFilter === 'active' ? 'Ativos' : 'Arquivados';
+    doc.text(`${tabLabel} · Gerado em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`, pageWidth / 2, 33, { align: 'center' });
+    doc.setTextColor(0);
+
+    const statusLabel = (s: string) => s === 'pending' ? 'Pendente' : s === 'in_progress' ? 'Em Execução' : 'Finalizado';
+    const priorityLabel = (p: string) => p === 'high' ? 'Alta' : p === 'medium' ? 'Média' : 'Baixa';
+
+    const rows = sortedServices.map((s: DbService) => {
+      const producer = producers.find(p => p.id === s.producer_id);
+      const dt = demandTypes.find(d => d.id === s.demand_type_id);
+      const st = settlements.find(set => set.id === s.settlement_id);
+      return [
+        producer?.name || s.producers?.name || 'N/A',
+        dt?.name || s.demand_types?.name || 'N/A',
+        st?.name || s.settlements?.name || 'N/A',
+        format(new Date(s.scheduled_date), 'dd/MM/yyyy', { locale: ptBR }),
+        statusLabel(s.status),
+        priorityLabel(s.priority),
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 40,
+      head: [['Produtor', 'Demanda', 'Assentamento', 'Data', 'Status', 'Prioridade']],
+      body: rows,
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [245, 247, 250] },
+      margin: { left: 14, right: 14 },
+    });
+
+    doc.save(`atendimentos-${statusFilter}-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+  };
 
   if (servicesLoading) {
     return (
@@ -379,6 +432,10 @@ export default function ServicesPage() {
             ))}
           </SelectContent>
         </Select>
+        <Button variant="outline" size="sm" onClick={handleExportPDF} className="gap-1.5 shrink-0">
+          <FileDown className="h-4 w-4" />
+          <span className="hidden sm:inline">Exportar PDF</span>
+        </Button>
       </div>
       
       <DataTable 

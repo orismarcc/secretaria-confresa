@@ -15,6 +15,8 @@ import DemandTypesPage from "./pages/DemandTypesPage";
 import SettlementsPage from "./pages/SettlementsPage";
 import MachineryPage from "./pages/MachineryPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
+import MapPage from "./pages/MapPage";
+import CalendarPage from "./pages/CalendarPage";
 import OperatorPage from "./pages/OperatorPage";
 import NotFound from "./pages/NotFound";
 
@@ -47,6 +49,8 @@ function AppRoutes() {
       <Route path="/settlements" element={<ProtectedRoute adminOnly><SettlementsPage /></ProtectedRoute>} />
       <Route path="/machinery" element={<ProtectedRoute adminOnly><MachineryPage /></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute adminOnly><AnalyticsPage /></ProtectedRoute>} />
+      <Route path="/map" element={<ProtectedRoute adminOnly><MapPage /></ProtectedRoute>} />
+      <Route path="/calendar" element={<ProtectedRoute adminOnly><CalendarPage /></ProtectedRoute>} />
       
       {/* Operator Route */}
       <Route path="/operator" element={<ProtectedRoute><OperatorPage /></ProtectedRoute>} />

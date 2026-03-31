@@ -6,8 +6,14 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Pencil, Trash2, MapPin, Phone, User, FileText, Home, Navigation, ExternalLink } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Pencil, Trash2, MapPin, Phone, User, FileText, Home, Navigation, ExternalLink, ClipboardList } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { useServicesByProducer } from '@/hooks/useSupabaseData';
+import { StatusBadge } from '@/components/StatusBadge';
 
 function openInMaps(lat: number, lng: number) {
   const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
@@ -41,9 +47,13 @@ export function ProducerDetailSheet({
   onEdit,
   onDelete,
 }: ProducerDetailSheetProps) {
+  const { data: services = [], isLoading: servicesLoading } = useServicesByProducer(
+    open ? producer?.id : undefined
+  );
+
   if (!producer) return null;
 
-  const producerDemandTypes = demandTypes.filter(d => 
+  const producerDemandTypes = demandTypes.filter(d =>
     producer.demandTypeIds.includes(d.id)
   );
 
@@ -59,11 +69,11 @@ export function ProducerDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-md">
+      <SheetContent className="w-full sm:max-w-md overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="text-left">Detalhes do Produtor</SheetTitle>
         </SheetHeader>
-        
+
         <div className="mt-6 space-y-6">
           {/* Info principal */}
           <div className="space-y-4">
@@ -147,14 +157,53 @@ export function ProducerDetailSheet({
 
           <Separator />
 
+          {/* Histórico de atendimentos */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <ClipboardList className="h-4 w-4 text-muted-foreground" />
+              <p className="text-sm font-medium">Histórico de Atendimentos</p>
+              {services.length > 0 && (
+                <Badge variant="secondary" className="text-xs">{services.length}</Badge>
+              )}
+            </div>
+
+            {servicesLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-14 w-full rounded-lg" />
+                <Skeleton className="h-14 w-full rounded-lg" />
+              </div>
+            ) : services.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center bg-muted/30 rounded-lg">
+                Nenhum atendimento registrado
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {(services as any[]).map((s) => (
+                  <div key={s.id} className="flex items-start justify-between gap-2 p-3 bg-muted/30 rounded-lg border border-border/50">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{s.demand_types?.name || 'N/A'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(s.scheduled_date), 'dd/MM/yyyy', { locale: ptBR })}
+                        {s.settlements?.name ? ` · ${s.settlements.name}` : ''}
+                      </p>
+                    </div>
+                    <StatusBadge status={s.status as 'pending' | 'in_progress' | 'completed'} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <Separator />
+
           {/* Ações */}
           <div className="flex flex-col gap-2">
             <Button onClick={handleEdit} className="w-full">
               <Pencil className="h-4 w-4 mr-2" />
               Editar Produtor
             </Button>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               onClick={handleDelete}
               className="w-full"
             >

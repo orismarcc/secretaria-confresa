@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useServices, useSettlements, useDemandTypes } from '@/hooks/useSupabaseData';
+import { useOperators } from '@/hooks/useOperatorData';
 import { 
   BarChart, 
   Bar, 
@@ -18,7 +19,7 @@ import {
 } from 'recharts';
 import { format, parseISO, startOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { TrendingUp, MapPin, ClipboardList, Tractor } from 'lucide-react';
+import { TrendingUp, MapPin, ClipboardList, Tractor, Users2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Custom tooltip component
@@ -112,6 +113,7 @@ export default function AnalyticsPage() {
   const { data: services = [], isLoading: servicesLoading } = useServices();
   const { data: settlements = [], isLoading: settlementsLoading } = useSettlements();
   const { data: demandTypes = [], isLoading: demandTypesLoading } = useDemandTypes();
+  const { data: operators = [] } = useOperators();
 
   const isLoading = servicesLoading || settlementsLoading || demandTypesLoading;
 
@@ -188,6 +190,24 @@ export default function AnalyticsPage() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 3);
   }, [services, demandTypes]);
+
+  // Operator productivity stats
+  const operatorStats = useMemo(() => {
+    const stats: Record<string, { name: string; completed: number; totalArea: number }> = {};
+    operators.forEach(op => {
+      stats[op.id] = { name: op.name, completed: 0, totalArea: 0 };
+    });
+    (services as any[]).forEach(s => {
+      if (s.status === 'completed' && s.operator_id && stats[s.operator_id]) {
+        stats[s.operator_id].completed++;
+        stats[s.operator_id].totalArea += Number(s.worked_area || 0);
+      }
+    });
+    return Object.values(stats)
+      .filter(op => op.completed > 0)
+      .sort((a, b) => b.completed - a.completed)
+      .slice(0, 5);
+  }, [services, operators]);
 
   // Total worked area (only from completed services with "Grade" demand type)
   const totalWorkedArea = useMemo(() => {
@@ -387,6 +407,54 @@ export default function AnalyticsPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Operator Productivity */}
+          {operatorStats.length > 0 && (
+            <Card className="overflow-hidden">
+              <CardHeader className="border-b bg-gradient-to-r from-primary/10 to-primary/5">
+                <CardTitle className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-primary/20">
+                    <Users2 className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <span className="text-lg">Produtividade dos Operadores</span>
+                    <p className="text-sm font-normal text-muted-foreground">Atendimentos finalizados por operador</p>
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="space-y-5">
+                  {operatorStats.map((op, index) => {
+                    const maxCompleted = operatorStats[0].completed;
+                    const pct = Math.round((op.completed / maxCompleted) * 100);
+                    return (
+                      <div key={index} className="space-y-1.5">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium truncate max-w-[60%]">{op.name}</span>
+                          <div className="flex items-center gap-3 shrink-0">
+                            {op.totalArea > 0 && (
+                              <span className="text-muted-foreground text-xs">{op.totalArea.toFixed(1)} ha</span>
+                            )}
+                            <span className="font-bold text-primary text-lg tabular-nums">{op.completed}</span>
+                          </div>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-border overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-primary transition-all duration-700"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {op.completed} {op.completed === 1 ? 'atendimento finalizado' : 'atendimentos finalizados'}
+                          {op.totalArea > 0 && ` · ${op.totalArea.toFixed(1)} ha trabalhado`}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Rankings Section */}
           <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
