@@ -6,8 +6,19 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Pencil, Trash2, MapPin, Phone, User, FileText, Home } from 'lucide-react';
+import { Pencil, Trash2, MapPin, Phone, User, FileText, Home, Navigation, ExternalLink } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+
+function openInMaps(lat: number, lng: number) {
+  const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+  const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+  if (isMobile) {
+    window.location.href = `geo:${lat},${lng}?q=${lat},${lng}`;
+    setTimeout(() => window.open(googleMapsUrl, '_blank', 'noopener,noreferrer'), 500);
+  } else {
+    window.open(googleMapsUrl, '_blank', 'noopener,noreferrer');
+  }
+}
 
 interface ProducerDetailSheetProps {
   open: boolean;
@@ -95,6 +106,22 @@ export function ProducerDetailSheet({
                 <p className="font-medium">{producer.locationName || 'Não informada'}</p>
               </div>
             </div>
+
+            {producer.latitude && producer.longitude && (
+              <div className="flex items-start gap-3">
+                <Navigation className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Coordenadas GPS</p>
+                  <button
+                    onClick={() => openInMaps(producer.latitude!, producer.longitude!)}
+                    className="flex items-center gap-1.5 mt-0.5 text-sm text-blue-600 hover:text-blue-500 font-mono"
+                  >
+                    {producer.latitude.toFixed(6)}, {producer.longitude.toFixed(6)}
+                    <ExternalLink className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <Separator />

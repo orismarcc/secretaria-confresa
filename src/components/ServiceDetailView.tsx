@@ -22,6 +22,17 @@ function buildWhatsAppUrl(phone: string): string {
   return `https://wa.me/${number}`;
 }
 
+function openInMaps(lat: number, lng: number) {
+  const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+  const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+  if (isMobile) {
+    window.location.href = `geo:${lat},${lng}?q=${lat},${lng}`;
+    setTimeout(() => window.open(googleMapsUrl, '_blank', 'noopener,noreferrer'), 500);
+  } else {
+    window.open(googleMapsUrl, '_blank', 'noopener,noreferrer');
+  }
+}
+
 interface ServiceDetailViewProps {
   service: {
     id: string;
@@ -46,7 +57,7 @@ interface ServiceDetailViewProps {
     locations?: { name: string } | null;
     machinery?: { name: string; patrimony_number: string } | null;
   };
-  producer?: { name: string; cpf: string; phone?: string; location_name?: string } | null;
+  producer?: { name: string; cpf: string; phone?: string; location_name?: string; latitude?: number | null; longitude?: number | null } | null;
   demandType?: { name: string } | null;
   settlement?: { name: string } | null;
   location?: { name: string } | null;
@@ -68,23 +79,6 @@ export function ServiceDetailView({
   const { photos, isLoading: photosLoading } = useCombinedServicePhotos(service.id);
   const isCompleted = service.status === 'completed';
 
-  const openInMaps = () => {
-    if (service.latitude && service.longitude) {
-      const geoUrl = `geo:${service.latitude},${service.longitude}?q=${service.latitude},${service.longitude}`;
-      const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${service.latitude},${service.longitude}`;
-
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
-      if (isMobile) {
-        window.location.href = geoUrl;
-        setTimeout(() => {
-          window.open(googleMapsUrl, '_blank', 'noopener,noreferrer');
-        }, 500);
-      } else {
-        window.open(googleMapsUrl, '_blank', 'noopener,noreferrer');
-      }
-    }
-  };
 
   return (
     <div className="mt-6 space-y-4">
@@ -116,6 +110,24 @@ export function ServiceDetailView({
             );
           })()}
         </div>
+
+        {(() => {
+          const lat = producer?.latitude ?? null;
+          const lng = producer?.longitude ?? null;
+          if (!lat || !lng) return null;
+          return (
+            <div>
+              <p className="text-sm text-muted-foreground">Localização do Produtor</p>
+              <button
+                onClick={() => openInMaps(lat, lng)}
+                className="flex items-center gap-1.5 mt-0.5 text-sm text-blue-600 hover:text-blue-500 font-mono"
+              >
+                <Navigation className="h-3.5 w-3.5 shrink-0" />
+                {lat.toFixed(6)}, {lng.toFixed(6)}
+              </button>
+            </div>
+          );
+        })()}
 
         <div>
           <p className="text-sm text-muted-foreground">Tipo de Demanda</p>
@@ -205,7 +217,7 @@ export function ServiceDetailView({
                     {service.latitude.toFixed(6)}, {service.longitude.toFixed(6)}
                   </p>
                 </div>
-                <Button variant="outline" size="sm" onClick={openInMaps}>
+                <Button variant="outline" size="sm" onClick={() => openInMaps(service.latitude!, service.longitude!)}>
                   <ExternalLink className="h-3 w-3 mr-1" />
                   Mapa
                 </Button>

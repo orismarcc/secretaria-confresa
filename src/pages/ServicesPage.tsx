@@ -61,7 +61,7 @@ interface DbService {
   created_at?: string | null;
   updated_at?: string | null;
   worked_area?: number | null;
-  producers?: { name: string; phone?: string | null; location_name?: string | null } | null;
+  producers?: { name: string; phone?: string | null; location_name?: string | null; latitude?: number | null; longitude?: number | null } | null;
   demand_types?: { name: string } | null;
   settlements?: { name: string } | null;
   locations?: { name: string } | null;
@@ -403,11 +403,15 @@ export default function ServicesPage() {
                 cpf: detailProducerFull.cpf,
                 phone: detailProducerFull.phone || detailService.producers?.phone || undefined,
                 location_name: detailProducerFull.location_name || detailService.producers?.location_name || undefined,
+                latitude: detailProducerFull.latitude ?? detailService.producers?.latitude ?? undefined,
+                longitude: detailProducerFull.longitude ?? detailService.producers?.longitude ?? undefined,
               } : detailService.producers ? {
                 name: detailService.producers.name,
                 cpf: '',
                 phone: detailService.producers.phone || undefined,
                 location_name: detailService.producers.location_name || undefined,
+                latitude: detailService.producers.latitude ?? undefined,
+                longitude: detailService.producers.longitude ?? undefined,
               } : null}
               demandType={detailDemandType ? { name: detailDemandType.name } : null}
               settlement={detailSettlement ? { name: detailSettlement.name } : null}

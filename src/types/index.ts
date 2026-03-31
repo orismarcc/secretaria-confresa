@@ -49,6 +49,8 @@ export interface Producer {
   propertyName?: string;
   propertySize?: number;
   dapCap?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   createdAt: Date;
 }
 

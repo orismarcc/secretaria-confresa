@@ -430,7 +430,7 @@ export function useServices() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('services')
-        .select('*, producers(name, phone, location_name), demand_types(name), settlements(name), locations(name), machinery(name, patrimony_number)')
+        .select('*, producers(name, phone, location_name, latitude, longitude), demand_types(name), settlements(name), locations(name), machinery(name, patrimony_number)')
         .order('scheduled_date', { ascending: true });
       if (error) throw error;
       return data;
