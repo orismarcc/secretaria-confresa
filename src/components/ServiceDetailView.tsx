@@ -12,8 +12,15 @@ import {
   Calendar,
   Navigation,
   Image,
-  ExternalLink
+  ExternalLink,
+  MessageCircle,
 } from 'lucide-react';
+
+function buildWhatsAppUrl(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  const number = digits.startsWith('55') ? digits : `55${digits}`;
+  return `https://wa.me/${number}`;
+}
 
 interface ServiceDetailViewProps {
   service: {
@@ -33,13 +40,13 @@ interface ServiceDetailViewProps {
     worked_area?: number | null;
     latitude?: number | null;
     longitude?: number | null;
-    producers?: { name: string; cpf?: string } | null;
+    producers?: { name: string; cpf?: string; phone?: string | null } | null;
     demand_types?: { name: string } | null;
     settlements?: { name: string } | null;
     locations?: { name: string } | null;
     machinery?: { name: string; patrimony_number: string } | null;
   };
-  producer?: { name: string; cpf: string; location_name?: string } | null;
+  producer?: { name: string; cpf: string; phone?: string; location_name?: string } | null;
   demandType?: { name: string } | null;
   settlement?: { name: string } | null;
   location?: { name: string } | null;
@@ -93,6 +100,21 @@ export function ServiceDetailView({
           <p className="text-sm text-muted-foreground">Produtor</p>
           <p className="font-medium">{producer?.name || service.producers?.name || 'N/A'}</p>
           <p className="text-sm text-muted-foreground">{producer?.cpf}</p>
+          {(() => {
+            const phone = producer?.phone || service.producers?.phone;
+            if (!phone) return null;
+            return (
+              <a
+                href={buildWhatsAppUrl(phone)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 mt-1 text-sm text-[#25D366] hover:text-[#25D366]/80 font-medium"
+              >
+                <MessageCircle className="h-4 w-4" />
+                {phone}
+              </a>
+            );
+          })()}
         </div>
 
         <div>

@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/StatusBadge';
-import { MapPin, Phone, Calendar, GripVertical, Navigation, User } from 'lucide-react';
+import { MapPin, Phone, Calendar, GripVertical, Navigation, User, MessageCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { OnlineIndicator } from '@/components/ConnectionStatus';
@@ -144,9 +144,22 @@ function SortableOperatorCard({
                 <MapPin className="h-4 w-4" />
                 {settlementName} - {locationName}
               </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Phone className="h-4 w-4" />
-                {service.producers?.phone || 'N/A'}
+              <div className="flex items-center gap-2">
+                <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                {service.producers?.phone ? (
+                  <a
+                    href={`https://wa.me/${service.producers.phone.replace(/\D/g, '').replace(/^(?!55)/, '55')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-[#25D366] hover:text-[#25D366]/80 font-medium text-sm"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    {service.producers.phone}
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground text-sm">N/A</span>
+                )}
               </div>
             </div>
             
