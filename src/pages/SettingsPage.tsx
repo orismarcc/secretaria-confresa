@@ -15,7 +15,8 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { User, KeyRound, Save, Eye, EyeOff } from 'lucide-react';
+import { usePWAInstall } from '@/hooks/usePWAInstall';
+import { User, KeyRound, Save, Eye, EyeOff, Download, Smartphone, CheckCircle2 } from 'lucide-react';
 
 const JOB_TITLES = [
   'Secretário de Agricultura',
@@ -27,6 +28,7 @@ const JOB_TITLES = [
 export default function SettingsPage() {
   const { profile, updateProfile, updatePassword } = useAuth();
   const { toast } = useToast();
+  const { canInstall, isInstalled, install } = usePWAInstall();
 
   // Personal data state
   const [name, setName] = useState(profile?.name || '');
@@ -139,6 +141,46 @@ export default function SettingsPage() {
               <Save className="h-4 w-4 mr-2" />
               {savingProfile ? 'Salvando...' : 'Salvar dados'}
             </Button>
+          </CardContent>
+        </Card>
+
+        {/* PWA Install Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Smartphone className="h-5 w-5 text-primary" />
+              Instalar Aplicativo
+            </CardTitle>
+            <CardDescription>
+              Adicione o app à tela inicial do seu celular para acesso rápido
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isInstalled ? (
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
+                <span>O aplicativo já está instalado na tela inicial do seu dispositivo.</span>
+              </div>
+            ) : canInstall ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Instale para acessar sem precisar abrir o navegador, receber notificações e usar offline.
+                </p>
+                <Button onClick={install} className="w-full sm:w-auto">
+                  <Download className="h-4 w-4 mr-2" />
+                  Adicionar à tela inicial
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>
+                  O botão de instalação aparece automaticamente quando o navegador libera o prompt.
+                </p>
+                <p className="text-xs">
+                  Caso já tenha desinstalado recentemente, o Chrome pode levar alguns minutos para disponibilizar o prompt novamente. Recarregue a página após alguns instantes.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 

@@ -8,35 +8,46 @@ interface BeforeInstallPromptEvent extends Event {
 /**
  * usePWAInstall
  *
- * Captures the `beforeinstallprompt` browser event so we can trigger
- * the Add-to-Home-Screen prompt on demand (e.g., via a download button).
- *
- * Returns:
- *   canInstall – true when the prompt is available (browser supports PWA install
- *                AND the app hasn't already been installed)
- *   install    – function that triggers the native install prompt
+ * Gerencia o ciclo de instalação do PWA.
+ * - canInstall: true quando o browser disparou o beforeinstallprompt e o app ainda não está instalado
+ * - isInstalled: true quando o app já está rodando em modo standalone (instalado)
+ * - install: função que dispara o prompt nativo de instalação
  */
 export function usePWAInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [canInstall, setCanInstall] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(false);
 
   useEffect(() => {
+    // Verifica se já está rodando em modo standalone (instalado)
+    const mq = window.matchMedia('(display-mode: standalone)');
+    setIsInstalled(mq.matches);
+
+    const mqHandler = (e: MediaQueryListEvent) => {
+      setIsInstalled(e.matches);
+      if (e.matches) setCanInstall(false);
+    };
+    mq.addEventListener('change', mqHandler);
+
+    // Captura o evento de prompt de instalação
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       setCanInstall(true);
     };
-
     window.addEventListener('beforeinstallprompt', handler);
 
-    // If already installed (standalone mode), hide the button
-    const mq = window.matchMedia('(display-mode: standalone)');
-    if (mq.matches) setCanInstall(false);
-    const mqHandler = (e: MediaQueryListEvent) => { if (e.matches) setCanInstall(false); };
-    mq.addEventListener('change', mqHandler);
+    // Detecta quando o app é instalado com sucesso
+    const installedHandler = () => {
+      setIsInstalled(true);
+      setCanInstall(false);
+      setDeferredPrompt(null);
+    };
+    window.addEventListener('appinstalled', installedHandler);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('appinstalled', installedHandler);
       mq.removeEventListener('change', mqHandler);
     };
   }, []);
@@ -51,5 +62,5 @@ export function usePWAInstall() {
     }
   };
 
-  return { canInstall, install };
+  return { canInstall, isInstalled, install };
 }
