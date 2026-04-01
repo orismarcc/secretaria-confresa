@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { useServices, useProducers, useDemandTypes } from '@/hooks/useSupabaseData';
+import { useServices } from '@/hooks/useSupabaseData';
 import { StatusBadge } from '@/components/StatusBadge';
 
 const locales = { 'pt-BR': ptBR };
@@ -44,12 +44,6 @@ const messages = {
   showMore: (total: number) => `+${total} mais`,
 };
 
-const statusColors: Record<string, string> = {
-  pending: '#f59e0b',
-  in_progress: '#3b82f6',
-  completed: '#22c55e',
-};
-
 interface CalendarEvent {
   id: string;
   title: string;
@@ -62,82 +56,120 @@ interface CalendarEvent {
     demandTypeName: string;
     status: string;
     notes?: string;
+    eventType: 'created' | 'completed';
+    registeredBy?: string;
   };
 }
 
 export default function CalendarPage() {
   const { data: services = [], isLoading } = useServices();
-  const { data: producers = [] } = useProducers();
-  const { data: demandTypes = [] } = useDemandTypes();
   const [view, setView] = useState<View>('month');
   const [date, setDate] = useState(new Date());
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const events = useMemo((): CalendarEvent[] => {
-    return (services as any[]).map(s => {
-      const producer = (producers as any[]).find(p => p.id === s.producer_id);
-      const demandType = (demandTypes as any[]).find(d => d.id === s.demand_type_id);
-      const d = new Date(s.scheduled_date);
-      return {
-        id: s.id,
-        title: producer?.name || s.producers?.name || 'Produtor',
-        start: d,
-        end: d,
+    const result: CalendarEvent[] = [];
+
+    (services as any[]).forEach(s => {
+      const producerName = s.producers?.name || 'Produtor';
+      const demandTypeName = s.demand_types?.name || 'N/A';
+      const registeredBy = s.profiles?.name;
+
+      // Event for creation date (cadastro)
+      const createdDate = s.created_at ? new Date(s.created_at) : new Date(s.scheduled_date);
+      result.push({
+        id: `${s.id}-created`,
+        title: `📋 ${producerName}`,
+        start: createdDate,
+        end: createdDate,
         allDay: true,
         resource: {
           service: s,
-          producerName: producer?.name || s.producers?.name || 'N/A',
-          demandTypeName: demandType?.name || s.demand_types?.name || 'N/A',
+          producerName,
+          demandTypeName,
           status: s.status,
           notes: s.notes,
+          eventType: 'created',
+          registeredBy,
         },
-      };
-    });
-  }, [services, producers, demandTypes]);
+      });
 
-  const eventStyleGetter = (event: CalendarEvent) => ({
-    style: {
-      backgroundColor: statusColors[event.resource.status] ?? '#6b7280',
-      borderRadius: '6px',
-      border: 'none',
-      color: 'white',
-      fontSize: '12px',
-      padding: '2px 6px',
-      cursor: 'pointer',
-    },
-  });
+      // Event for completion date (only for completed services)
+      if (s.status === 'completed' && s.completed_at) {
+        const d = new Date(s.completed_at);
+        result.push({
+          id: `${s.id}-completed`,
+          title: `✅ ${producerName}`,
+          start: d,
+          end: d,
+          allDay: true,
+          resource: {
+            service: s,
+            producerName,
+            demandTypeName,
+            status: s.status,
+            notes: s.notes,
+            eventType: 'completed',
+            registeredBy,
+          },
+        });
+      }
+    });
+
+    return result;
+  }, [services]);
+
+  const eventStyleGetter = (event: CalendarEvent) => {
+    const isCompleted = event.resource.eventType === 'completed';
+    const bgColor = isCompleted ? '#22c55e' : (
+      event.resource.status === 'pending' ? '#f59e0b' :
+      event.resource.status === 'in_progress' ? '#3b82f6' : '#6b7280'
+    );
+    return {
+      style: {
+        backgroundColor: bgColor,
+        borderRadius: '6px',
+        border: 'none',
+        color: 'white',
+        fontSize: '12px',
+        padding: '2px 6px',
+        cursor: 'pointer',
+      },
+    };
+  };
 
   const handleSelectEvent = (event: CalendarEvent) => {
     setSelectedEvent(event);
     setSheetOpen(true);
   };
 
-  const pendingCount = events.filter(e => e.resource.status === 'pending').length;
-  const inProgressCount = events.filter(e => e.resource.status === 'in_progress').length;
-  const completedCount = events.filter(e => e.resource.status === 'completed').length;
+  const createdCount = events.filter(e => e.resource.eventType === 'created').length;
+  const completedCount = events.filter(e => e.resource.eventType === 'completed').length;
 
   return (
     <AppLayout>
       <PageHeader
         title="Calendário de Atendimentos"
-        description="Visualização por data dos atendimentos agendados"
+        description="Cadastros e finalizações por data"
       />
 
       <div className="flex flex-wrap gap-3 mb-4 items-center">
         <div className="flex items-center gap-1.5 text-sm">
           <span className="w-3 h-3 rounded-full bg-amber-500 inline-block" />
-          <span className="text-muted-foreground">Pendente ({pendingCount})</span>
+          <span className="text-muted-foreground">Cadastrado - Pendente</span>
         </div>
         <div className="flex items-center gap-1.5 text-sm">
           <span className="w-3 h-3 rounded-full bg-blue-500 inline-block" />
-          <span className="text-muted-foreground">Em Execução ({inProgressCount})</span>
+          <span className="text-muted-foreground">Cadastrado - Em Execução</span>
         </div>
         <div className="flex items-center gap-1.5 text-sm">
           <span className="w-3 h-3 rounded-full bg-green-500 inline-block" />
-          <span className="text-muted-foreground">Finalizado ({completedCount})</span>
+          <span className="text-muted-foreground">Finalizado</span>
         </div>
-        <Badge variant="outline" className="ml-auto">{events.length} total</Badge>
+        <Badge variant="outline" className="ml-auto">
+          {createdCount} cadastros · {completedCount} finalizações
+        </Badge>
       </div>
 
       {isLoading ? (
@@ -167,7 +199,9 @@ export default function CalendarPage() {
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent className="w-full sm:max-w-sm">
           <SheetHeader>
-            <SheetTitle className="text-left">Detalhes do Atendimento</SheetTitle>
+            <SheetTitle className="text-left">
+              {selectedEvent?.resource.eventType === 'completed' ? '✅ Finalização' : '📋 Cadastro'} de Atendimento
+            </SheetTitle>
           </SheetHeader>
           {selectedEvent && (
             <div className="mt-6 space-y-4">
@@ -181,13 +215,21 @@ export default function CalendarPage() {
                 <p className="font-medium">{selectedEvent.resource.demandTypeName}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Data Agendada</p>
+                <p className="text-sm text-muted-foreground">
+                  {selectedEvent.resource.eventType === 'completed' ? 'Finalizado em' : 'Cadastrado em'}
+                </p>
                 <p className="font-medium">
                   {format(selectedEvent.start, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                 </p>
               </div>
+              {selectedEvent.resource.registeredBy && selectedEvent.resource.eventType === 'created' && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Cadastrado por</p>
+                  <p className="font-medium">{selectedEvent.resource.registeredBy}</p>
+                </div>
+              )}
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Status</p>
+                <p className="text-sm text-muted-foreground mb-1">Status atual</p>
                 <StatusBadge status={selectedEvent.resource.status as 'pending' | 'in_progress' | 'completed'} />
               </div>
               {selectedEvent.resource.notes && (

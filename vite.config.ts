@@ -5,7 +5,7 @@ import path from "path";
 export default defineConfig({
   server: {
     host: "::",
-    port: 8080,
+    port: process.env.PORT ? Number(process.env.PORT) : 5173,
     hmr: {
       overlay: false,
     },

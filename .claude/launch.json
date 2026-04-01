@@ -2,10 +2,22 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "dev",
+      "name": "Dev (Vite)",
       "runtimeExecutable": "bun",
       "runtimeArgs": ["run", "dev"],
-      "port": 8080
+      "autoPort": true
+    },
+    {
+      "name": "Preview (Vite build)",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "preview"],
+      "autoPort": true
+    },
+    {
+      "name": "Test (Vitest)",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "test"],
+      "autoPort": true
     }
   ]
 }

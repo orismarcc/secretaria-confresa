@@ -15,8 +15,8 @@ import DemandTypesPage from "./pages/DemandTypesPage";
 import SettlementsPage from "./pages/SettlementsPage";
 import MachineryPage from "./pages/MachineryPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
-import MapPage from "./pages/MapPage";
 import CalendarPage from "./pages/CalendarPage";
+import SettingsPage from "./pages/SettingsPage";
 import OperatorPage from "./pages/OperatorPage";
 import NotFound from "./pages/NotFound";
 
@@ -24,22 +24,22 @@ const queryClient = new QueryClient();
 
 function ProtectedRoute({ children, adminOnly = false }: { children: React.ReactNode; adminOnly?: boolean }) {
   const { isAuthenticated, isLoading, hasRole } = useAuth();
-  
+
   if (isLoading) return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (adminOnly && !hasRole('admin')) return <Navigate to="/operator" replace />;
-  
+
   return <>{children}</>;
 }
 
 function AppRoutes() {
   const { isAuthenticated, hasRole } = useAuth();
-  
+
   return (
     <Routes>
       <Route path="/login" element={isAuthenticated ? <Navigate to={hasRole('admin') ? '/dashboard' : '/operator'} replace /> : <LoginPage />} />
       <Route path="/" element={<Navigate to={isAuthenticated ? (hasRole('admin') ? '/dashboard' : '/operator') : '/login'} replace />} />
-      
+
       {/* Admin Routes */}
       <Route path="/dashboard" element={<ProtectedRoute adminOnly><DashboardPage /></ProtectedRoute>} />
       <Route path="/services" element={<ProtectedRoute adminOnly><ServicesPage /></ProtectedRoute>} />
@@ -49,12 +49,12 @@ function AppRoutes() {
       <Route path="/settlements" element={<ProtectedRoute adminOnly><SettlementsPage /></ProtectedRoute>} />
       <Route path="/machinery" element={<ProtectedRoute adminOnly><MachineryPage /></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute adminOnly><AnalyticsPage /></ProtectedRoute>} />
-      <Route path="/map" element={<ProtectedRoute adminOnly><MapPage /></ProtectedRoute>} />
       <Route path="/calendar" element={<ProtectedRoute adminOnly><CalendarPage /></ProtectedRoute>} />
-      
+      <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+
       {/* Operator Route */}
       <Route path="/operator" element={<ProtectedRoute><OperatorPage /></ProtectedRoute>} />
-      
+
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

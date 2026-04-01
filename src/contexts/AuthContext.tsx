@@ -6,7 +6,7 @@ import { UserRole } from '@/types';
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  profile: { name: string; email: string } | null;
+  profile: { name: string; email: string; job_title?: string | null } | null;
   role: UserRole | null;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -14,6 +14,8 @@ interface AuthContextType {
   signUp: (email: string, password: string, name: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   hasRole: (role: UserRole) => boolean;
+  updateProfile: (data: { name?: string; job_title?: string }) => Promise<{ success: boolean; error?: string }>;
+  updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -21,18 +23,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<{ name: string; email: string } | null>(null);
+  const [profile, setProfile] = useState<{ name: string; email: string; job_title?: string | null } | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        
-        // Defer Supabase calls with setTimeout to avoid deadlock
+
         if (session?.user) {
           setTimeout(() => {
             fetchUserData(session.user.id);
@@ -45,11 +45,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      
+
       if (session?.user) {
         fetchUserData(session.user.id);
       } else {
@@ -62,9 +61,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUserData = async (userId: string) => {
     try {
-      // Fetch profile and role in parallel
       const [profileRes, roleRes] = await Promise.all([
-        supabase.from('profiles').select('name, email').eq('id', userId).maybeSingle(),
+        supabase.from('profiles').select('name, email, job_title').eq('id', userId).maybeSingle(),
         supabase.from('user_roles').select('role, is_active').eq('user_id', userId).maybeSingle(),
       ]);
 
@@ -73,9 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (roleRes.data) {
-        // Check if user is active
         if (!roleRes.data.is_active) {
-          // User is deactivated, log them out
           await supabase.auth.signOut();
           setUser(null);
           setSession(null);
@@ -86,16 +82,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         setRole(roleRes.data.role as UserRole);
       } else {
-        // No role found - check if this is the first user (bootstrap)
         const { data: bootstrapResult } = await supabase.rpc('bootstrap_first_admin', { _user_id: userId });
-        
         if (bootstrapResult === true) {
-          // User was promoted to admin
           setRole('admin');
         }
       }
     } catch {
-      // silent — errors surface via Supabase auth state
+      // silent
     } finally {
       setIsLoading(false);
     }
@@ -103,12 +96,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
-
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-
     if (error) {
       setIsLoading(false);
-      // Map Supabase error codes to safe user-facing messages
       const code = error.message?.toLowerCase() ?? '';
       if (code.includes('invalid login') || code.includes('invalid credentials') || code.includes('wrong password')) {
         return { success: false, error: 'Email ou senha incorretos.' };
@@ -121,15 +111,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return { success: false, error: 'Não foi possível fazer login. Tente novamente.' };
     }
-
     return { success: true };
   };
 
   const signUp = async (email: string, password: string, name: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
-
     const redirectUrl = `${window.location.origin}/`;
-
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -138,7 +125,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         data: { name },
       },
     });
-
     if (error) {
       setIsLoading(false);
       const code = error.message?.toLowerCase() ?? '';
@@ -148,10 +134,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (code.includes('weak password') || code.includes('password')) {
         return { success: false, error: 'Senha muito fraca. Use ao menos 6 caracteres.' };
       }
-      // Generic fallback — never expose raw Supabase error
       return { success: false, error: 'Não foi possível criar a conta. Tente novamente.' };
     }
-
     setIsLoading(false);
     return { success: true };
   };
@@ -164,8 +148,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRole(null);
   };
 
-  const hasRole = (checkRole: UserRole): boolean => {
-    return role === checkRole;
+  const hasRole = (checkRole: UserRole): boolean => role === checkRole;
+
+  const updateProfile = async (data: { name?: string; job_title?: string }): Promise<{ success: boolean; error?: string }> => {
+    if (!user) return { success: false, error: 'Usuário não autenticado.' };
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update(data)
+        .eq('id', user.id);
+      if (error) throw error;
+      // Refresh local profile state
+      setProfile(prev => prev ? { ...prev, ...data } : prev);
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: 'Não foi possível atualizar o perfil.' };
+    }
+  };
+
+  const updatePassword = async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: 'Não foi possível alterar a senha.' };
+    }
   };
 
   return (
@@ -180,6 +188,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUp,
       logout,
       hasRole,
+      updateProfile,
+      updatePassword,
     }}>
       {children}
     </AuthContext.Provider>

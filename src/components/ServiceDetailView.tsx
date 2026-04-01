@@ -42,6 +42,7 @@ interface ServiceDetailViewProps {
     location_id?: string | null;
     status: string;
     scheduled_date: string;
+    created_at?: string | null;
     completed_at?: string | null;
     notes?: string | null;
     completion_notes?: string | null;
@@ -56,6 +57,7 @@ interface ServiceDetailViewProps {
     settlements?: { name: string } | null;
     locations?: { name: string } | null;
     machinery?: { name: string; patrimony_number: string } | null;
+    profiles?: { name: string } | null;
   };
   producer?: { name: string; cpf: string; phone?: string; location_name?: string; latitude?: number | null; longitude?: number | null } | null;
   demandType?: { name: string } | null;
@@ -166,12 +168,21 @@ export function ServiceDetailView({
         <div className="flex items-center gap-2">
           <Calendar className="h-4 w-4 text-muted-foreground" />
           <div>
-            <p className="text-sm text-muted-foreground">Data Agendada</p>
+            <p className="text-sm text-muted-foreground">Data de Cadastro</p>
             <p className="font-medium">
-              {format(new Date(service.scheduled_date), 'dd/MM/yyyy', { locale: ptBR })}
+              {service.created_at
+                ? format(new Date(service.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                : format(new Date(service.scheduled_date), 'dd/MM/yyyy', { locale: ptBR })}
             </p>
           </div>
         </div>
+
+        {service.profiles?.name && (
+          <div>
+            <p className="text-sm text-muted-foreground">Cadastrado por</p>
+            <p className="font-medium">{service.profiles.name}</p>
+          </div>
+        )}
 
         {service.notes && (
           <div>

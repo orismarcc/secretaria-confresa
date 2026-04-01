@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { DataTable } from '@/components/DataTable';
@@ -17,7 +18,6 @@ import {
 } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
 import { Plus, Pencil, Trash2, Archive, CheckCircle, Eye, FileDown } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -64,16 +64,19 @@ interface DbService {
   created_at?: string | null;
   updated_at?: string | null;
   worked_area?: number | null;
+  created_by?: string | null;
   producers?: { name: string; phone?: string | null; location_name?: string | null; latitude?: number | null; longitude?: number | null } | null;
   demand_types?: { name: string } | null;
   settlements?: { name: string } | null;
   locations?: { name: string } | null;
   machinery?: { name: string; patrimony_number: string } | null;
+  profiles?: { name: string } | null;
 }
 
 export default function ServicesPage() {
   const queryClient = useQueryClient();
-  
+  const [searchParams] = useSearchParams();
+
   const { data: services = [], isLoading: servicesLoading } = useServices();
   const { data: producers = [] } = useProducers();
   const { data: demandTypes = [] } = useDemandTypes();
@@ -86,7 +89,9 @@ export default function ServicesPage() {
   const deleteService = useDeleteService();
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('active');
+  const [statusFilter, setStatusFilter] = useState<string>(
+    searchParams.get('tab') === 'archived' ? 'archived' : 'active'
+  );
   const [demandTypeFilter, setDemandTypeFilter] = useState<string>('all');
   const [formOpen, setFormOpen] = useState(false);
   const [editingService, setEditingService] = useState<DbService | null>(null);
@@ -308,14 +313,21 @@ export default function ServicesPage() {
       key: 'status',
       header: 'Status',
       render: (s: DbService) => {
-        const isOverdue = s.status === 'pending' && new Date(s.scheduled_date) < new Date(new Date().toDateString());
+        const createdAt = s.created_at ? new Date(s.created_at) : null;
+        const registeredBy = (s as any).profiles?.name;
         return (
           <div className="flex flex-col gap-1">
             <StatusBadge status={s.status as 'pending' | 'in_progress' | 'completed'} />
-            <span className={cn('text-xs', isOverdue ? 'text-destructive font-medium' : 'text-muted-foreground')}>
-              {isOverdue && '⚠ '}
-              {format(new Date(s.scheduled_date), 'dd/MM/yy', { locale: ptBR })}
-            </span>
+            {createdAt && (
+              <span className="text-xs text-muted-foreground">
+                {format(createdAt, 'dd/MM/yy', { locale: ptBR })}
+              </span>
+            )}
+            {registeredBy && (
+              <span className="text-xs text-muted-foreground truncate max-w-[110px]" title={registeredBy}>
+                por {registeredBy}
+              </span>
+            )}
           </div>
         );
       }
@@ -368,15 +380,15 @@ export default function ServicesPage() {
         producer?.name || s.producers?.name || 'N/A',
         dt?.name || s.demand_types?.name || 'N/A',
         st?.name || s.settlements?.name || 'N/A',
-        format(new Date(s.scheduled_date), 'dd/MM/yyyy', { locale: ptBR }),
+        s.created_at ? format(new Date(s.created_at), 'dd/MM/yyyy', { locale: ptBR }) : '-',
         statusLabel(s.status),
-        priorityLabel(s.priority),
+        (s as any).profiles?.name || '-',
       ];
     });
 
     autoTable(doc, {
       startY: 40,
-      head: [['Produtor', 'Demanda', 'Assentamento', 'Data', 'Status', 'Prioridade']],
+      head: [['Produtor', 'Demanda', 'Assentamento', 'Cadastro', 'Status', 'Cadastrado por']],
       body: rows,
       styles: { fontSize: 9, cellPadding: 3 },
       headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },

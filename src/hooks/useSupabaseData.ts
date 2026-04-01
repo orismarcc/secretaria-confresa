@@ -430,8 +430,8 @@ export function useServices() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('services')
-        .select('*, producers(name, phone, location_name, latitude, longitude), demand_types(name), settlements(name), locations(name), machinery(name, patrimony_number)')
-        .order('scheduled_date', { ascending: true });
+        .select('*, producers(name, phone, location_name, latitude, longitude), demand_types(name), settlements(name), locations(name), machinery(name, patrimony_number), profiles!created_by(name)')
+        .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -489,9 +489,10 @@ export function useCreateService() {
       operator_id?: string | null;
       machinery_id?: string | null;
     }) => {
+      const { data: { user } } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from('services')
-        .insert(service)
+        .insert({ ...service, created_by: user?.id ?? null })
         .select()
         .single();
       if (error) throw error;

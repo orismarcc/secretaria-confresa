@@ -134,10 +134,10 @@ export default function DashboardPage() {
           </>
         ) : (
           <>
-            <StatsCard title="Total de Atendimentos" value={stats?.totalServices || 0} icon={ClipboardList} variant="primary" />
-            <StatsCard title="Pendentes" value={stats?.pendingServices || 0} icon={Clock} variant="warning" />
-            <StatsCard title="Em Execução" value={stats?.inProgressServices || 0} icon={Loader2} variant="info" />
-            <StatsCard title="Finalizados" value={stats?.completedServices || 0} icon={CheckCircle2} variant="success" />
+            <div className="cursor-pointer" onClick={() => navigate('/services')}><StatsCard title="Total de Atendimentos" value={stats?.totalServices || 0} icon={ClipboardList} variant="primary" /></div>
+            <div className="cursor-pointer" onClick={() => navigate('/services')}><StatsCard title="Pendentes" value={stats?.pendingServices || 0} icon={Clock} variant="warning" /></div>
+            <div className="cursor-pointer" onClick={() => navigate('/services')}><StatsCard title="Em Execução" value={stats?.inProgressServices || 0} icon={Loader2} variant="info" /></div>
+            <div className="cursor-pointer" onClick={() => navigate('/services?tab=archived')}><StatsCard title="Finalizados" value={stats?.completedServices || 0} icon={CheckCircle2} variant="success" /></div>
           </>
         )}
       </div>
