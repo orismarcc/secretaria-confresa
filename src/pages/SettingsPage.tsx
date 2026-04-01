@@ -152,19 +152,21 @@ export default function SettingsPage() {
               Instalar Aplicativo
             </CardTitle>
             <CardDescription>
-              Adicione o app à tela inicial do seu celular para acesso rápido
+              Adicione o app à tela inicial para acesso rápido, sem precisar abrir o navegador
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             {isInstalled ? (
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
-                <span>O aplicativo já está instalado na tela inicial do seu dispositivo.</span>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900">
+                <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+                <span className="text-sm text-green-800 dark:text-green-300">
+                  Aplicativo já instalado na tela inicial.
+                </span>
               </div>
             ) : canInstall ? (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Instale para acessar sem precisar abrir o navegador, receber notificações e usar offline.
+                  Clique abaixo para adicionar à tela inicial do seu dispositivo.
                 </p>
                 <Button onClick={install} className="w-full sm:w-auto">
                   <Download className="h-4 w-4 mr-2" />
@@ -172,13 +174,34 @@ export default function SettingsPage() {
                 </Button>
               </div>
             ) : (
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p>
-                  O botão de instalação aparece automaticamente quando o navegador libera o prompt.
-                </p>
+              <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-sm text-amber-800 dark:text-amber-300 space-y-1">
+                <p className="font-medium">Prompt automático não disponível agora.</p>
                 <p className="text-xs">
-                  Caso já tenha desinstalado recentemente, o Chrome pode levar alguns minutos para disponibilizar o prompt novamente. Recarregue a página após alguns instantes.
+                  Se acabou de desinstalar, aguarde alguns minutos e recarregue a página. Use as instruções manuais abaixo.
                 </p>
+              </div>
+            )}
+
+            {/* Manual install instructions — always visible */}
+            {!isInstalled && (
+              <div className="space-y-3 pt-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Instalação manual</p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex gap-3 items-start">
+                    <span className="text-base">🤖</span>
+                    <div>
+                      <p className="font-medium">Android (Chrome)</p>
+                      <p className="text-muted-foreground text-xs">Menu ⋮ → "Adicionar à tela inicial"</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <span className="text-base">🍎</span>
+                    <div>
+                      <p className="font-medium">iPhone / iPad (Safari)</p>
+                      <p className="text-muted-foreground text-xs">Botão compartilhar ⎋ → "Adicionar à Tela Inicial"</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </CardContent>
