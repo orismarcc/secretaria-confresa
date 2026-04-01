@@ -16,6 +16,7 @@ import SettlementsPage from "./pages/SettlementsPage";
 import MachineryPage from "./pages/MachineryPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import CalendarPage from "./pages/CalendarPage";
+import DeliveriesPage from "./pages/DeliveriesPage";
 import SettingsPage from "./pages/SettingsPage";
 import OperatorPage from "./pages/OperatorPage";
 import NotFound from "./pages/NotFound";
@@ -50,6 +51,7 @@ function AppRoutes() {
       <Route path="/machinery" element={<ProtectedRoute adminOnly><MachineryPage /></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute adminOnly><AnalyticsPage /></ProtectedRoute>} />
       <Route path="/calendar" element={<ProtectedRoute adminOnly><CalendarPage /></ProtectedRoute>} />
+      <Route path="/deliveries" element={<ProtectedRoute adminOnly><DeliveriesPage /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
 
       {/* Operator Route */}

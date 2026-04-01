@@ -10,6 +10,7 @@ export function useDemandTypes() {
       const { data, error } = await supabase
         .from('demand_types')
         .select('*')
+        .order('category', { nullsFirst: false })
         .order('name');
       if (error) throw error;
       return data;
@@ -22,10 +23,10 @@ export function useCreateDemandType() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ name, description }: { name: string; description?: string }) => {
+    mutationFn: async ({ name, description, category }: { name: string; description?: string; category?: string | null }) => {
       const { data, error } = await supabase
         .from('demand_types')
-        .insert({ name, description })
+        .insert({ name, description, category })
         .select()
         .single();
       if (error) throw error;
@@ -46,7 +47,7 @@ export function useUpdateDemandType() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; name?: string; description?: string; is_active?: boolean }) => {
+    mutationFn: async ({ id, ...updates }: { id: string; name?: string; description?: string; is_active?: boolean; category?: string | null }) => {
       const { data, error } = await supabase
         .from('demand_types')
         .update(updates)
@@ -683,6 +684,98 @@ export function useDashboardStats() {
       };
 
       return stats;
+    },
+  });
+}
+
+// ============= DELIVERIES =============
+export function useDeliveries() {
+  return useQuery({
+    queryKey: ['deliveries'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('deliveries')
+        .select('*, producers(name, phone), demand_types(name, category), settlements(name), profiles!created_by(name)')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useCreateDelivery() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (delivery: {
+      producer_id: string;
+      demand_type_id: string;
+      settlement_id?: string | null;
+      quantity?: number | null;
+      notes?: string | null;
+      delivery_date_start?: string | null;
+      delivery_date_end?: string | null;
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase
+        .from('deliveries')
+        .insert({ ...delivery, created_by: user?.id ?? null })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] });
+      toast({ title: 'Entrega cadastrada!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao cadastrar entrega', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useUpdateDelivery() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string; [key: string]: unknown }) => {
+      const { data, error } = await supabase
+        .from('deliveries')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] });
+      toast({ title: 'Entrega atualizada!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao atualizar entrega', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useDeleteDelivery() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('deliveries').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] });
+      toast({ title: 'Entrega removida!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao remover entrega', description: error.message, variant: 'destructive' });
     },
   });
 }

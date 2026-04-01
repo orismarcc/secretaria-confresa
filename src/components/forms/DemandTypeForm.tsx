@@ -20,11 +20,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { DemandType } from '@/types';
 
 const demandTypeSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').max(100, 'Nome muito longo'),
   description: z.string().max(500, 'Descrição muito longa').optional(),
+  category: z.string().optional().nullable(),
   isActive: z.boolean(),
 });
 
@@ -33,9 +41,15 @@ type DemandTypeFormData = z.infer<typeof demandTypeSchema>;
 interface DemandTypeFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  demandType?: DemandType | null;
+  demandType?: (DemandType & { category?: string | null }) | null;
   onSubmit: (data: DemandTypeFormData) => void;
 }
+
+export const DEMAND_CATEGORIES = [
+  { value: 'patrulha_mecanizada', label: 'Patrulha Mecanizada' },
+  { value: 'entregas', label: 'Entregas' },
+  { value: 'calcario', label: 'Logística do Calcário' },
+];
 
 export function DemandTypeForm({ open, onOpenChange, demandType, onSubmit }: DemandTypeFormProps) {
   const form = useForm<DemandTypeFormData>({
@@ -43,6 +57,7 @@ export function DemandTypeForm({ open, onOpenChange, demandType, onSubmit }: Dem
     defaultValues: {
       name: demandType?.name || '',
       description: demandType?.description || '',
+      category: (demandType as any)?.category || null,
       isActive: demandType?.isActive ?? true,
     },
   });
@@ -70,6 +85,32 @@ export function DemandTypeForm({ open, onOpenChange, demandType, onSubmit }: Dem
                   <FormControl>
                     <Input placeholder="Ex: Aração de Solo" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="category"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Categoria</FormLabel>
+                  <Select
+                    onValueChange={(val) => field.onChange(val === '__none__' ? null : val)}
+                    value={field.value ?? '__none__'}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione uma categoria" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="__none__">Sem categoria</SelectItem>
+                      {DEMAND_CATEGORIES.map(cat => (
+                        <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

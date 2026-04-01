@@ -16,10 +16,13 @@ import {
   UserCog,
   BarChart3,
   CalendarDays,
+  Package,
+  Download,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import logoTransparent from '@/assets/logo-transparent.png';
+import { usePWAInstall } from '@/hooks/usePWAInstall';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -29,6 +32,7 @@ const adminNavItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/analytics', label: 'Análises', icon: BarChart3 },
   { path: '/calendar', label: 'Calendário', icon: CalendarDays },
+  { path: '/deliveries', label: 'Entregas', icon: Package },
   { path: '/services', label: 'Atendimentos', icon: ClipboardList },
   { path: '/producers', label: 'Produtores', icon: Users },
   { path: '/operators', label: 'Operadores', icon: UserCog },
@@ -46,6 +50,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { canInstall, install } = usePWAInstall();
 
   const navItems = hasRole('admin') ? adminNavItems : operatorNavItems;
 
@@ -133,6 +138,20 @@ export function AppLayout({ children }: AppLayoutProps) {
 
           <div className="flex items-center gap-3">
             <OnlineIndicator className="hidden sm:flex" />
+
+            {/* PWA Install button */}
+            {canInstall && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={install}
+                className="text-primary-foreground hover:bg-primary/90"
+                title="Adicionar à tela inicial"
+              >
+                <Download className="h-4 w-4 md:mr-2" />
+                <span className="hidden md:inline">Instalar App</span>
+              </Button>
+            )}
 
             {/* Header name — clickable to settings on mobile */}
             <button

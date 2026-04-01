@@ -1,17 +1,18 @@
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useServices, useSettlements, useDemandTypes } from '@/hooks/useSupabaseData';
+import { useServices, useSettlements, useDemandTypes, useDeliveries } from '@/hooks/useSupabaseData';
 import { useOperators } from '@/hooks/useOperatorData';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   AreaChart,
   Area,
@@ -19,7 +20,7 @@ import {
 } from 'recharts';
 import { format, parseISO, startOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { TrendingUp, MapPin, ClipboardList, Tractor, Users2 } from 'lucide-react';
+import { TrendingUp, MapPin, ClipboardList, Tractor, Users2, Package, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Custom tooltip component
@@ -110,12 +111,27 @@ function RankingItem({ position, name, count, maxCount }: RankingItemProps) {
 }
 
 export default function AnalyticsPage() {
+  const navigate = useNavigate();
   const { data: services = [], isLoading: servicesLoading } = useServices();
   const { data: settlements = [], isLoading: settlementsLoading } = useSettlements();
   const { data: demandTypes = [], isLoading: demandTypesLoading } = useDemandTypes();
   const { data: operators = [] } = useOperators();
+  const { data: deliveries = [] } = useDeliveries();
 
   const isLoading = servicesLoading || settlementsLoading || demandTypesLoading;
+
+  // Category quick stats
+  const patrulhaCount = useMemo(() => {
+    const ids = new Set((demandTypes as any[]).filter(d => d.category === 'patrulha_mecanizada').map((d: any) => d.id));
+    return (services as any[]).filter(s => ids.has(s.demand_type_id)).length;
+  }, [services, demandTypes]);
+
+  const entregasCount = useMemo(() => (deliveries as any[]).length, [deliveries]);
+
+  const calcarioCount = useMemo(() => {
+    const ids = new Set((demandTypes as any[]).filter(d => d.category === 'calcario').map((d: any) => d.id));
+    return (services as any[]).filter(s => ids.has(s.demand_type_id)).length;
+  }, [services, demandTypes]);
 
   // Calculate monthly data for charts (last 6 months)
   const monthlyData = useMemo(() => {
@@ -225,6 +241,51 @@ export default function AnalyticsPage() {
         title="Análise Gráfica" 
         description="Estatísticas e métricas do sistema"
       />
+
+      {/* Category quick-access cards */}
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-3 mb-6">
+        <button
+          onClick={() => navigate('/services')}
+          className="rounded-xl border bg-card p-4 flex items-center gap-4 hover:shadow-md transition-all hover:-translate-y-0.5 text-left"
+        >
+          <div className="p-3 rounded-xl bg-amber-500/10 shrink-0">
+            <Tractor className="h-6 w-6 text-amber-600" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Patrulha Mecanizada</p>
+            <p className="text-3xl font-black text-foreground">{patrulhaCount}</p>
+            <p className="text-xs text-muted-foreground">atendimentos</p>
+          </div>
+        </button>
+
+        <button
+          onClick={() => navigate('/deliveries')}
+          className="rounded-xl border bg-card p-4 flex items-center gap-4 hover:shadow-md transition-all hover:-translate-y-0.5 text-left"
+        >
+          <div className="p-3 rounded-xl bg-blue-500/10 shrink-0">
+            <Package className="h-6 w-6 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Entregas</p>
+            <p className="text-3xl font-black text-foreground">{entregasCount}</p>
+            <p className="text-xs text-muted-foreground">registros</p>
+          </div>
+        </button>
+
+        <button
+          onClick={() => navigate('/services')}
+          className="rounded-xl border bg-card p-4 flex items-center gap-4 hover:shadow-md transition-all hover:-translate-y-0.5 text-left"
+        >
+          <div className="p-3 rounded-xl bg-stone-500/10 shrink-0">
+            <Layers className="h-6 w-6 text-stone-600" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Calcário</p>
+            <p className="text-3xl font-black text-foreground">{calcarioCount}</p>
+            <p className="text-xs text-muted-foreground">atendimentos</p>
+          </div>
+        </button>
+      </div>
 
       {isLoading ? (
         <div className="space-y-6">
