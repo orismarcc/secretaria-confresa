@@ -424,6 +424,27 @@ export function useDeleteProducer() {
   });
 }
 
+export function useDeleteProducers() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      await supabase.from('producer_demands').delete().in('producer_id', ids);
+      const { error } = await supabase.from('producers').delete().in('id', ids);
+      if (error) throw error;
+    },
+    onSuccess: (_data, ids) => {
+      queryClient.invalidateQueries({ queryKey: ['producers'] });
+      queryClient.invalidateQueries({ queryKey: ['producer_demands'] });
+      toast({ title: `${ids.length} produtor(es) removido(s)!` });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao remover', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
 // ============= SERVICES =============
 export function useServices() {
   return useQuery({
@@ -484,6 +505,7 @@ export function useCreateService() {
       settlement_id?: string;
       location_id?: string;
       scheduled_date: string;
+      purpose?: string;
       notes?: string;
       priority?: string;
       worked_area?: number | null;

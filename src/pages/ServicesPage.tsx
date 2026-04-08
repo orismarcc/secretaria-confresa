@@ -54,6 +54,7 @@ interface DbService {
   status: string;
   scheduled_date: string;
   completed_at?: string | null;
+  purpose?: string | null;
   notes?: string | null;
   completion_notes?: string | null;
   priority: string;
@@ -147,6 +148,7 @@ export default function ServicesPage() {
     createService.mutate({
       producer_id: data.producerId,
       demand_type_id: data.demandTypeId,
+      purpose: data.purpose || undefined,
       settlement_id: producer?.settlement_id || data.settlementId,
       location_id: producer?.location_id || data.locationId,
       scheduled_date: data.scheduledDate,
@@ -169,6 +171,7 @@ export default function ServicesPage() {
         settlement_id: producer?.settlement_id || editingService.settlement_id,
         location_id: producer?.location_id || editingService.location_id,
         scheduled_date: data.scheduledDate,
+        purpose: data.purpose || null,
         notes: data.notes,
         status: data.status,
         priority: data.priority || editingService.priority,
@@ -239,6 +242,7 @@ export default function ServicesPage() {
       status: s.status as 'pending' | 'in_progress' | 'completed',
       scheduledDate: new Date(s.scheduled_date),
       completedDate: s.completed_at ? new Date(s.completed_at) : undefined,
+      purpose: s.purpose || undefined,
       notes: s.notes || undefined,
       priority: (s.priority || 'medium') as 'low' | 'medium' | 'high',
       workedArea: s.worked_area || 0,

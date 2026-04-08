@@ -271,6 +271,7 @@ export type Database = {
           position: number | null
           priority: string
           producer_id: string
+          purpose: string | null
           scheduled_date: string
           settlement_id: string | null
           status: string
@@ -293,6 +294,7 @@ export type Database = {
           position?: number | null
           priority?: string
           producer_id: string
+          purpose?: string | null
           scheduled_date: string
           settlement_id?: string | null
           status?: string
@@ -315,6 +317,7 @@ export type Database = {
           position?: number | null
           priority?: string
           producer_id?: string
+          purpose?: string | null
           scheduled_date?: string
           settlement_id?: string | null
           status?: string

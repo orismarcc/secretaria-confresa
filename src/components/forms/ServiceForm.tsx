@@ -42,6 +42,7 @@ const serviceSchema = z.object({
   workedArea: z.coerce.number().min(0, 'Área não pode ser negativa').optional(),
   scheduledDate: z.string().min(1, 'Selecione a data'),
   status: z.enum(['pending', 'in_progress', 'completed']),
+  purpose: z.string().max(500, 'Finalidade muito longa').optional(),
   notes: z.string().max(1000, 'Observações muito longas').optional(),
   priority: z.enum(['low', 'medium', 'high']).optional(),
   operatorId: z.string().optional(),
@@ -70,6 +71,7 @@ interface ServiceFormProps {
     workedArea?: number;
     scheduledDate: Date;
     status: string;
+    purpose?: string;
     notes?: string;
     priority?: string;
     operatorId?: string;
@@ -191,6 +193,7 @@ export function ServiceForm({
       workedArea: 0,
       scheduledDate: format(new Date(), 'yyyy-MM-dd'),
       status: 'pending',
+      purpose: '',
       notes: '',
       priority: 'medium',
       operatorId: '',
@@ -209,6 +212,7 @@ export function ServiceForm({
         workedArea: service.workedArea || 0,
         scheduledDate: format(new Date(service.scheduledDate), 'yyyy-MM-dd'),
         status: service.status as 'pending' | 'in_progress' | 'completed',
+        purpose: service.purpose || '',
         notes: service.notes || '',
         priority: (service.priority as 'low' | 'medium' | 'high') || 'medium',
         operatorId: service.operatorId || '',
@@ -221,6 +225,7 @@ export function ServiceForm({
         workedArea: 0,
         scheduledDate: format(new Date(), 'yyyy-MM-dd'),
         status: 'pending',
+        purpose: '',
         notes: '',
         priority: 'medium',
         operatorId: '',
@@ -468,6 +473,24 @@ export function ServiceForm({
                         onChange={(e) =>
                           field.onChange(parseFloat(e.target.value) || 0)
                         }
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Purpose */}
+              <FormField
+                control={form.control}
+                name="purpose"
+                render={({ field }) => (
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>Finalidade</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Descreva a finalidade do serviço..."
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />

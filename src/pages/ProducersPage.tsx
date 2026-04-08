@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
-import { DataTable } from '@/components/DataTable';
 import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ProducerForm } from '@/components/forms/ProducerForm';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ProducerDetailSheet } from '@/components/ProducerDetailSheet';
@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Eye } from 'lucide-react';
+import { Plus, Eye, Trash2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   useProducers,
@@ -23,7 +23,8 @@ import {
   useDemandTypes,
   useCreateProducer,
   useUpdateProducer,
-  useDeleteProducer
+  useDeleteProducer,
+  useDeleteProducers,
 } from '@/hooks/useSupabaseData';
 
 interface DbProducer {
@@ -53,6 +54,7 @@ export default function ProducersPage() {
   const createProducer = useCreateProducer();
   const updateProducer = useUpdateProducer();
   const deleteProducer = useDeleteProducer();
+  const deleteProducers = useDeleteProducers();
 
   const [search, setSearch] = useState('');
   const [settlementFilter, setSettlementFilter] = useState<string>('all');
@@ -60,14 +62,44 @@ export default function ProducersPage() {
   const [editingProducer, setEditingProducer] = useState<DbProducer | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [producerToDelete, setProducerToDelete] = useState<DbProducer | null>(null);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedProducer, setSelectedProducer] = useState<DbProducer | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const filtered = producers.filter((p: DbProducer) => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.cpf.includes(search);
     const matchesSettlement = settlementFilter === 'all' || p.settlement_id === settlementFilter;
     return matchesSearch && matchesSettlement;
   });
+
+  const allSelected = filtered.length > 0 && filtered.every(p => selectedIds.has(p.id));
+  const someSelected = filtered.some(p => selectedIds.has(p.id));
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        filtered.forEach(p => next.delete(p.id));
+        return next;
+      });
+    } else {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        filtered.forEach(p => next.add(p.id));
+        return next;
+      });
+    }
+  };
+
+  const toggleOne = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const handleCreate = (data: any) => {
     createProducer.mutate({
@@ -107,8 +139,17 @@ export default function ProducersPage() {
     }
   };
 
+  const handleBulkDelete = () => {
+    const ids = Array.from(selectedIds);
+    deleteProducers.mutate(ids, {
+      onSuccess: () => {
+        setSelectedIds(new Set());
+        setBulkDeleteDialogOpen(false);
+      },
+    });
+  };
+
   const openEditForm = (producer: any) => {
-    // Find the DB producer
     const dbProducer = producers.find(p => p.id === producer.id);
     if (dbProducer) {
       setEditingProducer(dbProducer);
@@ -129,7 +170,6 @@ export default function ProducersPage() {
     setDetailOpen(true);
   };
 
-  // Map producer for form/detail compatibility
   const mapProducerForDisplay = (p: DbProducer | null) => {
     if (!p) return null;
     const demandTypeIds = p.producer_demands?.map(d => d.demand_type_id) || [];
@@ -148,7 +188,6 @@ export default function ProducersPage() {
     };
   };
 
-  // Map data for form compatibility
   const mappedSettlements = settlements.map(s => ({
     id: s.id,
     name: s.name,
@@ -169,25 +208,6 @@ export default function ProducersPage() {
     isActive: d.is_active ?? true,
     createdAt: new Date(d.created_at || Date.now())
   }));
-
-  const columns = [
-    { key: 'name', header: 'Nome', render: (p: DbProducer) => <span className="font-medium">{p.name}</span> },
-    { 
-      key: 'settlement', 
-      header: 'Assentamento', 
-      render: (p: DbProducer) => p.settlements?.name || settlements.find(s => s.id === p.settlement_id)?.name || 'N/A' 
-    },
-    { 
-      key: 'actions', 
-      header: '', 
-      render: (p: DbProducer) => (
-        <Button variant="ghost" size="sm" onClick={() => openDetail(p)} className="gap-1">
-          <Eye className="h-4 w-4" />
-          <span className="hidden sm:inline">Ver</span>
-        </Button>
-      )
-    },
-  ];
 
   const selectedSettlement = selectedProducer ? settlements.find(s => s.id === selectedProducer.settlement_id) : undefined;
   const selectedLocation = selectedProducer ? locations.find(l => l.id === selectedProducer.location_id) : undefined;
@@ -225,14 +245,69 @@ export default function ProducersPage() {
             ))}
           </SelectContent>
         </Select>
+        {selectedIds.size > 0 && (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setBulkDeleteDialogOpen(true)}
+            className="gap-1"
+          >
+            <Trash2 className="h-4 w-4" />
+            Excluir {selectedIds.size} selecionado(s)
+          </Button>
+        )}
       </div>
-      
-      <DataTable 
-        data={filtered} 
-        columns={columns} 
-        keyExtractor={(p) => p.id} 
-        emptyMessage="Nenhum produtor encontrado" 
-      />
+
+      <div className="rounded-md border">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/50">
+              <th className="w-10 px-3 py-3 text-left">
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={toggleAll}
+                  aria-label="Selecionar todos"
+                  className={someSelected && !allSelected ? 'data-[state=unchecked]:bg-muted' : ''}
+                />
+              </th>
+              <th className="px-3 py-3 text-left font-medium">Nome</th>
+              <th className="px-3 py-3 text-left font-medium hidden sm:table-cell">Assentamento</th>
+              <th className="w-16 px-3 py-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-3 py-8 text-center text-muted-foreground">
+                  Nenhum produtor encontrado
+                </td>
+              </tr>
+            ) : (
+              filtered.map((p: DbProducer) => (
+                <tr key={p.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                  <td className="px-3 py-3">
+                    <Checkbox
+                      checked={selectedIds.has(p.id)}
+                      onCheckedChange={() => toggleOne(p.id)}
+                      aria-label={`Selecionar ${p.name}`}
+                    />
+                  </td>
+                  <td className="px-3 py-3 font-medium">{p.name}</td>
+                  <td className="px-3 py-3 hidden sm:table-cell text-muted-foreground">
+                    {p.settlements?.name || settlements.find(s => s.id === p.settlement_id)?.name || 'N/A'}
+                  </td>
+                  <td className="px-3 py-3">
+                    <Button variant="ghost" size="sm" onClick={() => openDetail(p)} className="gap-1">
+                      <Eye className="h-4 w-4" />
+                      <span className="hidden sm:inline">Ver</span>
+                    </Button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
       <ProducerDetailSheet
         open={detailOpen}
@@ -261,6 +336,16 @@ export default function ProducersPage() {
         description={`Tem certeza que deseja excluir "${producerToDelete?.name}"? Esta ação não pode ser desfeita.`}
         onConfirm={handleDelete}
         confirmLabel="Excluir"
+        variant="destructive"
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteDialogOpen}
+        onOpenChange={setBulkDeleteDialogOpen}
+        title="Excluir Produtores"
+        description={`Tem certeza que deseja excluir ${selectedIds.size} produtor(es) selecionado(s)? Esta ação não pode ser desfeita.`}
+        onConfirm={handleBulkDelete}
+        confirmLabel="Excluir todos"
         variant="destructive"
       />
     </AppLayout>
