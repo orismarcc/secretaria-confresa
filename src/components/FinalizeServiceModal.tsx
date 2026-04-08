@@ -45,6 +45,7 @@ export function FinalizeServiceModal({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [permDenied, setPermDenied] = useState(false);
   const { toast } = useToast();
   
   
@@ -74,6 +75,7 @@ export function FinalizeServiceModal({
   useEffect(() => {
     if (open) {
       setStep('photo');
+      setPermDenied(false);
       setPhotoBlob(null);
       setPhotoPreview(null);
       setCapturedCoords(null);
@@ -96,8 +98,30 @@ export function FinalizeServiceModal({
   }, [photoPreview]);
 
   const handleStartCamera = async () => {
+    setPermDenied(false);
+
+    // Pre-check permission if the browser supports it
+    if ('permissions' in navigator) {
+      try {
+        const perm = await navigator.permissions.query({ name: 'camera' as PermissionName });
+        if (perm.state === 'denied') {
+          setPermDenied(true);
+          return;
+        }
+      } catch {
+        // Permissions API not supported — proceed normally
+      }
+    }
+
     setShowCamera(true);
-    await startCamera();
+    const ok = await startCamera();
+    if (!ok) {
+      // startCamera failed (permission denied at runtime or hardware issue)
+      setShowCamera(false);
+      if (cameraError?.toLowerCase().includes('negada') || cameraError?.toLowerCase().includes('allowed')) {
+        setPermDenied(true);
+      }
+    }
   };
 
   const handleTakePhoto = async () => {
@@ -236,21 +260,34 @@ export function FinalizeServiceModal({
                   </p>
                 </div>
 
+                {/* Permission denied banner */}
+                {permDenied && (
+                  <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-sm text-destructive">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="font-medium">Permissão de câmera negada</p>
+                      <p className="text-xs opacity-80">
+                        Acesse as configurações do navegador → permissões do site → câmera e permita o acesso. Em seguida, recarregue a página.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex flex-col gap-2">
-                  {cameraSupported && (
+                  {cameraSupported && !permDenied && (
                     <Button onClick={handleStartCamera} className="w-full">
                       <Camera className="h-4 w-4 mr-2" />
                       Abrir Câmera
                     </Button>
                   )}
-                  
+
                   <Button
-                    variant="outline"
+                    variant={permDenied ? 'default' : 'outline'}
                     onClick={() => fileInputRef.current?.click()}
                     className="w-full"
                   >
                     <Upload className="h-4 w-4 mr-2" />
-                    Escolher da Galeria
+                    {permDenied ? 'Escolher foto da galeria' : 'Escolher da Galeria'}
                   </Button>
                   
                   <input

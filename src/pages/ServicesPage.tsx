@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { DataTable } from '@/components/DataTable';
@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Plus, Pencil, Trash2, Archive, CheckCircle, Eye, FileDown } from 'lucide-react';
+import { Plus, Pencil, Trash2, Archive, CheckCircle, Eye, FileDown, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
@@ -76,6 +76,7 @@ interface DbService {
 export default function ServicesPage() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const { data: services = [], isLoading: servicesLoading } = useServices();
   const { data: producers = [] } = useProducers();
@@ -418,6 +419,12 @@ export default function ServicesPage() {
         description="Gerenciar atendimentos"
         action={{ label: 'Novo', onClick: () => { setEditingService(null); setFormOpen(true); }, icon: <Plus className="h-4 w-4 mr-2" /> }}
       />
+      <div className="flex justify-end mb-2">
+        <Button variant="outline" size="sm" onClick={() => navigate('/import')}>
+          <FileSpreadsheet className="h-4 w-4 mr-2" />
+          Importar Planilha
+        </Button>
+      </div>
 
       <Tabs value={statusFilter} onValueChange={setStatusFilter} className="mb-4">
         <TabsList>
