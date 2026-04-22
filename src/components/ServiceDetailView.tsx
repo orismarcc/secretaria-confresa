@@ -171,8 +171,8 @@ export function ServiceDetailView({
             <p className="text-sm text-muted-foreground">Data de Cadastro</p>
             <p className="font-medium">
               {service.created_at
-                ? format(new Date(service.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
-                : format(new Date(service.scheduled_date), 'dd/MM/yyyy', { locale: ptBR })}
+                ? format(new Date(service.created_at.replace(' ', 'T')), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+                : format(new Date(service.scheduled_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
             </p>
           </div>
         </div>
@@ -206,7 +206,7 @@ export function ServiceDetailView({
                 <div>
                   <p className="text-sm text-muted-foreground">Finalizado em</p>
                   <p className="font-medium">
-                    {format(new Date(service.completed_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    {format(new Date(service.completed_at!.replace(' ', 'T')), "dd/MM/yyyy", { locale: ptBR })}
                   </p>
                 </div>
               </div>

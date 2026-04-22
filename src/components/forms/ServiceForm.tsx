@@ -41,6 +41,7 @@ const serviceSchema = z.object({
   demandTypeId: z.string().min(1, 'Selecione o tipo de demanda'),
   workedArea: z.coerce.number().min(0, 'Área não pode ser negativa').optional(),
   scheduledDate: z.string().min(1, 'Selecione a data'),
+  completedAt: z.string().optional(),
   status: z.enum(['pending', 'in_progress', 'completed']),
   purpose: z.string().max(500, 'Finalidade muito longa').optional(),
   notes: z.string().max(1000, 'Observações muito longas').optional(),
@@ -65,11 +66,13 @@ interface MachineryOption {
 interface ServiceFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  isAdmin?: boolean;
   service?: {
     producerId: string;
     demandTypeId: string;
     workedArea?: number;
     scheduledDate: Date;
+    completedAt?: string; // YYYY-MM-DD for the date input
     status: string;
     purpose?: string;
     notes?: string;
@@ -176,6 +179,7 @@ function ProducerCombobox({
 export function ServiceForm({
   open,
   onOpenChange,
+  isAdmin = false,
   service,
   producers,
   settlements,
@@ -192,6 +196,7 @@ export function ServiceForm({
       demandTypeId: '',
       workedArea: 0,
       scheduledDate: format(new Date(), 'yyyy-MM-dd'),
+      completedAt: '',
       status: 'pending',
       purpose: '',
       notes: '',
@@ -202,6 +207,7 @@ export function ServiceForm({
   });
 
   const selectedProducerId = form.watch('producerId');
+  const watchedStatus = form.watch('status');
   const selectedProducer = producers.find((p) => p.id === selectedProducerId);
 
   useEffect(() => {
@@ -211,6 +217,7 @@ export function ServiceForm({
         demandTypeId: service.demandTypeId,
         workedArea: service.workedArea || 0,
         scheduledDate: format(new Date(service.scheduledDate), 'yyyy-MM-dd'),
+        completedAt: service.completedAt || '',
         status: service.status as 'pending' | 'in_progress' | 'completed',
         purpose: service.purpose || '',
         notes: service.notes || '',
@@ -224,6 +231,7 @@ export function ServiceForm({
         demandTypeId: '',
         workedArea: 0,
         scheduledDate: format(new Date(), 'yyyy-MM-dd'),
+        completedAt: '',
         status: 'pending',
         purpose: '',
         notes: '',
@@ -396,6 +404,23 @@ export function ServiceForm({
                   </FormItem>
                 )}
               />
+
+              {/* Completion Date — admin only, when status is completed */}
+              {isAdmin && watchedStatus === 'completed' && (
+                <FormField
+                  control={form.control}
+                  name="completedAt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Data de Finalização</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               {/* Operator Selection */}
               <FormField
