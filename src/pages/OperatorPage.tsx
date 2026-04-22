@@ -137,13 +137,13 @@ function SortableOperatorCard({
             
             <div className="grid gap-2 text-sm mb-4">
               {(() => {
-                const isOverdue = service.status === 'pending' && new Date(service.scheduled_date) < new Date(new Date().toDateString());
+                const isOverdue = service.status === 'pending' && new Date(service.scheduled_date + 'T12:00:00') < new Date(new Date().toDateString());
                 return (
                   <div className={cn('flex items-center gap-2', isOverdue ? 'text-destructive' : 'text-muted-foreground')}>
                     <Calendar className="h-4 w-4" />
                     <span className={isOverdue ? 'font-medium' : ''}>
                       {isOverdue && '⚠ '}
-                      {format(new Date(service.scheduled_date), 'dd/MM/yyyy', { locale: ptBR })}
+                      {format(new Date(service.scheduled_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
                     </span>
                   </div>
                 );
@@ -362,8 +362,8 @@ export default function OperatorPage() {
       settlementId: s.settlement_id || '',
       locationId: s.location_id || '',
       status: s.status as 'pending' | 'in_progress' | 'completed',
-      scheduledDate: new Date(s.scheduled_date),
-      completedDate: s.completed_at ? new Date(s.completed_at) : undefined,
+      scheduledDate: new Date(s.scheduled_date + 'T12:00:00'),
+      completedDate: s.completed_at ? new Date(s.completed_at.replace(' ', 'T')) : undefined,
       notes: s.notes || undefined,
       priority: s.priority,
       purpose: '',

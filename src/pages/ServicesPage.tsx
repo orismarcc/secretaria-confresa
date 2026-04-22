@@ -240,8 +240,8 @@ export default function ServicesPage() {
       settlementId: s.settlement_id || '',
       locationId: s.location_id || '',
       status: s.status as 'pending' | 'in_progress' | 'completed',
-      scheduledDate: new Date(s.scheduled_date),
-      completedDate: s.completed_at ? new Date(s.completed_at) : undefined,
+      scheduledDate: new Date(s.scheduled_date + 'T12:00:00'),
+      completedDate: s.completed_at ? new Date(s.completed_at.replace(' ', 'T')) : undefined,
       purpose: s.purpose || undefined,
       notes: s.notes || undefined,
       priority: (s.priority || 'medium') as 'low' | 'medium' | 'high',
@@ -318,7 +318,7 @@ export default function ServicesPage() {
       key: 'status',
       header: 'Status',
       render: (s: DbService) => {
-        const createdAt = s.created_at ? new Date(s.created_at) : null;
+        const createdAt = s.created_at ? new Date(s.created_at.replace(' ', 'T')) : null;
         const registeredBy = (s as any).profiles?.name;
         return (
           <div className="flex flex-col gap-1">

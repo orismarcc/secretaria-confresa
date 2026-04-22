@@ -68,6 +68,15 @@ export default function CalendarPage() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
+  // Parse a Supabase date/timestamp string to a local-midnight Date to avoid timezone shifts
+  const toLocalDay = (raw: string | null | undefined): Date | null => {
+    if (!raw) return null;
+    // Normalize: replace space with T, extract YYYY-MM-DD, then treat as local noon to be safe
+    const iso = raw.replace(' ', 'T');
+    const datePart = iso.substring(0, 10); // "2026-04-08"
+    return new Date(`${datePart}T12:00:00`);
+  };
+
   const events = useMemo((): CalendarEvent[] => {
     const result: CalendarEvent[] = [];
 
@@ -77,7 +86,7 @@ export default function CalendarPage() {
       const registeredBy = s.profiles?.name;
 
       // Event for creation date (cadastro)
-      const createdDate = s.created_at ? new Date(s.created_at) : new Date(s.scheduled_date);
+      const createdDate = toLocalDay(s.created_at) ?? toLocalDay(s.scheduled_date) ?? new Date();
       result.push({
         id: `${s.id}-created`,
         title: `📋 ${producerName}`,
@@ -97,7 +106,7 @@ export default function CalendarPage() {
 
       // Event for completion date (only for completed services)
       if (s.status === 'completed' && s.completed_at) {
-        const d = new Date(s.completed_at);
+        const d = toLocalDay(s.completed_at) ?? new Date();
         result.push({
           id: `${s.id}-completed`,
           title: `✅ ${producerName}`,
