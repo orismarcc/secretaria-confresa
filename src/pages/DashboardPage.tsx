@@ -10,8 +10,6 @@ import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { useNavigate } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import {
   useDashboardStats,
   useServices,
@@ -43,7 +41,6 @@ export default function DashboardPage() {
 
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
   const { data: services = [], isLoading: servicesLoading } = useServices();
-  const updateService = useUpdateService();
   const updatePositions = useUpdateServicePositions();
 
   // Drag-and-drop sensors
@@ -64,10 +61,10 @@ export default function DashboardPage() {
     return () => { supabase.removeChannel(channel); };
   }, [queryClient]);
 
-  // Pending + in_progress, sorted by position then scheduled_date
-  const pendingServices = useMemo(() => {
+  // Only services with status 'proximo', sorted by position then scheduled_date
+  const proximoServices = useMemo(() => {
     return services
-      .filter(s => s.status === 'pending' || s.status === 'in_progress')
+      .filter(s => s.status === 'proximo')
       .sort((a, b) => {
         const posA = (a as any).position ?? 999999;
         const posB = (b as any).position ?? 999999;
@@ -77,39 +74,17 @@ export default function DashboardPage() {
       });
   }, [services]);
 
-  // "Próximo" stat — nearest upcoming scheduled_date
-  const proximoLabel = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // First try: next service >= today
-    const upcoming = pendingServices
-      .map(s => ({ s, d: new Date(s.scheduled_date + 'T12:00:00') }))
-      .filter(({ d }) => d >= today)
-      .sort((a, b) => a.d.getTime() - b.d.getTime());
-
-    if (upcoming.length > 0) {
-      const d = upcoming[0].d;
-      const isToday = d.toDateString() === new Date().toDateString();
-      return isToday ? 'Hoje' : format(d, 'dd/MM', { locale: ptBR });
-    }
-
-    // Fallback: nearest past service (overdue)
-    if (pendingServices.length > 0) return 'Atrasado';
-    return '—';
-  }, [pendingServices]);
-
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
-      const oldIndex = pendingServices.findIndex(s => s.id === active.id);
-      const newIndex = pendingServices.findIndex(s => s.id === over.id);
+      const oldIndex = proximoServices.findIndex(s => s.id === active.id);
+      const newIndex = proximoServices.findIndex(s => s.id === over.id);
       if (oldIndex !== -1 && newIndex !== -1) {
-        const reordered = arrayMove(pendingServices, oldIndex, newIndex);
+        const reordered = arrayMove(proximoServices, oldIndex, newIndex);
         updatePositions.mutate(reordered.map((s, idx) => ({ id: s.id, position: idx + 1 })));
       }
     }
-  }, [pendingServices, updatePositions]);
+  }, [proximoServices, updatePositions]);
 
   const isLoading = statsLoading || servicesLoading;
 
@@ -121,14 +96,14 @@ export default function DashboardPage() {
     <AppLayout>
       <PageHeader title="Dashboard" description="Visão geral do sistema" />
 
-      {/* ── Stats row (5 cards) ─────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-5 mb-6">
+      {/* ── Stats row (4 cards) ─────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 mb-6">
         {isLoading ? (
-          Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-24" />)
+          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)
         ) : (
           <>
             <div className="cursor-pointer" onClick={() => navigate('/services')}>
-              <StatsCard title="Total" value={stats?.totalServices || 0} icon={ClipboardList} variant="primary" />
+              <StatsCard title="Total de Atendimentos" value={stats?.totalServices || 0} icon={ClipboardList} variant="primary" />
             </div>
             <div className="cursor-pointer" onClick={() => navigate('/services')}>
               <StatsCard title="Pendentes" value={stats?.pendingServices || 0} icon={Clock} variant="warning" />
@@ -139,21 +114,6 @@ export default function DashboardPage() {
             <div className="cursor-pointer" onClick={() => navigate('/services?tab=archived')}>
               <StatsCard title="Finalizados" value={stats?.completedServices || 0} icon={CheckCircle2} variant="success" />
             </div>
-            {/* NEW: Próximo */}
-            <div
-              className="cursor-pointer col-span-2 sm:col-span-1"
-              onClick={() => navigate('/services')}
-            >
-              <StatsCard
-                title="Próximo"
-                value={proximoLabel}
-                icon={CalendarCheck}
-                variant="secondary"
-                description={pendingServices.length > 0
-                  ? `${pendingServices.length} agendado(s)`
-                  : 'Nenhum pendente'}
-              />
-            </div>
           </>
         )}
       </div>
@@ -161,16 +121,18 @@ export default function DashboardPage() {
       {/* ── Main content ────────────────────────────────────────────── */}
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
 
-        {/* Próximos Atendimentos — drag-and-drop */}
+        {/* Próximos Atendimentos — apenas status 'proximo', drag-and-drop */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center justify-between text-base">
               <div className="flex items-center gap-2">
-                <CalendarCheck className="h-4 w-4 text-primary" />
+                <CalendarCheck className="h-4 w-4 text-violet-600" />
                 <span>Próximos Atendimentos</span>
-                <span className="text-xs text-muted-foreground font-normal hidden sm:inline">
-                  (arraste para priorizar)
-                </span>
+                {!isLoading && (
+                  <span className="text-xs font-normal text-muted-foreground hidden sm:inline">
+                    (arraste para priorizar)
+                  </span>
+                )}
               </div>
               <button
                 onClick={() => navigate('/services')}
@@ -187,10 +149,15 @@ export default function DashboardPage() {
                 <Skeleton className="h-14" />
                 <Skeleton className="h-14" />
               </div>
-            ) : pendingServices.length === 0 ? (
+            ) : proximoServices.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
-                <CheckCircle2 className="h-10 w-10 text-success/50" />
-                <p className="text-muted-foreground text-sm">Nenhum atendimento pendente</p>
+                <CalendarCheck className="h-10 w-10 text-muted-foreground/30" />
+                <p className="text-muted-foreground text-sm">
+                  Nenhum atendimento marcado como <strong>Próximo</strong>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Defina o status de um atendimento como "Próximo" em Atendimentos
+                </p>
               </div>
             ) : (
               <DndContext
@@ -199,11 +166,11 @@ export default function DashboardPage() {
                 onDragEnd={handleDragEnd}
               >
                 <SortableContext
-                  items={pendingServices.map(s => s.id)}
+                  items={proximoServices.map(s => s.id)}
                   strategy={verticalListSortingStrategy}
                 >
                   <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
-                    {pendingServices.map(service => (
+                    {proximoServices.map(service => (
                       <SortableServiceItem
                         key={service.id}
                         service={service}
@@ -248,24 +215,25 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            {/* Mini-summary of upcoming by status */}
             <Separator />
+
+            {/* Status breakdown */}
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Pendentes por status
+                Por status
               </p>
-              <div className="flex gap-3">
-                <div className="flex-1 rounded-lg bg-warning/10 border border-warning/20 p-3 text-center">
-                  <p className="text-xl font-bold text-warning">
-                    {pendingServices.filter(s => s.status === 'pending').length}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Pendentes</p>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-lg bg-warning/10 border border-warning/20 p-2.5 text-center">
+                  <p className="text-lg font-bold text-warning">{stats?.pendingServices || 0}</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight">Pendentes</p>
                 </div>
-                <div className="flex-1 rounded-lg bg-info/10 border border-info/20 p-3 text-center">
-                  <p className="text-xl font-bold text-info">
-                    {pendingServices.filter(s => s.status === 'in_progress').length}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Em Execução</p>
+                <div className="rounded-lg bg-info/10 border border-info/20 p-2.5 text-center">
+                  <p className="text-lg font-bold text-info">{stats?.inProgressServices || 0}</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight">Em Execução</p>
+                </div>
+                <div className="rounded-lg bg-violet-50 border border-violet-200 p-2.5 text-center dark:bg-violet-950/30">
+                  <p className="text-lg font-bold text-violet-600">{stats?.proximoServices || 0}</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight">Próximos</p>
                 </div>
               </div>
             </div>

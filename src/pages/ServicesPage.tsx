@@ -169,7 +169,7 @@ export default function ServicesPage() {
       s.producers?.name?.toLowerCase().includes(search.toLowerCase());
     const matchesDemandType = demandTypeFilter === 'all' || s.demand_type_id === demandTypeFilter;
     const matchesStatus = statusFilter === 'active'
-      ? s.status === 'pending' || s.status === 'in_progress'
+      ? s.status === 'pending' || s.status === 'in_progress' || s.status === 'proximo'
       : s.status === 'completed';
     return matchesSearch && matchesDemandType && matchesStatus;
   }), [services, producers, search, demandTypeFilter, statusFilter]);
@@ -225,7 +225,7 @@ export default function ServicesPage() {
       completedAt = dateInputToIso(data.completedAt);
     } else if (data.status === 'completed' && editingService.status !== 'completed') {
       completedAt = new Date().toISOString();
-    } else if (data.status !== 'completed') {
+    } else if (data.status !== 'completed' && data.status !== 'proximo') {
       completedAt = null;
     }
 
@@ -305,7 +305,7 @@ export default function ServicesPage() {
       demandTypeId: s.demand_type_id,
       settlementId: s.settlement_id || '',
       locationId: s.location_id || '',
-      status: s.status as 'pending' | 'in_progress' | 'completed',
+      status: s.status as 'pending' | 'in_progress' | 'completed' | 'proximo',
       scheduledDate: new Date(s.scheduled_date + 'T12:00:00'),
       completedAt: isoToDateInput(s.completed_at),
       purpose: s.purpose || undefined,

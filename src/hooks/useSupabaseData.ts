@@ -696,6 +696,7 @@ export function useDashboardStats() {
         pendingServices: services.filter(s => s.status === 'pending').length,
         inProgressServices: services.filter(s => s.status === 'in_progress').length,
         completedServices: services.filter(s => s.status === 'completed').length,
+        proximoServices: services.filter(s => s.status === 'proximo').length,
         totalProducers,
         servicesByDemandType: Object.entries(
           services.reduce((acc, s) => {

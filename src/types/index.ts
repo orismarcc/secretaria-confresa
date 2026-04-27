@@ -1,7 +1,7 @@
 // Enums
 export type UserRole = 'admin' | 'operator';
 
-export type ServiceStatus = 'pending' | 'in_progress' | 'completed';
+export type ServiceStatus = 'pending' | 'in_progress' | 'completed' | 'proximo';
 
 // User types
 export interface User {

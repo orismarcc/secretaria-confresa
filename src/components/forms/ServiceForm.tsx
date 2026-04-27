@@ -42,7 +42,7 @@ const serviceSchema = z.object({
   workedArea: z.coerce.number().min(0, 'Área não pode ser negativa').optional(),
   scheduledDate: z.string().min(1, 'Selecione a data'),
   completedAt: z.string().optional(),
-  status: z.enum(['pending', 'in_progress', 'completed']),
+  status: z.enum(['pending', 'in_progress', 'completed', 'proximo']),
   purpose: z.string().max(500, 'Finalidade muito longa').optional(),
   notes: z.string().max(1000, 'Observações muito longas').optional(),
   priority: z.enum(['low', 'medium', 'high']).optional(),
@@ -353,6 +353,7 @@ export function ServiceForm({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="proximo">Próximo</SelectItem>
                         <SelectItem value="pending">Pendente</SelectItem>
                         <SelectItem value="in_progress">Em Execução</SelectItem>
                         <SelectItem value="completed">Finalizado</SelectItem>
