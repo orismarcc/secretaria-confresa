@@ -124,22 +124,26 @@ export default function DashboardPage() {
         {/* Próximos Atendimentos — apenas status 'proximo', drag-and-drop */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center justify-between text-base">
-              <div className="flex items-center gap-2">
-                <CalendarCheck className="h-4 w-4 text-violet-600" />
-                <span>Próximos Atendimentos</span>
-                {!isLoading && (
-                  <span className="text-xs font-normal text-muted-foreground hidden sm:inline">
-                    (arraste para priorizar)
-                  </span>
-                )}
+            <CardTitle className="text-base">
+              <div className="flex items-start justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 min-w-0">
+                  <CalendarCheck className="h-4 w-4 text-violet-600 shrink-0" />
+                  <span className="truncate">Próximos Atendimentos</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {!isLoading && (
+                    <span className="text-xs font-normal text-muted-foreground hidden md:inline">
+                      (arraste para priorizar)
+                    </span>
+                  )}
+                  <button
+                    onClick={() => navigate('/services')}
+                    className="text-sm text-primary hover:underline font-normal whitespace-nowrap"
+                  >
+                    Ver todos
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={() => navigate('/services')}
-                className="text-sm text-primary hover:underline font-normal"
-              >
-                Ver todos
-              </button>
             </CardTitle>
           </CardHeader>
           <CardContent>

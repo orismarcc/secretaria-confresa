@@ -13,6 +13,7 @@ interface ServiceData {
   demand_type_id: string;
   status: string;
   scheduled_date: string;
+  appointment_date?: string | null;
   producers?: { name: string } | null;
   demand_types?: { name: string } | null;
 }
@@ -48,11 +49,17 @@ export function SortableServiceItem({
     transition,
   };
 
-  const scheduledDate = new Date(service.scheduled_date + 'T12:00:00');
+  const registrationDate = new Date(service.scheduled_date + 'T12:00:00');
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const isToday = scheduledDate.toDateString() === new Date().toDateString();
-  const isPast = scheduledDate < today;
+
+  // For overdue/today logic: only applies when appointment_date is set
+  const hasAppointment = !!service.appointment_date;
+  const displayDate = hasAppointment
+    ? new Date(service.appointment_date! + 'T12:00:00')
+    : registrationDate;
+  const isToday = hasAppointment && displayDate.toDateString() === new Date().toDateString();
+  const isPast  = hasAppointment && displayDate < today;
 
   if (variant === 'proximos') {
     return (
@@ -84,10 +91,10 @@ export function SortableServiceItem({
                     'bg-muted text-muted-foreground',
         )}>
           <span className="text-xs font-semibold leading-none">
-            {format(scheduledDate, 'dd', { locale: ptBR })}
+            {format(displayDate, 'dd', { locale: ptBR })}
           </span>
           <span className="text-[10px] uppercase leading-none mt-0.5">
-            {format(scheduledDate, 'MMM', { locale: ptBR })}
+            {format(displayDate, 'MMM', { locale: ptBR })}
           </span>
         </div>
 
@@ -95,17 +102,20 @@ export function SortableServiceItem({
         <div className="flex-1 min-w-0">
           <p className="font-medium text-sm truncate">{producerName}</p>
           <p className="text-xs text-muted-foreground truncate">{demandTypeName}</p>
-          {isToday && (
+          {hasAppointment && isToday && (
             <span className="text-[10px] font-semibold text-primary uppercase tracking-wide">Hoje</span>
           )}
-          {isPast && !isToday && (
+          {hasAppointment && isPast && !isToday && (
             <span className="text-[10px] font-semibold text-destructive uppercase tracking-wide">Atrasado</span>
+          )}
+          {!hasAppointment && (
+            <span className="text-[10px] text-muted-foreground">Cadastro: {format(registrationDate, 'dd/MM/yyyy', { locale: ptBR })}</span>
           )}
         </div>
 
-        {/* Status + action */}
+        {/* Status */}
         <div className="flex flex-col items-end gap-1 shrink-0">
-          <StatusBadge status={service.status as 'pending' | 'in_progress' | 'completed'} />
+          <StatusBadge status={service.status as 'pending' | 'in_progress' | 'completed' | 'proximo'} />
         </div>
       </div>
     );
@@ -136,7 +146,7 @@ export function SortableServiceItem({
         <p className="font-medium truncate">{producerName}</p>
         <p className="text-sm text-muted-foreground truncate">{demandTypeName}</p>
         <p className="text-xs text-muted-foreground">
-          {format(scheduledDate, 'dd/MM/yyyy', { locale: ptBR })}
+          {format(registrationDate, 'dd/MM/yyyy', { locale: ptBR })}
         </p>
       </div>
 

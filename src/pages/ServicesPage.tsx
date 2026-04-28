@@ -86,6 +86,7 @@ interface DbService {
   location_id?: string | null;
   status: string;
   scheduled_date: string;
+  appointment_date?: string | null;
   completed_at?: string | null;
   purpose?: string | null;
   notes?: string | null;
@@ -202,6 +203,7 @@ export default function ServicesPage() {
       settlement_id: producer?.settlement_id || data.settlementId,
       location_id: producer?.location_id || data.locationId,
       scheduled_date: data.scheduledDate,
+      appointment_date: data.appointmentDate ? data.appointmentDate : null,
       notes: data.notes,
       priority: data.priority || 'medium',
       worked_area: data.workedArea || null,
@@ -236,6 +238,7 @@ export default function ServicesPage() {
       settlement_id: producer?.settlement_id || editingService.settlement_id,
       location_id: producer?.location_id || editingService.location_id,
       scheduled_date: data.scheduledDate,
+      appointment_date: data.appointmentDate ? data.appointmentDate : null,
       purpose: data.purpose || null,
       notes: data.notes || null,
       status: data.status,
@@ -307,6 +310,7 @@ export default function ServicesPage() {
       locationId: s.location_id || '',
       status: s.status as 'pending' | 'in_progress' | 'completed' | 'proximo',
       scheduledDate: new Date(s.scheduled_date + 'T12:00:00'),
+      appointmentDate: isoToDateInput(s.appointment_date),
       completedAt: isoToDateInput(s.completed_at),
       purpose: s.purpose || undefined,
       notes: s.notes || undefined,

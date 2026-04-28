@@ -505,6 +505,7 @@ export function useCreateService() {
       settlement_id?: string;
       location_id?: string;
       scheduled_date: string;
+      appointment_date?: string | null;
       purpose?: string;
       notes?: string;
       priority?: string;

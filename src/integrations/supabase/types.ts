@@ -257,6 +257,7 @@ export type Database = {
       }
       services: {
         Row: {
+          appointment_date: string | null
           completed_at: string | null
           completion_notes: string | null
           created_at: string | null
@@ -280,6 +281,7 @@ export type Database = {
           worked_area: number | null
         }
         Insert: {
+          appointment_date?: string | null
           completed_at?: string | null
           completion_notes?: string | null
           created_at?: string | null
@@ -303,6 +305,7 @@ export type Database = {
           worked_area?: number | null
         }
         Update: {
+          appointment_date?: string | null
           completed_at?: string | null
           completion_notes?: string | null
           created_at?: string | null

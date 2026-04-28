@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Form,
   FormControl,
@@ -41,6 +42,7 @@ const serviceSchema = z.object({
   demandTypeId: z.string().min(1, 'Selecione o tipo de demanda'),
   workedArea: z.coerce.number().min(0, 'Área não pode ser negativa').optional(),
   scheduledDate: z.string().min(1, 'Selecione a data'),
+  appointmentDate: z.string().optional(),
   completedAt: z.string().optional(),
   status: z.enum(['pending', 'in_progress', 'completed', 'proximo']),
   purpose: z.string().max(500, 'Finalidade muito longa').optional(),
@@ -72,6 +74,7 @@ interface ServiceFormProps {
     demandTypeId: string;
     workedArea?: number;
     scheduledDate: Date;
+    appointmentDate?: string | null; // YYYY-MM-DD for the date input
     completedAt?: string; // YYYY-MM-DD for the date input
     status: string;
     purpose?: string;
@@ -189,6 +192,8 @@ export function ServiceForm({
   machinery = [],
   onSubmit,
 }: ServiceFormProps) {
+  const [hasAppointment, setHasAppointment] = useState(false);
+
   const form = useForm<ServiceFormData>({
     resolver: zodResolver(serviceSchema),
     defaultValues: {
@@ -196,6 +201,7 @@ export function ServiceForm({
       demandTypeId: '',
       workedArea: 0,
       scheduledDate: format(new Date(), 'yyyy-MM-dd'),
+      appointmentDate: '',
       completedAt: '',
       status: 'pending',
       purpose: '',
@@ -212,13 +218,16 @@ export function ServiceForm({
 
   useEffect(() => {
     if (service) {
+      const apptDate = service.appointmentDate || '';
+      setHasAppointment(!!apptDate);
       form.reset({
         producerId: service.producerId,
         demandTypeId: service.demandTypeId,
         workedArea: service.workedArea || 0,
         scheduledDate: format(new Date(service.scheduledDate), 'yyyy-MM-dd'),
+        appointmentDate: apptDate,
         completedAt: service.completedAt || '',
-        status: service.status as 'pending' | 'in_progress' | 'completed',
+        status: service.status as 'pending' | 'in_progress' | 'completed' | 'proximo',
         purpose: service.purpose || '',
         notes: service.notes || '',
         priority: (service.priority as 'low' | 'medium' | 'high') || 'medium',
@@ -226,11 +235,13 @@ export function ServiceForm({
         machineryId: service.machineryId || '',
       });
     } else {
+      setHasAppointment(false);
       form.reset({
         producerId: '',
         demandTypeId: '',
         workedArea: 0,
         scheduledDate: format(new Date(), 'yyyy-MM-dd'),
+        appointmentDate: '',
         completedAt: '',
         status: 'pending',
         purpose: '',
@@ -391,13 +402,13 @@ export function ServiceForm({
                 )}
               />
 
-              {/* Scheduled Date */}
+              {/* Registration Date */}
               <FormField
                 control={form.control}
                 name="scheduledDate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Data Agendada *</FormLabel>
+                    <FormLabel>Data de Cadastro *</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -405,6 +416,42 @@ export function ServiceForm({
                   </FormItem>
                 )}
               />
+
+              {/* Appointment toggle + date */}
+              <div className="md:col-span-2 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="has-appointment"
+                    checked={hasAppointment}
+                    onCheckedChange={(checked) => {
+                      setHasAppointment(!!checked);
+                      if (!checked) form.setValue('appointmentDate', '');
+                    }}
+                  />
+                  <label
+                    htmlFor="has-appointment"
+                    className="text-sm font-medium leading-none cursor-pointer select-none"
+                  >
+                    Agendar atendimento?
+                  </label>
+                </div>
+
+                {hasAppointment && (
+                  <FormField
+                    control={form.control}
+                    name="appointmentDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Data do Agendamento</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
 
               {/* Completion Date — admin only, when status is completed */}
               {isAdmin && watchedStatus === 'completed' && (
