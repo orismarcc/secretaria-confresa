@@ -1,7 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { StatusBadge } from '@/components/StatusBadge';
-import { GripVertical, CheckCircle2, CalendarDays } from 'lucide-react';
+import { GripVertical, CheckCircle2, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -23,6 +23,7 @@ interface SortableServiceItemProps {
   producerName: string;
   demandTypeName: string;
   onFinalize?: (id: string) => void;
+  onView?: (id: string) => void;
   isFinalizePending?: boolean;
   variant?: 'dashboard' | 'operator' | 'proximos';
 }
@@ -32,6 +33,7 @@ export function SortableServiceItem({
   producerName,
   demandTypeName,
   onFinalize,
+  onView,
   isFinalizePending,
   variant = 'dashboard',
 }: SortableServiceItemProps) {
@@ -67,7 +69,7 @@ export function SortableServiceItem({
         ref={setNodeRef}
         style={style}
         className={cn(
-          'flex items-center gap-2 p-3 rounded-xl border bg-card transition-all',
+          'flex items-center gap-1 sm:gap-2 p-1.5 sm:p-3 rounded-xl border bg-card transition-all',
           isDragging && 'opacity-50 shadow-lg scale-[1.02] z-50 ring-2 ring-primary/30',
           isToday && 'border-primary/40 bg-primary/5',
           isPast && !isToday && 'border-destructive/30 bg-destructive/5',
@@ -77,15 +79,23 @@ export function SortableServiceItem({
         <button
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-muted touch-none shrink-0"
+          className="cursor-grab active:cursor-grabbing p-0.5 sm:p-1 rounded hover:bg-muted touch-none shrink-0"
           aria-label="Arrastar para reordenar"
         >
-          <GripVertical className="h-4 w-4 text-muted-foreground" />
+          <GripVertical className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
         </button>
 
-        {/* Date badge */}
+        {/* Urgency dot — mobile only, replaces the full date badge */}
         <div className={cn(
-          'flex flex-col items-center justify-center w-12 h-12 rounded-lg shrink-0 text-center',
+          'sm:hidden w-1.5 h-1.5 rounded-full shrink-0',
+          isToday ? 'bg-primary' :
+          isPast  ? 'bg-destructive' :
+                    'bg-border',
+        )} />
+
+        {/* Date badge — sm+ only */}
+        <div className={cn(
+          'hidden sm:flex flex-col items-center justify-center w-12 h-12 rounded-lg shrink-0 text-center',
           isToday ? 'bg-primary text-primary-foreground' :
           isPast  ? 'bg-destructive/15 text-destructive' :
                     'bg-muted text-muted-foreground',
@@ -100,23 +110,36 @@ export function SortableServiceItem({
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <p className="font-medium text-sm truncate">{producerName}</p>
-          <p className="text-xs text-muted-foreground truncate">{demandTypeName}</p>
+          <p className="font-medium text-xs sm:text-sm truncate leading-tight">{producerName}</p>
+          <p className="text-[10px] text-muted-foreground truncate hidden sm:block">{demandTypeName}</p>
           {hasAppointment && isToday && (
-            <span className="text-[10px] font-semibold text-primary uppercase tracking-wide">Hoje</span>
+            <span className="text-[9px] sm:text-[10px] font-semibold text-primary uppercase tracking-wide">Hoje</span>
           )}
           {hasAppointment && isPast && !isToday && (
-            <span className="text-[10px] font-semibold text-destructive uppercase tracking-wide">Atrasado</span>
+            <span className="text-[9px] sm:text-[10px] font-semibold text-destructive uppercase tracking-wide">Atrasado</span>
           )}
           {!hasAppointment && (
-            <span className="text-[10px] text-muted-foreground">Cadastro: {format(registrationDate, 'dd/MM/yyyy', { locale: ptBR })}</span>
+            <span className="hidden sm:block text-[10px] text-muted-foreground">
+              Cad.: {format(registrationDate, 'dd/MM/yyyy', { locale: ptBR })}
+            </span>
           )}
         </div>
 
-        {/* Status */}
-        <div className="flex flex-col items-end gap-1 shrink-0">
+        {/* Status badge — sm+ only (all items in this card have status "proximo") */}
+        <div className="hidden sm:flex shrink-0">
           <StatusBadge status={service.status as 'pending' | 'in_progress' | 'completed' | 'proximo'} />
         </div>
+
+        {/* View details button */}
+        {onView && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onView(service.id); }}
+            className="p-1 rounded-md hover:bg-muted shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Ver detalhes"
+          >
+            <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+          </button>
+        )}
       </div>
     );
   }

@@ -177,6 +177,16 @@ export default function ServicesPage() {
 
   const sortedServices = useMemo(() => [...filteredServices].sort((a: DbService, b: DbService) => {
     if (statusFilter === 'active') {
+      // "proximo" always appear first, sorted by their drag-and-drop position
+      const aIsProximo = a.status === 'proximo';
+      const bIsProximo = b.status === 'proximo';
+      if (aIsProximo && !bIsProximo) return -1;
+      if (!aIsProximo && bIsProximo) return 1;
+      if (aIsProximo && bIsProximo) {
+        const posA = (a as any).position ?? 999999;
+        const posB = (b as any).position ?? 999999;
+        if (posA !== posB) return posA - posB;
+      }
       return new Date(a.scheduled_date + 'T12:00:00').getTime() - new Date(b.scheduled_date + 'T12:00:00').getTime();
     }
     const aDate = parseSupabaseDate(a.completed_at || a.updated_at);

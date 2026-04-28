@@ -63,8 +63,8 @@ interface ServiceDetailViewProps {
   demandType?: { name: string } | null;
   settlement?: { name: string } | null;
   location?: { name: string } | null;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
   onFinalize?: () => void;
 }
 
@@ -283,18 +283,18 @@ export function ServiceDetailView({
             Finalizar Atendimento
           </Button>
         )}
-        <Button variant="outline" onClick={onEdit} className="w-full">
-          <Pencil className="h-4 w-4 mr-2" />
-          Editar
-        </Button>
-        <Button
-          variant="destructive"
-          onClick={onDelete}
-          className="w-full"
-        >
-          <Trash2 className="h-4 w-4 mr-2" />
-          Excluir
-        </Button>
+        {onEdit && (
+          <Button variant="outline" onClick={onEdit} className="w-full">
+            <Pencil className="h-4 w-4 mr-2" />
+            Editar
+          </Button>
+        )}
+        {onDelete && (
+          <Button variant="destructive" onClick={onDelete} className="w-full">
+            <Trash2 className="h-4 w-4 mr-2" />
+            Excluir
+          </Button>
+        )}
       </div>
     </div>
   );
