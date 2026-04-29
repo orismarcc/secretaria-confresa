@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { User, KeyRound, Save, Eye, EyeOff, Download, Smartphone, CheckCircle2 } from 'lucide-react';
+import { AVIPrestacaoContas } from '@/components/AVIPrestacaoContas';
 
 const JOB_TITLES = [
   'Secretário de Agricultura',
@@ -206,6 +207,9 @@ export default function SettingsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Prestação de Contas / AVI Card */}
+        <AVIPrestacaoContas />
 
         {/* Password Card */}
         <Card>

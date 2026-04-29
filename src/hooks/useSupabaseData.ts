@@ -2,6 +2,58 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
+// ============= SCHEMA-RESILIENCE HELPER =============
+/**
+ * Extracts the offending column name from a Supabase / PostgREST error.
+ * Handles two patterns:
+ *   1. "Could not find the 'column_name' column of 'table' in the schema cache"
+ *   2. column "column_name" of relation "table" does not exist
+ */
+function extractMissingColumn(message: string): string | null {
+  const cacheMatch = message.match(/find the '(\w+)' column/);
+  if (cacheMatch) return cacheMatch[1];
+  const pgMatch = message.match(/column "(\w+)" of relation/);
+  if (pgMatch) return pgMatch[1];
+  return null;
+}
+
+/**
+ * Retries a Supabase call, automatically dropping any column that the DB
+ * reports as missing (schema cache out of sync with the code).
+ * Up to MAX_RETRIES columns can be stripped before giving up.
+ *
+ * @param callFn   - receives the (possibly reduced) payload and returns { data, error }
+ * @param payload  - initial key/value object to pass to the DB call
+ * @param onSkip   - optional callback called with each stripped column name
+ */
+async function withMissingColumnRetry<T>(
+  callFn: (payload: Record<string, unknown>) => Promise<{ data: T | null; error: { message: string } | null }>,
+  payload: Record<string, unknown>,
+  onSkip?: (column: string) => void,
+): Promise<T> {
+  const MAX_RETRIES = 8;
+  let current = { ...payload };
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const { data, error } = await callFn(current);
+    if (!error) return data as T;
+
+    const missing = extractMissingColumn(error.message);
+    if (missing && missing in current) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { [missing]: _dropped, ...rest } = current;
+      current = rest;
+      onSkip?.(missing);
+      continue; // retry without the missing column
+    }
+
+    // Not a missing-column error — re-throw as a proper Error
+    throw new Error(error.message);
+  }
+
+  throw new Error('Máximo de tentativas atingido ao tentar salvar o registro.');
+}
+
 // ============= DEMAND TYPES =============
 export function useDemandTypes() {
   return useQuery({
@@ -514,13 +566,24 @@ export function useCreateService() {
       machinery_id?: string | null;
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data, error } = await supabase
-        .from('services')
-        .insert({ ...service, created_by: user?.id ?? null })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      const payload: Record<string, unknown> = { ...service, created_by: user?.id ?? null };
+      const skipped: string[] = [];
+
+      const result = await withMissingColumnRetry(
+        (p) => supabase.from('services').insert(p).select().single(),
+        payload,
+        (col) => skipped.push(col),
+      );
+
+      if (skipped.length > 0) {
+        toast({
+          title: 'Atenção: campos não salvos',
+          description: `Os campos "${skipped.join(', ')}" ainda não existem no banco. Execute a migração pendente no Supabase.`,
+          variant: 'destructive',
+        });
+      }
+
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
@@ -538,14 +601,23 @@ export function useUpdateService() {
 
   return useMutation({
     mutationFn: async ({ id, ...updates }: { id: string; [key: string]: unknown }) => {
-      const { data, error } = await supabase
-        .from('services')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      const skipped: string[] = [];
+
+      const result = await withMissingColumnRetry(
+        (p) => supabase.from('services').update(p).eq('id', id).select().single(),
+        updates as Record<string, unknown>,
+        (col) => skipped.push(col),
+      );
+
+      if (skipped.length > 0) {
+        toast({
+          title: 'Atenção: campos não salvos',
+          description: `Os campos "${skipped.join(', ')}" ainda não existem no banco. Execute a migração pendente no Supabase.`,
+          variant: 'destructive',
+        });
+      }
+
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
