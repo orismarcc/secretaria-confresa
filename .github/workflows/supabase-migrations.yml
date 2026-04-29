@@ -27,15 +27,24 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      - name: Repair migration history (mark remote-only migrations as reverted)
+      # Mark all previously-applied local migrations as applied so db push
+      # doesn't try to re-run them (schema objects already exist in the DB).
+      # Only 20260428000002_add_appointment_date.sql is intentionally omitted
+      # so it gets applied by the db push step below.
+      - name: Sync migration history
         run: |
-          supabase migration repair --status reverted \
-            20260331202040 20260401022708 20260408233120 20260422143040 \
-            --password "${{ secrets.SUPABASE_DB_PASSWORD }}" || true
+          supabase migration repair --status applied \
+            20260126013012 20260126013149 20260126022722 20260126024352 \
+            20260126024508 20260126025014 20260126025742 20260127003111 \
+            20260205001838 20260207173319 20260313012906 20260322223618 \
+            20260328000001 20260328000002 20260328000003 20260328000004 \
+            20260328000005 20260328000006 \
+            20260408000001 20260428000001 \
+            --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      - name: Apply migrations
+      - name: Apply pending migrations
         run: supabase db push --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
