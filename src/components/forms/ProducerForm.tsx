@@ -59,11 +59,11 @@ export function ProducerForm({
   const form = useForm<ProducerFormData>({
     resolver: zodResolver(producerSchema),
     defaultValues: {
-      name: producer?.name || '',
+      name: producer?.name?.toUpperCase() || '',
       cpf: producer?.cpf || '',
       phone: producer?.phone || '',
       settlementId: producer?.settlementId || '',
-      locationName: producer?.locationName || '',
+      locationName: producer?.locationName?.toUpperCase() || '',
       latitude: (producer as any)?.latitude?.toString() || '',
       longitude: (producer as any)?.longitude?.toString() || '',
     },
@@ -72,11 +72,11 @@ export function ProducerForm({
   useEffect(() => {
     if (producer) {
       form.reset({
-        name: producer.name,
+        name: producer.name?.toUpperCase() || '',
         cpf: producer.cpf,
         phone: producer.phone,
         settlementId: producer.settlementId,
-        locationName: producer.locationName || '',
+        locationName: producer.locationName?.toUpperCase() || '',
         latitude: (producer as any)?.latitude?.toString() || '',
         longitude: (producer as any)?.longitude?.toString() || '',
       });
@@ -132,7 +132,11 @@ export function ProducerForm({
                   <FormItem className="md:col-span-2">
                     <FormLabel>Nome Completo *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Nome do produtor" {...field} />
+                      <Input
+                        placeholder="NOME DO PRODUTOR"
+                        {...field}
+                        onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -201,7 +205,11 @@ export function ProducerForm({
                   <FormItem>
                     <FormLabel>Localidade</FormLabel>
                     <FormControl>
-                      <Input placeholder="Digite a localidade" {...field} />
+                      <Input
+                        placeholder="LOCALIDADE"
+                        {...field}
+                        onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

@@ -103,11 +103,11 @@ export default function ProducersPage() {
 
   const handleCreate = (data: any) => {
     createProducer.mutate({
-      name: data.name,
+      name: (data.name as string).toUpperCase(),
       cpf: data.cpf,
       phone: data.phone,
       settlement_id: data.settlementId,
-      location_name: data.locationName,
+      location_name: data.locationName ? (data.locationName as string).toUpperCase() : undefined,
       latitude: data.latitude ? parseFloat(data.latitude) : null,
       longitude: data.longitude ? parseFloat(data.longitude) : null,
     });
@@ -118,11 +118,11 @@ export default function ProducersPage() {
     if (editingProducer) {
       updateProducer.mutate({
         id: editingProducer.id,
-        name: data.name,
+        name: (data.name as string).toUpperCase(),
         cpf: data.cpf,
         phone: data.phone,
         settlement_id: data.settlementId,
-        location_name: data.locationName,
+        location_name: data.locationName ? (data.locationName as string).toUpperCase() : undefined,
         latitude: data.latitude ? parseFloat(data.latitude) : null,
         longitude: data.longitude ? parseFloat(data.longitude) : null,
       });
