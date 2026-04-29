@@ -27,6 +27,14 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
+      - name: Repair migration history (mark remote-only migrations as reverted)
+        run: |
+          supabase migration repair --status reverted \
+            20260331202040 20260401022708 20260408233120 20260422143040 \
+            --password "${{ secrets.SUPABASE_DB_PASSWORD }}" || true
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
       - name: Apply migrations
         run: supabase db push --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
         env:
