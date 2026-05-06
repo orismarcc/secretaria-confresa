@@ -20,6 +20,7 @@ import DeliveriesPage from "./pages/DeliveriesPage";
 import ImportServicesPage from "./pages/ImportServicesPage";
 import SettingsPage from "./pages/SettingsPage";
 import OperatorPage from "./pages/OperatorPage";
+import DAMPage from "./pages/DAMPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -54,6 +55,7 @@ function AppRoutes() {
       <Route path="/calendar" element={<ProtectedRoute adminOnly><CalendarPage /></ProtectedRoute>} />
       <Route path="/deliveries" element={<ProtectedRoute adminOnly><DeliveriesPage /></ProtectedRoute>} />
       <Route path="/import" element={<ProtectedRoute adminOnly><ImportServicesPage /></ProtectedRoute>} />
+      <Route path="/dam" element={<ProtectedRoute adminOnly><DAMPage /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
 
       {/* Operator Route */}

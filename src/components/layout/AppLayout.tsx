@@ -17,6 +17,7 @@ import {
   BarChart3,
   CalendarDays,
   Package,
+  Receipt,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -31,6 +32,7 @@ const adminNavItems = [
   { path: '/analytics', label: 'Análises', icon: BarChart3 },
   { path: '/calendar', label: 'Calendário', icon: CalendarDays },
   { path: '/deliveries', label: 'Entregas', icon: Package },
+  { path: '/dam', label: 'DAMs', icon: Receipt },
   { path: '/services', label: 'Atendimentos', icon: ClipboardList },
   { path: '/producers', label: 'Produtores', icon: Users },
   { path: '/operators', label: 'Operadores', icon: UserCog },
