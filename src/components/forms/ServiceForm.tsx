@@ -50,6 +50,10 @@ const serviceSchema = z.object({
   priority: z.enum(['low', 'medium', 'high']).optional(),
   operatorId: z.string().optional(),
   machineryId: z.string().optional(),
+  // DAM fields
+  damIssued: z.boolean().optional(),
+  damIssuedAt: z.string().optional(),
+  damPaid: z.boolean().optional(),
 });
 
 export type ServiceFormData = z.infer<typeof serviceSchema>;
@@ -82,6 +86,9 @@ interface ServiceFormProps {
     priority?: string;
     operatorId?: string;
     machineryId?: string;
+    damIssued?: boolean;
+    damIssuedAt?: string;
+    damPaid?: boolean;
   } | null;
   producers: Producer[];
   settlements: Settlement[];
@@ -209,11 +216,15 @@ export function ServiceForm({
       priority: 'medium',
       operatorId: '',
       machineryId: '',
+      damIssued: false,
+      damIssuedAt: '',
+      damPaid: false,
     },
   });
 
   const selectedProducerId = form.watch('producerId');
   const watchedStatus = form.watch('status');
+  const watchedDamIssued = form.watch('damIssued');
   const selectedProducer = producers.find((p) => p.id === selectedProducerId);
 
   useEffect(() => {
@@ -233,6 +244,9 @@ export function ServiceForm({
         priority: (service.priority as 'low' | 'medium' | 'high') || 'medium',
         operatorId: service.operatorId || '',
         machineryId: service.machineryId || '',
+        damIssued: service.damIssued ?? false,
+        damIssuedAt: service.damIssuedAt || '',
+        damPaid: service.damPaid ?? false,
       });
     } else {
       setHasAppointment(false);
@@ -249,6 +263,9 @@ export function ServiceForm({
         priority: 'medium',
         operatorId: '',
         machineryId: '',
+        damIssued: false,
+        damIssuedAt: '',
+        damPaid: false,
       });
     }
   }, [service, form]);
@@ -570,6 +587,70 @@ export function ServiceForm({
                   </FormItem>
                 )}
               />
+
+              {/* DAM Section */}
+              <div className="md:col-span-2 rounded-lg border border-border/60 bg-muted/30 p-4 space-y-3">
+                <p className="text-sm font-semibold text-foreground">DAM — Documento de Arrecadação Municipal</p>
+
+                {/* DAM Issued */}
+                <FormField
+                  control={form.control}
+                  name="damIssued"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center gap-2 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={!!field.value}
+                          onCheckedChange={(checked) => {
+                            field.onChange(!!checked);
+                            if (!checked) {
+                              form.setValue('damIssuedAt', '');
+                              form.setValue('damPaid', false);
+                            }
+                          }}
+                        />
+                      </FormControl>
+                      <FormLabel className="font-normal cursor-pointer">DAM emitida?</FormLabel>
+                    </FormItem>
+                  )}
+                />
+
+                {watchedDamIssued && (
+                  <div className="pl-6 space-y-3">
+                    {/* DAM Issued Date */}
+                    <FormField
+                      control={form.control}
+                      name="damIssuedAt"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Data de Emissão da DAM</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {/* DAM Paid */}
+                    <FormField
+                      control={form.control}
+                      name="damPaid"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center gap-2 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={!!field.value}
+                              onCheckedChange={(checked) => field.onChange(!!checked)}
+                            />
+                          </FormControl>
+                          <FormLabel className="font-normal cursor-pointer">DAM paga?</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
+              </div>
 
               {/* Notes */}
               <FormField

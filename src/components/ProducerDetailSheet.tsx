@@ -7,13 +7,20 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2, MapPin, Phone, User, FileText, Home, Navigation, ExternalLink, ClipboardList } from 'lucide-react';
+import { Pencil, Trash2, MapPin, Phone, User, FileText, Home, Navigation, ExternalLink, ClipboardList, AlertTriangle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useServicesByProducer } from '@/hooks/useSupabaseData';
 import { StatusBadge } from '@/components/StatusBadge';
+
+function isDamOverdue(s: any): boolean {
+  if (!s.dam_issued || s.dam_paid) return false;
+  if (!s.dam_issued_at) return false;
+  const issued = new Date(s.dam_issued_at + 'T12:00:00');
+  return (Date.now() - issued.getTime()) / (1000 * 60 * 60 * 24) > 30;
+}
 
 function openInMaps(lat: number, lng: number) {
   const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
@@ -167,6 +174,25 @@ export function ProducerDetailSheet({
               )}
             </div>
 
+            {/* DAM overdue alert */}
+            {(() => {
+              const overdueServices = (services as any[]).filter(isDamOverdue);
+              if (overdueServices.length === 0) return null;
+              return (
+                <div className="mb-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3">
+                  <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-destructive">DAM em atraso</p>
+                    <p className="text-xs text-destructive/80 mt-0.5">
+                      {overdueServices.length === 1
+                        ? 'Este produtor possui 1 DAM emitida há mais de 30 dias sem pagamento.'
+                        : `Este produtor possui ${overdueServices.length} DAMs emitidas há mais de 30 dias sem pagamento.`}
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+
             {servicesLoading ? (
               <div className="space-y-2">
                 <Skeleton className="h-14 w-full rounded-lg" />
@@ -178,18 +204,67 @@ export function ProducerDetailSheet({
               </p>
             ) : (
               <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                {(services as any[]).map((s) => (
-                  <div key={s.id} className="flex items-start justify-between gap-2 p-3 bg-muted/30 rounded-lg border border-border/50">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{s.demand_types?.name || 'N/A'}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {format(new Date(s.scheduled_date), 'dd/MM/yyyy', { locale: ptBR })}
-                        {s.settlements?.name ? ` · ${s.settlements.name}` : ''}
-                      </p>
-                    </div>
-                    <StatusBadge status={s.status as 'pending' | 'in_progress' | 'completed'} />
-                  </div>
-                ))}
+                {(services as any[])
+                  .slice()
+                  .sort((a: any, b: any) => {
+                    // Most recent first: prefer completed_at, fallback to scheduled_date
+                    const aDate = a.completed_at || a.scheduled_date;
+                    const bDate = b.completed_at || b.scheduled_date;
+                    return new Date(bDate).getTime() - new Date(aDate).getTime();
+                  })
+                  .map((s: any) => {
+                    const isCompleted = s.status === 'completed';
+                    const completedAt = s.completed_at
+                      ? format(new Date(s.completed_at.replace(' ', 'T')), 'dd/MM/yyyy', { locale: ptBR })
+                      : null;
+                    const scheduledDate = s.scheduled_date
+                      ? format(new Date(s.scheduled_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })
+                      : null;
+
+                    return (
+                      <div
+                        key={s.id}
+                        className={`flex items-start justify-between gap-2 p-3 rounded-lg border ${
+                          isCompleted
+                            ? 'bg-success/5 border-success/20'
+                            : 'bg-muted/30 border-border/50'
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{s.demand_types?.name || 'N/A'}</p>
+                          {isCompleted && completedAt ? (
+                            <p className="text-xs font-semibold text-success mt-0.5">
+                              ✓ Finalizado em {completedAt}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Cadastro: {scheduledDate}
+                            </p>
+                          )}
+                          {s.settlements?.name && (
+                            <p className="text-xs text-muted-foreground truncate">{s.settlements.name}</p>
+                          )}
+                          {/* DAM status */}
+                          {isDamOverdue(s) && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 rounded px-1.5 py-0.5 mt-0.5">
+                              ⚠ DAM em atraso
+                            </span>
+                          )}
+                          {s.dam_issued && !s.dam_paid && !isDamOverdue(s) && (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-warning bg-warning/10 rounded px-1.5 py-0.5 mt-0.5">
+                              DAM pendente
+                            </span>
+                          )}
+                          {s.dam_issued && s.dam_paid && (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-success bg-success/10 rounded px-1.5 py-0.5 mt-0.5">
+                              DAM paga
+                            </span>
+                          )}
+                        </div>
+                        <StatusBadge status={s.status as 'pending' | 'in_progress' | 'completed'} />
+                      </div>
+                    );
+                  })}
               </div>
             )}
           </div>

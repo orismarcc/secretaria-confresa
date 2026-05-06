@@ -3,7 +3,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { StatsCard } from '@/components/StatsCard';
 import {
-  ClipboardList, Clock, Loader2, CheckCircle2, Users, CalendarCheck,
+  ClipboardList, Clock, Loader2, CheckCircle2, Users, CalendarCheck, PlayCircle,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -27,7 +27,9 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ServiceDetailView } from '@/components/ServiceDetailView';
+import { StatusBadge } from '@/components/StatusBadge';
 import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import {
   useDashboardStats,
   useServices,
@@ -128,6 +130,17 @@ export default function DashboardPage() {
       });
   }, [services]);
 
+  // Services currently in_progress, sorted by most recent update
+  const inProgressServices = useMemo(() => {
+    return services
+      .filter(s => s.status === 'in_progress')
+      .sort((a, b) => {
+        const aDate = (a as any).updated_at || a.scheduled_date;
+        const bDate = (b as any).updated_at || b.scheduled_date;
+        return new Date(bDate).getTime() - new Date(aDate).getTime();
+      });
+  }, [services]);
+
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
@@ -146,6 +159,16 @@ export default function DashboardPage() {
     ? Math.round(((stats.completedServices || 0) / stats.totalServices) * 100)
     : 0;
 
+  // Count services with overdue DAM (issued, not paid, > 30 days)
+  const damOverdueCount = useMemo(() => {
+    return services.filter((s: any) => {
+      if (!s.dam_issued || s.dam_paid) return false;
+      if (!s.dam_issued_at) return false;
+      const issued = new Date(s.dam_issued_at + 'T12:00:00');
+      return (Date.now() - issued.getTime()) / (1000 * 60 * 60 * 24) > 30;
+    }).length;
+  }, [services]);
+
   return (
     <AppLayout>
       <PageHeader title="Dashboard" description="Visão geral do sistema" />
@@ -159,10 +182,10 @@ export default function DashboardPage() {
             <div className="cursor-pointer" onClick={() => navigate('/services')}>
               <StatsCard title="Total de Atendimentos" value={stats?.totalServices || 0} icon={ClipboardList} variant="primary" />
             </div>
-            <div className="cursor-pointer" onClick={() => navigate('/services')}>
+            <div className="cursor-pointer" onClick={() => navigate('/services?status=pending')}>
               <StatsCard title="Pendentes" value={stats?.pendingServices || 0} icon={Clock} variant="warning" />
             </div>
-            <div className="cursor-pointer" onClick={() => navigate('/services')}>
+            <div className="cursor-pointer" onClick={() => navigate('/services?status=in_progress')}>
               <StatsCard title="Em Execução" value={stats?.inProgressServices || 0} icon={Loader2} variant="info" />
             </div>
             <div className="cursor-pointer" onClick={() => navigate('/services?tab=archived')}>
@@ -173,7 +196,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Main content ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-3">
 
         {/* Próximos Atendimentos — apenas status 'proximo', drag-and-drop */}
         <Card>
@@ -184,6 +207,11 @@ export default function DashboardPage() {
                   <CalendarCheck className="h-3 w-3 sm:h-4 sm:w-4 text-violet-600 shrink-0" />
                   <span className="truncate">Próximos</span>
                   <span className="hidden sm:inline truncate">Atendimentos</span>
+                  {proximoServices.length > 0 && (
+                    <span className="text-[10px] bg-violet-100 text-violet-700 dark:bg-violet-950/50 px-1.5 py-0.5 rounded-full font-normal">
+                      {proximoServices.length}
+                    </span>
+                  )}
                 </div>
                 <button
                   onClick={() => navigate('/services')}
@@ -223,7 +251,7 @@ export default function DashboardPage() {
                   items={proximoServices.map(s => s.id)}
                   strategy={verticalListSortingStrategy}
                 >
-                  <div className="space-y-1.5 sm:space-y-2 max-h-[260px] sm:max-h-[420px] overflow-y-auto pr-0.5 sm:pr-1">
+                  <div className="space-y-1.5 sm:space-y-2 max-h-[260px] sm:max-h-[380px] overflow-y-auto pr-0.5 sm:pr-1">
                     {proximoServices.map(service => (
                       <SortableServiceItem
                         key={service.id}
@@ -237,6 +265,73 @@ export default function DashboardPage() {
                   </div>
                 </SortableContext>
               </DndContext>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Em Execução */}
+        <Card>
+          <CardHeader className="p-3 sm:p-6 pb-2 sm:pb-3">
+            <CardTitle className="text-xs sm:text-base">
+              <div className="flex items-start justify-between gap-1 sm:gap-2 flex-wrap">
+                <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                  <PlayCircle className="h-3 w-3 sm:h-4 sm:w-4 text-info shrink-0" />
+                  <span className="truncate">Em Execução</span>
+                  {inProgressServices.length > 0 && (
+                    <span className="text-[10px] bg-info/10 text-info px-1.5 py-0.5 rounded-full font-normal">
+                      {inProgressServices.length}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => navigate('/services')}
+                  className="text-[10px] sm:text-sm text-primary hover:underline font-normal whitespace-nowrap shrink-0"
+                >
+                  Ver todos
+                </button>
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-6 pt-0">
+            {isLoading ? (
+              <div className="space-y-2 sm:space-y-3">
+                <Skeleton className="h-10 sm:h-14" />
+                <Skeleton className="h-10 sm:h-14" />
+              </div>
+            ) : inProgressServices.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 sm:py-10 text-center gap-1 sm:gap-2">
+                <PlayCircle className="h-7 w-7 sm:h-10 sm:w-10 text-muted-foreground/30" />
+                <p className="text-muted-foreground text-[10px] sm:text-sm leading-tight">
+                  Nenhum atendimento em execução
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1.5 sm:space-y-2 max-h-[260px] sm:max-h-[380px] overflow-y-auto pr-0.5 sm:pr-1">
+                {inProgressServices.map((service: any) => (
+                  <button
+                    key={service.id}
+                    onClick={() => openDetail(service)}
+                    className="w-full text-left rounded-lg border bg-info/5 border-info/20 p-2 sm:p-3 hover:bg-info/10 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-1">
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm font-medium truncate">
+                          {service.producers?.name || 'N/A'}
+                        </p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
+                          {service.demand_types?.name || 'N/A'}
+                        </p>
+                      </div>
+                      <StatusBadge status="in_progress" className="shrink-0 text-[10px] sm:text-xs" />
+                    </div>
+                    {service.scheduled_date && (
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        {format(new Date(service.scheduled_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
+                      </p>
+                    )}
+                  </button>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -277,35 +372,65 @@ export default function DashboardPage() {
 
             <Separator />
 
-            {/* Status breakdown */}
+            {/* Status breakdown — clickable */}
             <div className="space-y-1.5 sm:space-y-2">
               <p className="text-[9px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Por status
               </p>
               <div className="grid grid-cols-3 gap-1 sm:gap-2">
-                <div className="rounded-lg bg-warning/10 border border-warning/20 p-1 sm:p-2.5 text-center">
+                <button
+                  onClick={() => navigate('/services?status=pending')}
+                  className="rounded-lg bg-warning/10 border border-warning/20 p-1 sm:p-2.5 text-center hover:bg-warning/20 transition-colors"
+                >
                   <p className="text-sm sm:text-lg font-bold text-warning leading-none">{stats?.pendingServices || 0}</p>
                   <p className="text-[8px] sm:text-[10px] text-muted-foreground leading-tight mt-0.5">
                     <span className="sm:hidden">Pend.</span>
                     <span className="hidden sm:inline">Pendentes</span>
                   </p>
-                </div>
-                <div className="rounded-lg bg-info/10 border border-info/20 p-1 sm:p-2.5 text-center">
+                </button>
+                <button
+                  onClick={() => navigate('/services?status=in_progress')}
+                  className="rounded-lg bg-info/10 border border-info/20 p-1 sm:p-2.5 text-center hover:bg-info/20 transition-colors"
+                >
                   <p className="text-sm sm:text-lg font-bold text-info leading-none">{stats?.inProgressServices || 0}</p>
                   <p className="text-[8px] sm:text-[10px] text-muted-foreground leading-tight mt-0.5">
                     <span className="sm:hidden">Em Ex.</span>
                     <span className="hidden sm:inline">Em Execução</span>
                   </p>
-                </div>
-                <div className="rounded-lg bg-violet-50 border border-violet-200 p-1 sm:p-2.5 text-center dark:bg-violet-950/30">
+                </button>
+                <button
+                  onClick={() => navigate('/services')}
+                  className="rounded-lg bg-violet-50 border border-violet-200 p-1 sm:p-2.5 text-center hover:bg-violet-100 transition-colors dark:bg-violet-950/30"
+                >
                   <p className="text-sm sm:text-lg font-bold text-violet-600 leading-none">{stats?.proximoServices || 0}</p>
                   <p className="text-[8px] sm:text-[10px] text-muted-foreground leading-tight mt-0.5">
                     <span className="sm:hidden">Próx.</span>
                     <span className="hidden sm:inline">Próximos</span>
                   </p>
-                </div>
+                </button>
               </div>
             </div>
+
+            {/* DAM overdue alert */}
+            {!isLoading && damOverdueCount > 0 && (
+              <>
+                <Separator />
+                <button
+                  onClick={() => navigate('/services')}
+                  className="w-full flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-2 sm:p-3 text-left hover:bg-destructive/20 transition-colors"
+                >
+                  <span className="text-destructive text-sm sm:text-base shrink-0 mt-0.5">⚠</span>
+                  <div>
+                    <p className="text-[10px] sm:text-xs font-semibold text-destructive leading-tight">
+                      {damOverdueCount} DAM{damOverdueCount > 1 ? 's' : ''} em atraso
+                    </p>
+                    <p className="text-[9px] sm:text-[10px] text-destructive/70 leading-tight mt-0.5">
+                      Emitida{damOverdueCount > 1 ? 's' : ''} há mais de 30 dias sem pagamento
+                    </p>
+                  </div>
+                </button>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

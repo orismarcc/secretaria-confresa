@@ -558,12 +558,17 @@ export function useCreateService() {
       location_id?: string;
       scheduled_date: string;
       appointment_date?: string | null;
+      completed_at?: string | null;
       purpose?: string;
       notes?: string;
+      status?: string;
       priority?: string;
       worked_area?: number | null;
       operator_id?: string | null;
       machinery_id?: string | null;
+      dam_issued?: boolean;
+      dam_paid?: boolean;
+      dam_issued_at?: string | null;
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
       const payload: Record<string, unknown> = { ...service, created_by: user?.id ?? null };

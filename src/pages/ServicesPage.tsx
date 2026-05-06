@@ -100,6 +100,10 @@ interface DbService {
   updated_at?: string | null;
   worked_area?: number | null;
   created_by?: string | null;
+  // DAM fields
+  dam_issued?: boolean | null;
+  dam_paid?: boolean | null;
+  dam_issued_at?: string | null;
   producers?: { name: string; phone?: string | null; location_name?: string | null; latitude?: number | null; longitude?: number | null } | null;
   demand_types?: { name: string } | null;
   settlements?: { name: string } | null;
@@ -206,19 +210,33 @@ export default function ServicesPage() {
 
   const handleCreate = (data: any) => {
     const producer = producers.find(p => p.id === data.producerId);
+
+    // Determine completed_at on create
+    let completedAt: string | null = null;
+    if (isAdmin && data.completedAt) {
+      completedAt = dateInputToIso(data.completedAt);
+    } else if (data.status === 'completed') {
+      completedAt = new Date().toISOString();
+    }
+
     createService.mutate({
       producer_id: data.producerId,
       demand_type_id: data.demandTypeId,
+      status: data.status || 'pending',
       purpose: data.purpose || undefined,
       settlement_id: producer?.settlement_id || data.settlementId,
       location_id: producer?.location_id || data.locationId,
       scheduled_date: data.scheduledDate,
       ...(data.appointmentDate ? { appointment_date: data.appointmentDate } : {}),
+      ...(completedAt ? { completed_at: completedAt } : {}),
       notes: data.notes,
       priority: data.priority || 'medium',
       worked_area: data.workedArea || null,
       operator_id: data.operatorId && data.operatorId !== 'none' ? data.operatorId : null,
       machinery_id: data.machineryId && data.machineryId !== 'none' ? data.machineryId : null,
+      dam_issued: data.damIssued ?? false,
+      dam_paid: data.damPaid ?? false,
+      ...(data.damIssued && data.damIssuedAt ? { dam_issued_at: data.damIssuedAt } : {}),
     });
     setFormOpen(false);
   };
@@ -257,6 +275,9 @@ export default function ServicesPage() {
       operator_id: data.operatorId && data.operatorId !== 'none' ? data.operatorId : null,
       machinery_id: data.machineryId && data.machineryId !== 'none' ? data.machineryId : null,
       completed_at: completedAt,
+      dam_issued: data.damIssued ?? false,
+      dam_paid: data.damPaid ?? false,
+      dam_issued_at: (data.damIssued && data.damIssuedAt) ? data.damIssuedAt : null,
     });
     setEditingService(null);
     setFormOpen(false);
@@ -330,6 +351,9 @@ export default function ServicesPage() {
       machineryId: s.machinery_id || '',
       createdAt: new Date(s.created_at || Date.now()),
       updatedAt: new Date(s.updated_at || Date.now()),
+      damIssued: s.dam_issued ?? false,
+      damPaid: s.dam_paid ?? false,
+      damIssuedAt: s.dam_issued_at || '',
     };
   };
 
@@ -368,13 +392,42 @@ export default function ServicesPage() {
 
   // ── columns ───────────────────────────────────────────────────────────────
 
+  // Helper: check if DAM is overdue (issued but not paid, more than 30 days ago)
+  const isDamOverdue = (s: DbService): boolean => {
+    if (!s.dam_issued || s.dam_paid) return false;
+    if (!s.dam_issued_at) return false;
+    const issued = new Date(s.dam_issued_at + 'T12:00:00');
+    const diffDays = (Date.now() - issued.getTime()) / (1000 * 60 * 60 * 24);
+    return diffDays > 30;
+  };
+
   const columns = [
     {
       key: 'producer',
       header: 'Produtor',
       render: (s: DbService) => {
         const producer = producers.find(p => p.id === s.producer_id);
-        return <span className="font-medium">{producer?.name || s.producers?.name || 'N/A'}</span>;
+        const overdue = isDamOverdue(s);
+        return (
+          <div className="flex flex-col gap-0.5">
+            <span className="font-medium">{producer?.name || s.producers?.name || 'N/A'}</span>
+            {overdue && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 rounded px-1.5 py-0.5 w-fit">
+                ⚠ DAM em atraso
+              </span>
+            )}
+            {s.dam_issued && !s.dam_paid && !overdue && (
+              <span className="inline-flex items-center gap-1 text-[10px] text-warning bg-warning/10 rounded px-1.5 py-0.5 w-fit">
+                DAM pendente
+              </span>
+            )}
+            {s.dam_issued && s.dam_paid && (
+              <span className="inline-flex items-center gap-1 text-[10px] text-success bg-success/10 rounded px-1.5 py-0.5 w-fit">
+                DAM paga
+              </span>
+            )}
+          </div>
+        );
       },
     },
     {

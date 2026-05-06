@@ -8,11 +8,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Select,
@@ -21,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import {
   Plus,
   Pencil,
@@ -29,6 +32,9 @@ import {
   CalendarRange,
   User,
   Hash,
+  CheckCircle,
+  Clock,
+  CalendarCheck,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -72,6 +78,7 @@ export default function DeliveriesPage() {
   const deleteDelivery = useDeleteDelivery();
 
   const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<'pending' | 'completed'>('pending');
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<DeliveryFormData>(EMPTY_FORM);
@@ -79,20 +86,45 @@ export default function DeliveriesPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteName, setDeleteName] = useState('');
 
+  // Mark as realized dialog
+  const [realizeDialogOpen, setRealizeDialogOpen] = useState(false);
+  const [realizeId, setRealizeId] = useState<string | null>(null);
+  const [realizeName, setRealizeName] = useState('');
+  const [realizeDate, setRealizeDate] = useState('');
+
   // Only delivery-category demand types
   const deliveryDemandTypes = useMemo(() =>
     (demandTypes as any[]).filter(d => d.category === 'entregas' && d.is_active !== false),
     [demandTypes]
   );
 
+  const pendingCount = useMemo(
+    () => (deliveries as any[]).filter(d => !d.status || d.status === 'pending').length,
+    [deliveries]
+  );
+  const completedCount = useMemo(
+    () => (deliveries as any[]).filter(d => d.status === 'completed').length,
+    [deliveries]
+  );
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return (deliveries as any[]).filter(d => {
+      const isPending = !d.status || d.status === 'pending';
+      const matchesTab = tab === 'pending' ? isPending : d.status === 'completed';
       const producerName = d.producers?.name || '';
       const demandName = d.demand_types?.name || '';
-      return producerName.toLowerCase().includes(q) || demandName.toLowerCase().includes(q);
+      const matchesSearch = producerName.toLowerCase().includes(q) || demandName.toLowerCase().includes(q);
+      return matchesTab && matchesSearch;
+    }).sort((a: any, b: any) => {
+      if (tab === 'completed') {
+        const aDate = a.completed_at || a.created_at || '';
+        const bDate = b.completed_at || b.created_at || '';
+        return new Date(bDate).getTime() - new Date(aDate).getTime();
+      }
+      return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
     });
-  }, [deliveries, search]);
+  }, [deliveries, search, tab]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -120,6 +152,13 @@ export default function DeliveriesPage() {
     setDeleteDialogOpen(true);
   };
 
+  const openRealize = (d: any) => {
+    setRealizeId(d.id);
+    setRealizeName(d.producers?.name || 'este produtor');
+    setRealizeDate(format(new Date(), 'yyyy-MM-dd'));
+    setRealizeDialogOpen(true);
+  };
+
   const handleSubmit = () => {
     const payload = {
       producer_id: formData.producer_id,
@@ -136,7 +175,7 @@ export default function DeliveriesPage() {
     if (editingId) {
       updateDelivery.mutate({ id: editingId, ...payload });
     } else {
-      createDelivery.mutate(payload);
+      createDelivery.mutate(payload as any);
     }
     setFormOpen(false);
   };
@@ -147,6 +186,20 @@ export default function DeliveriesPage() {
       setDeleteId(null);
       setDeleteDialogOpen(false);
     }
+  };
+
+  const handleRealize = () => {
+    if (!realizeId) return;
+    const completedAt = realizeDate
+      ? `${realizeDate}T12:00:00.000Z`
+      : new Date().toISOString();
+    updateDelivery.mutate({
+      id: realizeId,
+      status: 'completed',
+      completed_at: completedAt,
+    });
+    setRealizeId(null);
+    setRealizeDialogOpen(false);
   };
 
   const formatDate = (dateStr: string | null | undefined) => {
@@ -178,6 +231,22 @@ export default function DeliveriesPage() {
         }}
       />
 
+      {/* Tabs */}
+      <Tabs value={tab} onValueChange={(v) => setTab(v as 'pending' | 'completed')} className="mb-4">
+        <TabsList>
+          <TabsTrigger value="pending" className="gap-2">
+            <Clock className="h-4 w-4" />
+            Pendentes
+            <span className="bg-warning/20 text-warning px-2 py-0.5 rounded-full text-xs">{pendingCount}</span>
+          </TabsTrigger>
+          <TabsTrigger value="completed" className="gap-2">
+            <CalendarCheck className="h-4 w-4" />
+            Realizadas
+            <span className="bg-success/20 text-success px-2 py-0.5 rounded-full text-xs">{completedCount}</span>
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <div className="mb-4">
         <SearchInput value={search} onChange={setSearch} placeholder="Buscar por produtor ou tipo..." className="max-w-sm" />
       </div>
@@ -186,33 +255,56 @@ export default function DeliveriesPage() {
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-3">
           <Package className="h-12 w-12 opacity-30" />
-          <p>Nenhuma entrega cadastrada</p>
+          <p>{tab === 'pending' ? 'Nenhuma entrega pendente' : 'Nenhuma entrega realizada'}</p>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((d: any) => {
             const startDate = formatDate(d.delivery_date_start);
             const endDate = formatDate(d.delivery_date_end);
+            const completedDate = d.completed_at ? formatDate(d.completed_at.slice(0, 10)) : null;
+            const isCompleted = d.status === 'completed';
+
             return (
               <div
                 key={d.id}
-                className="rounded-xl border bg-card p-4 space-y-3 hover:shadow-sm transition-shadow"
+                className={`rounded-xl border bg-card p-4 space-y-3 hover:shadow-sm transition-shadow ${
+                  isCompleted ? 'border-success/30 bg-success/5' : ''
+                }`}
               >
                 {/* Header */}
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-0.5">
                       <User className="h-3.5 w-3.5 shrink-0" />
                       <span className="truncate font-medium text-foreground">{d.producers?.name || '—'}</span>
                     </div>
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge variant={isCompleted ? 'default' : 'secondary'} className={`text-xs ${isCompleted ? 'bg-success/10 text-success border-success/20 hover:bg-success/20' : ''}`}>
                       {d.demand_types?.name || '—'}
                     </Badge>
                   </div>
                   <div className="flex gap-1 shrink-0">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(d)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
+                    {!isCompleted && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-success hover:text-success hover:bg-success/10"
+                          title="Marcar como realizada"
+                          onClick={() => openRealize(d)}
+                        >
+                          <CheckCircle className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(d)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    )}
+                    {isCompleted && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(d)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
@@ -223,6 +315,14 @@ export default function DeliveriesPage() {
                     </Button>
                   </div>
                 </div>
+
+                {/* Completed badge */}
+                {isCompleted && completedDate && (
+                  <div className="flex items-center gap-1.5 text-sm font-medium text-success">
+                    <CheckCircle className="h-4 w-4 shrink-0" />
+                    <span>Realizada em {completedDate}</span>
+                  </div>
+                )}
 
                 {/* Details */}
                 <div className="space-y-1.5 text-sm">
@@ -366,6 +466,40 @@ export default function DeliveriesPage() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Realize Dialog */}
+      <Dialog open={realizeDialogOpen} onOpenChange={setRealizeDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Marcar Entrega como Realizada</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Produtor: <strong>{realizeName}</strong>
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="realize-date">Data de Realização</Label>
+              <Input
+                id="realize-date"
+                type="date"
+                value={realizeDate}
+                onChange={e => setRealizeDate(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setRealizeDialogOpen(false)}>Cancelar</Button>
+            <Button
+              className="bg-success hover:bg-success/90 text-white"
+              onClick={handleRealize}
+              disabled={!realizeDate || updateDelivery.isPending}
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Confirmar Entrega
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
