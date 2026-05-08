@@ -898,3 +898,238 @@ export function useUserRole(userId: string | undefined) {
     enabled: !!userId,
   });
 }
+
+// ============= PATRIMONY =============
+export function usePatrimony() {
+  return useQuery({
+    queryKey: ['patrimony'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('patrimony')
+        .select('*')
+        .order('name');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useCreatePatrimony() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (item: {
+      name: string;
+      patrimony_number: string;
+      description?: string | null;
+      value?: number | null;
+      category?: string | null;
+      acquisition_date?: string | null;
+    }) => {
+      const { data, error } = await supabase.from('patrimony').insert(item).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['patrimony'] });
+      toast({ title: 'Bem cadastrado!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao cadastrar bem', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useUpdatePatrimony() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string; [key: string]: unknown }) => {
+      const { data, error } = await supabase.from('patrimony').update(updates).eq('id', id).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['patrimony'] });
+      toast({ title: 'Bem atualizado!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useDeletePatrimony() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('patrimony').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['patrimony'] });
+      toast({ title: 'Bem removido!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao remover', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+// ============= SEFAZ =============
+export function useSefazProducers() {
+  return useQuery({
+    queryKey: ['sefaz_producers'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('sefaz_producers')
+        .select('*, sefaz_services(id)')
+        .order('name');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useCreateSefazProducer() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (producer: {
+      name: string;
+      cpf?: string | null;
+      phone?: string | null;
+      settlement?: string | null;
+      location?: string | null;
+    }) => {
+      const { data, error } = await supabase.from('sefaz_producers').insert(producer).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sefaz_producers'] });
+      toast({ title: 'Produtor SEFAZ cadastrado!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao cadastrar', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useUpdateSefazProducer() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string; [key: string]: unknown }) => {
+      const { data, error } = await supabase.from('sefaz_producers').update(updates).eq('id', id).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sefaz_producers'] });
+      toast({ title: 'Produtor SEFAZ atualizado!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useDeleteSefazProducer() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('sefaz_producers').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sefaz_producers'] });
+      toast({ title: 'Produtor removido!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao remover', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useSefazServices(producerId?: string) {
+  return useQuery({
+    queryKey: ['sefaz_services', producerId],
+    queryFn: async () => {
+      let query = supabase
+        .from('sefaz_services')
+        .select('*, sefaz_producers(name, cpf, phone, settlement, location)')
+        .order('service_date', { ascending: false });
+      if (producerId) query = query.eq('sefaz_producer_id', producerId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useCreateSefazService() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (service: {
+      sefaz_producer_id: string;
+      service_type: string;
+      signed_list?: boolean;
+      service_date: string;
+      notes?: string | null;
+    }) => {
+      const { data, error } = await supabase.from('sefaz_services').insert(service).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sefaz_services'] });
+      queryClient.invalidateQueries({ queryKey: ['sefaz_producers'] });
+      toast({ title: 'Atendimento SEFAZ registrado!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao registrar atendimento', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useUpdateSefazService() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string; [key: string]: unknown }) => {
+      const { data, error } = await supabase.from('sefaz_services').update(updates).eq('id', id).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sefaz_services'] });
+      toast({ title: 'Atendimento atualizado!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useDeleteSefazService() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('sefaz_services').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sefaz_services'] });
+      queryClient.invalidateQueries({ queryKey: ['sefaz_producers'] });
+      toast({ title: 'Atendimento removido!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao remover', description: error.message, variant: 'destructive' });
+    },
+  });
+}

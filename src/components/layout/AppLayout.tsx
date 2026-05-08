@@ -18,6 +18,8 @@ import {
   CalendarDays,
   Package,
   Receipt,
+  Building2,
+  Landmark,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -38,7 +40,9 @@ const adminNavItems = [
   { path: '/operators', label: 'Operadores', icon: UserCog },
   { path: '/demand-types', label: 'Tipos de Demanda', icon: FileText },
   { path: '/settlements', label: 'Assentamentos', icon: Building2 },
+  { path: '/patrimony', label: 'Patrimônio', icon: Building2 },
   { path: '/machinery', label: 'Maquinários', icon: Wrench },
+  { path: '/sefaz', label: 'SEFAZ', icon: Landmark },
 ];
 
 const operatorNavItems = [

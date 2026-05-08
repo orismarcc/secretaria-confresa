@@ -29,7 +29,7 @@ jobs:
 
       # Mark all previously-applied local migrations as applied so db push
       # doesn't try to re-run them (schema objects already exist in the DB).
-      # 20260506000001 and 20260506000002 are intentionally omitted
+      # 20260508000001, 20260508000002, 20260508000003 are intentionally omitted
       # so they get applied by the db push step below.
       - name: Sync migration history
         run: |
@@ -40,6 +40,7 @@ jobs:
             20260328000001 20260328000002 20260328000003 20260328000004 \
             20260328000005 20260328000006 \
             20260408000001 20260428000001 20260428000002 \
+            20260506000001 20260506000002 \
             --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

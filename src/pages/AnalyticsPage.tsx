@@ -165,6 +165,32 @@ export default function AnalyticsPage() {
     return months;
   }, [services]);
 
+  // Monthly Grade vs PC data (last 6 months)
+  const monthlyGradeVsPcData = useMemo(() => {
+    const gradeIds = new Set((demandTypes as any[]).filter(d => d.name?.toLowerCase().includes('grade')).map((d: any) => d.id));
+    const pcIds = new Set((demandTypes as any[]).filter(d => d.name?.toLowerCase().includes(' pc') || d.name?.toLowerCase() === 'pc').map((d: any) => d.id));
+    const now = new Date();
+    return Array.from({ length: 6 }, (_, i) => {
+      const monthDate = subMonths(now, 5 - i);
+      const monthStart = startOfMonth(monthDate);
+      const monthKey = format(monthStart, 'yyyy-MM');
+      const monthLabel = format(monthStart, 'MMM/yy', { locale: ptBR });
+      const grade = services.filter(s => {
+        const d = parseISO(s.created_at || s.scheduled_date);
+        return format(startOfMonth(d), 'yyyy-MM') === monthKey && gradeIds.has(s.demand_type_id);
+      }).length;
+      const pc = services.filter(s => {
+        const d = parseISO(s.created_at || s.scheduled_date);
+        return format(startOfMonth(d), 'yyyy-MM') === monthKey && pcIds.has(s.demand_type_id);
+      }).length;
+      return {
+        month: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
+        grade,
+        pc,
+      };
+    });
+  }, [services, demandTypes]);
+
   // Top 3 settlements
   const topSettlements = useMemo(() => {
     const settlementCounts: Record<string, { name: string; count: number }> = {};
@@ -418,49 +444,49 @@ export default function AnalyticsPage() {
             </Card>
           </div>
 
-          {/* Combined Chart - Full Width */}
+          {/* Combined Chart - Grade vs PC */}
           <Card className="overflow-hidden">
             <CardHeader className="border-b bg-gradient-to-r from-secondary/10 via-primary/5 to-secondary/10">
               <CardTitle className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-secondary/20">
-                  <TrendingUp className="h-5 w-5 text-secondary" />
+                  <Layers className="h-5 w-5 text-secondary" />
                 </div>
                 <div>
-                  <span className="text-lg">Comparativo: Cadastrados vs Finalizados</span>
-                  <p className="text-sm font-normal text-muted-foreground">Visão consolidada dos últimos 6 meses</p>
+                  <span className="text-lg">Comparativo: Operação com Grade vs PC</span>
+                  <p className="text-sm font-normal text-muted-foreground">Atendimentos por tipo de operação — últimos 6 meses</p>
                 </div>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 sm:pt-6 px-2 sm:px-6">
               <div className="h-[220px] sm:h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={monthlyData} barCategoryGap="20%">
+                  <BarChart data={monthlyGradeVsPcData} barCategoryGap="20%">
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis 
-                      dataKey="month" 
+                    <XAxis
+                      dataKey="month"
                       tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                       axisLine={{ stroke: 'hsl(var(--border))' }}
                     />
-                    <YAxis 
+                    <YAxis
                       tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                       axisLine={{ stroke: 'hsl(var(--border))' }}
                       allowDecimals={false}
                     />
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend 
+                    <Legend
                       wrapperStyle={{ paddingTop: '20px' }}
                       formatter={(value) => <span className="text-foreground">{value}</span>}
                     />
                     <Bar
-                      dataKey="cadastrados"
-                      name="Cadastrados"
+                      dataKey="grade"
+                      name="Grade"
                       fill="hsl(210 70% 45%)"
                       radius={[4, 4, 0, 0]}
                     />
                     <Bar
-                      dataKey="finalizados"
-                      name="Finalizados"
-                      fill="hsl(142 71% 45%)"
+                      dataKey="pc"
+                      name="PC"
+                      fill="hsl(280 70% 55%)"
                       radius={[4, 4, 0, 0]}
                     />
                   </BarChart>

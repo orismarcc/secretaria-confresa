@@ -21,6 +21,8 @@ import ImportServicesPage from "./pages/ImportServicesPage";
 import SettingsPage from "./pages/SettingsPage";
 import OperatorPage from "./pages/OperatorPage";
 import DAMPage from "./pages/DAMPage";
+import PatrimonyPage from "./pages/PatrimonyPage";
+import SEFAZPage from "./pages/SEFAZPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -56,6 +58,8 @@ function AppRoutes() {
       <Route path="/deliveries" element={<ProtectedRoute adminOnly><DeliveriesPage /></ProtectedRoute>} />
       <Route path="/import" element={<ProtectedRoute adminOnly><ImportServicesPage /></ProtectedRoute>} />
       <Route path="/dam" element={<ProtectedRoute adminOnly><DAMPage /></ProtectedRoute>} />
+      <Route path="/patrimony" element={<ProtectedRoute adminOnly><PatrimonyPage /></ProtectedRoute>} />
+      <Route path="/sefaz" element={<ProtectedRoute adminOnly><SEFAZPage /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
 
       {/* Operator Route */}

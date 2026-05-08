@@ -28,8 +28,10 @@ import {
   CheckCircle,
   XCircle,
   TrendingUp,
+  Paperclip,
 } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
 import { ptBR } from 'date-fns/locale';
 import {
   useServices,
@@ -87,6 +89,8 @@ export default function DAMPage() {
   const [payDialogOpen, setPayDialogOpen] = useState(false);
   const [payingService, setPayingService] = useState<any | null>(null);
   const [payDate, setPayDate] = useState('');
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptUploading, setReceiptUploading] = useState(false);
 
   // Filter only services with DAM issued
   const damServices = useMemo(() =>
@@ -124,20 +128,46 @@ export default function DAMPage() {
       });
   }, [damServices, tab, search, producers, demandTypes]);
 
+  async function uploadReceipt(file: File, serviceId: string): Promise<string | null> {
+    const ext = file.name.split('.').pop() ?? 'pdf';
+    const path = `${serviceId}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('dam-receipts').upload(path, file, { upsert: true });
+    if (error) {
+      console.error('Upload error:', error);
+      return null;
+    }
+    // Get signed URL (valid 10 years)
+    const { data } = await supabase.storage.from('dam-receipts').createSignedUrl(path, 60 * 60 * 24 * 3650);
+    return data?.signedUrl ?? null;
+  }
+
   const openPayDialog = (s: any) => {
     setPayingService(s);
     setPayDate(format(new Date(), 'yyyy-MM-dd'));
+    setReceiptFile(null);
     setPayDialogOpen(true);
   };
 
-  const handleMarkPaid = () => {
+  const handleMarkPaid = async () => {
     if (!payingService) return;
-    updateService.mutate({
-      id: payingService.id,
-      dam_paid: true,
-    });
-    setPayingService(null);
-    setPayDialogOpen(false);
+    setReceiptUploading(true);
+    try {
+      let receiptUrl: string | null = null;
+      if (receiptFile) {
+        receiptUrl = await uploadReceipt(receiptFile, payingService.id);
+      }
+      updateService.mutate({
+        id: payingService.id,
+        dam_paid: true,
+        dam_paid_at: payDate || null,
+        ...(receiptUrl ? { dam_receipt_url: receiptUrl } : {}),
+      });
+      setPayingService(null);
+      setPayDialogOpen(false);
+      setReceiptFile(null);
+    } finally {
+      setReceiptUploading(false);
+    }
   };
 
   const handleMarkUnpaid = (s: any) => {
@@ -393,6 +423,20 @@ export default function DAMPage() {
                     </div>
                   )}
 
+                  {s.dam_receipt_url && (
+                    <div className="flex items-center gap-2 text-success">
+                      <Paperclip className="h-3.5 w-3.5 shrink-0" />
+                      <a
+                        href={s.dam_receipt_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm hover:underline truncate"
+                      >
+                        Ver comprovante
+                      </a>
+                    </div>
+                  )}
+
                   {s.purpose && (
                     <p className="text-xs text-muted-foreground line-clamp-1 pt-1 border-t">
                       {s.purpose}
@@ -454,6 +498,25 @@ export default function DAMPage() {
                 onChange={e => setPayDate(e.target.value)}
               />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="receipt-file">Comprovante de Pagamento (opcional)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="receipt-file"
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp,application/pdf"
+                  onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
+                  className="text-sm"
+                />
+              </div>
+              {receiptFile && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Paperclip className="h-3 w-3" />
+                  {receiptFile.name} ({(receiptFile.size / 1024).toFixed(0)} KB)
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">PDF ou imagem (máx. 10 MB)</p>
+            </div>
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setPayDialogOpen(false)}>
@@ -462,10 +525,19 @@ export default function DAMPage() {
             <Button
               className="bg-success hover:bg-success/90 text-white gap-1.5"
               onClick={handleMarkPaid}
-              disabled={!payDate || updateService.isPending}
+              disabled={!payDate || updateService.isPending || receiptUploading}
             >
-              <CheckCircle className="h-4 w-4" />
-              Confirmar Pagamento
+              {receiptUploading ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Enviando...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-4 w-4" />
+                  Confirmar Pagamento
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
