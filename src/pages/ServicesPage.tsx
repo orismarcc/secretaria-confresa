@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import logoTransparent from '@/assets/logo-transparent.png';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
@@ -537,50 +538,69 @@ export default function ServicesPage() {
   // ── export ────────────────────────────────────────────────────────────────
 
   const handleExportPDF = () => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Secretaria de Agricultura', pageWidth / 2, 18, { align: 'center' });
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Relatório de Atendimentos', pageWidth / 2, 26, { align: 'center' });
-    doc.setFontSize(9);
-    doc.setTextColor(120);
-    const tabLabel = statusFilter === 'active' ? 'Ativos' : 'Arquivados';
-    doc.text(`${tabLabel} · Gerado em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`, pageWidth / 2, 33, { align: 'center' });
-    doc.setTextColor(0);
+    const img = new Image();
+    img.onload = () => {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
 
-    const statusLabel = (s: string) => s === 'pending' ? 'Pendente' : s === 'in_progress' ? 'Em Execução' : 'Finalizado';
+      // Logo no canto superior esquerdo
+      const logoW = 52;
+      const logoH = logoW * (img.naturalHeight / img.naturalWidth);
+      doc.addImage(img, 'PNG', 14, 6, logoW, logoH);
 
-    const rows = sortedServices.map((s: DbService) => {
-      const producer = producers.find(p => p.id === s.producer_id);
-      const dt = demandTypes.find(d => d.id === s.demand_type_id);
-      const st = settlements.find(set => set.id === s.settlement_id);
-      const createdAt = parseSupabaseDate(s.created_at);
-      const completedAt = parseSupabaseDate(s.completed_at);
-      return [
-        producer?.name || s.producers?.name || 'N/A',
-        dt?.name || s.demand_types?.name || 'N/A',
-        st?.name || s.settlements?.name || 'N/A',
-        createdAt ? format(createdAt, 'dd/MM/yyyy', { locale: ptBR }) : '-',
-        completedAt ? format(completedAt, 'dd/MM/yyyy', { locale: ptBR }) : '-',
-        statusLabel(s.status),
-        (s as any).profiles?.name || '-',
-      ];
-    });
+      // Título e subtítulo centralizados verticalmente com a logo
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(45, 90, 39); // verde escuro da logo
+      doc.text('Relatório de Atendimentos', pageWidth / 2, 16, { align: 'center' });
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100);
+      const tabLabel = statusFilter === 'active' ? 'Ativos' : 'Arquivados';
+      doc.text(
+        `${tabLabel} · Gerado em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`,
+        pageWidth / 2, 23, { align: 'center' }
+      );
 
-    autoTable(doc, {
-      startY: 40,
-      head: [['Produtor', 'Demanda', 'Assentamento', 'Cadastro', 'Finalização', 'Status', 'Cadastrado por']],
-      body: rows,
-      styles: { fontSize: 9, cellPadding: 3 },
-      headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [245, 247, 250] },
-      margin: { left: 14, right: 14 },
-    });
+      // Linha separadora
+      doc.setDrawColor(200);
+      const headerH = Math.max(logoH + 10, 32);
+      doc.line(14, headerH, pageWidth - 14, headerH);
+      doc.setTextColor(0);
 
-    doc.save(`atendimentos-${statusFilter}-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+      const statusLabel = (s: string) =>
+        s === 'pending' ? 'Pendente' : s === 'in_progress' ? 'Em Execução' : 'Finalizado';
+
+      const rows = sortedServices.map((s: DbService) => {
+        const producer = producers.find(p => p.id === s.producer_id);
+        const dt = demandTypes.find(d => d.id === s.demand_type_id);
+        const st = settlements.find(set => set.id === s.settlement_id);
+        const createdAt = parseSupabaseDate(s.created_at);
+        const completedAt = parseSupabaseDate(s.completed_at);
+        return [
+          producer?.name || s.producers?.name || 'N/A',
+          dt?.name || s.demand_types?.name || 'N/A',
+          st?.name || s.settlements?.name || 'N/A',
+          createdAt ? format(createdAt, 'dd/MM/yyyy', { locale: ptBR }) : '-',
+          completedAt ? format(completedAt, 'dd/MM/yyyy', { locale: ptBR }) : '-',
+          statusLabel(s.status),
+          (s as any).profiles?.name || '-',
+        ];
+      });
+
+      autoTable(doc, {
+        startY: headerH + 4,
+        head: [['Produtor', 'Demanda', 'Assentamento', 'Cadastro', 'Finalização', 'Status', 'Cadastrado por']],
+        body: rows,
+        styles: { fontSize: 9, cellPadding: 3 },
+        headStyles: { fillColor: [45, 90, 39], textColor: 255, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [245, 250, 245] },
+        margin: { left: 14, right: 14 },
+      });
+
+      doc.save(`atendimentos-${statusFilter}-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+    };
+    img.src = logoTransparent;
   };
 
   // ── loading ───────────────────────────────────────────────────────────────

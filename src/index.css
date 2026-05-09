@@ -18,8 +18,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 215 25% 15%;
 
-    /* Azul institucional - governo */
-    --primary: 210 70% 45%;
+    /* Verde institucional - Secretaria de Agricultura */
+    --primary: 113 38% 26%;
     --primary-foreground: 0 0% 100%;
 
     /* Verde agricultura */
@@ -48,18 +48,18 @@
 
     --border: 214 20% 88%;
     --input: 214 20% 88%;
-    --ring: 210 70% 45%;
+    --ring: 113 38% 26%;
 
     --radius: 0.75rem;
 
-    --sidebar-background: 215 25% 15%;
-    --sidebar-foreground: 210 20% 94%;
-    --sidebar-primary: 210 70% 55%;
+    --sidebar-background: 113 35% 13%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 113 45% 38%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 215 25% 22%;
-    --sidebar-accent-foreground: 210 20% 94%;
-    --sidebar-border: 215 20% 25%;
-    --sidebar-ring: 210 70% 55%;
+    --sidebar-accent: 113 30% 19%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 113 25% 21%;
+    --sidebar-ring: 113 45% 38%;
   }
 
   .dark {
@@ -72,7 +72,7 @@
     --popover: 215 25% 13%;
     --popover-foreground: 210 20% 94%;
 
-    --primary: 210 70% 55%;
+    --primary: 113 45% 38%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 142 55% 45%;
@@ -98,16 +98,16 @@
 
     --border: 215 20% 22%;
     --input: 215 20% 22%;
-    --ring: 210 70% 55%;
+    --ring: 113 45% 38%;
 
-    --sidebar-background: 215 30% 8%;
-    --sidebar-foreground: 210 20% 94%;
-    --sidebar-primary: 210 70% 55%;
+    --sidebar-background: 113 40% 9%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 113 45% 38%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 215 25% 15%;
-    --sidebar-accent-foreground: 210 20% 94%;
-    --sidebar-border: 215 20% 18%;
-    --sidebar-ring: 210 70% 55%;
+    --sidebar-accent: 113 30% 15%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 113 25% 18%;
+    --sidebar-ring: 113 45% 38%;
   }
 }
 
