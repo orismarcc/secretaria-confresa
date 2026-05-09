@@ -183,7 +183,7 @@ export default function ServicesPage() {
 
   const filteredServices = useMemo(() => services.filter((s: DbService) => {
     const dt = demandTypes.find(d => d.id === s.demand_type_id);
-    if ((dt as any)?.category === 'entrega') return false;
+    if ((dt as any)?.category === 'entregas') return false;
     const producer = producers.find(p => p.id === s.producer_id);
     const matchesSearch =
       producer?.name?.toLowerCase().includes(search.toLowerCase()) ||

@@ -368,13 +368,14 @@ export default function SEFAZPage() {
         {/* ── ANALYTICS TAB ─────────────────────────────────────────────── */}
         <TabsContent value="analytics">
           {/* Month selector */}
-          <div className="flex items-center gap-3 mb-6">
-            <Label htmlFor="month-sel" className="shrink-0 text-sm font-medium">Mês de referência:</Label>
+          <div className="flex items-center gap-3 mb-6 p-4 rounded-xl bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20">
+            <CalendarDays className="h-4 w-4 text-primary shrink-0" />
+            <Label htmlFor="month-sel" className="shrink-0 text-sm font-semibold text-primary">Mês de referência:</Label>
             <select
               id="month-sel"
               value={selectedMonth}
               onChange={e => setSelectedMonth(e.target.value)}
-              className="border border-input bg-background rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="border border-primary/30 bg-background rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-medium"
             >
               {MONTH_OPTIONS.map(o => (
                 <option key={o.value} value={o.value}>
@@ -384,44 +385,93 @@ export default function SEFAZPage() {
             </select>
           </div>
 
-          {/* Monthly stats */}
+          {/* Monthly stats — colored cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-2xl font-bold">{monthlyServices.length}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Atendimentos no mês</p>
+            <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/60">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-blue-500/20">
+                  <ClipboardList className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-blue-700">{monthlyServices.length}</p>
+                  <p className="text-xs text-blue-600/80 mt-0.5 font-medium">No mês</p>
+                </div>
               </CardContent>
             </Card>
-            {typeStats.slice(0, 3).map(({ type, count }) => (
-              <Card key={type}>
-                <CardContent className="p-4">
-                  <p className="text-2xl font-bold">{count}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{type}</p>
-                </CardContent>
-              </Card>
-            ))}
+
+            {/* Nota Fiscal */}
+            <Card className="border-indigo-200 bg-gradient-to-br from-indigo-50 to-indigo-100/60">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-indigo-500/20">
+                  <FileText className="h-5 w-5 text-indigo-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-indigo-700">
+                    {monthlyServices.filter(s => s.service_type === 'Nota Fiscal').length}
+                  </p>
+                  <p className="text-xs text-indigo-600/80 mt-0.5 font-medium">Nota Fiscal</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* GTA */}
+            <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100/60">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-emerald-500/20">
+                  <CheckSquare className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-emerald-700">
+                    {monthlyServices.filter(s => s.service_type === 'GTA').length}
+                  </p>
+                  <p className="text-xs text-emerald-600/80 mt-0.5 font-medium">GTA</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Declaração */}
+            <Card className="border-violet-200 bg-gradient-to-br from-violet-50 to-violet-100/60">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-violet-500/20">
+                  <Square className="h-5 w-5 text-violet-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-violet-700">
+                    {monthlyServices.filter(s => s.service_type === 'Declaração de Posse').length}
+                  </p>
+                  <p className="text-xs text-violet-600/80 mt-0.5 font-medium">Declaração</p>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Year totals */}
-          <Card className="mb-6">
-            <CardHeader className="border-b pb-3">
+          <Card className="mb-6 border-amber-200 overflow-hidden">
+            <CardHeader className="border-b pb-3 bg-gradient-to-r from-amber-50 to-amber-100/50">
               <CardTitle className="text-base flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-primary" />
-                Total do Ano {new Date().getFullYear()}
+                <div className="p-1.5 rounded-lg bg-amber-500/20">
+                  <TrendingUp className="h-4 w-4 text-amber-600" />
+                </div>
+                <span className="text-amber-800">Total do Ano {new Date().getFullYear()}</span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-center">
-                  <p className="text-2xl font-bold text-primary">{yearServices.length}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Total</p>
+            <CardContent className="pt-4 bg-gradient-to-b from-amber-50/30 to-transparent">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div className="rounded-lg bg-amber-500 p-3 text-center text-white shadow-sm">
+                  <p className="text-2xl font-bold">{yearServices.length}</p>
+                  <p className="text-xs font-medium mt-0.5 opacity-90">Total</p>
                 </div>
-                {SERVICE_TYPES.map(t => {
-                  const count = yearServices.filter(s => s.service_type === t).length;
+                {[
+                  { type: 'Nota Fiscal', color: 'bg-indigo-500' },
+                  { type: 'GTA', color: 'bg-emerald-500' },
+                  { type: 'Declaração de Posse', color: 'bg-violet-500' },
+                  { type: 'Outros', color: 'bg-orange-400' },
+                ].map(({ type, color }) => {
+                  const count = yearServices.filter(s => s.service_type === type).length;
                   return (
-                    <div key={t} className="rounded-lg bg-muted/50 border p-3 text-center">
+                    <div key={type} className={`rounded-lg ${color} p-3 text-center text-white shadow-sm`}>
                       <p className="text-2xl font-bold">{count}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{t}</p>
+                      <p className="text-xs font-medium mt-0.5 opacity-90 leading-tight">{type}</p>
                     </div>
                   );
                 })}
@@ -429,27 +479,45 @@ export default function SEFAZPage() {
             </CardContent>
           </Card>
 
-          {/* By service type breakdown */}
+          {/* By service type breakdown — colored bars */}
           {typeStats.length > 0 && (
-            <Card className="mb-6">
-              <CardHeader className="border-b">
+            <Card className="mb-6 overflow-hidden">
+              <CardHeader className="border-b bg-gradient-to-r from-slate-50 to-slate-100/50">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <ClipboardList className="h-4 w-4" />
-                  Atendimentos por tipo — {MONTH_OPTIONS.find(o => o.value === selectedMonth)?.label}
+                  <div className="p-1.5 rounded-lg bg-slate-200">
+                    <ClipboardList className="h-4 w-4 text-slate-600" />
+                  </div>
+                  Atendimentos por tipo —{' '}
+                  <span className="text-primary">
+                    {MONTH_OPTIONS.find(o => o.value === selectedMonth)?.label}
+                  </span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-4">
-                <div className="space-y-3">
-                  {typeStats.map(({ type, count }) => {
+              <CardContent className="pt-5">
+                <div className="space-y-4">
+                  {typeStats.map(({ type, count }, idx) => {
                     const max = typeStats[0].count;
+                    const pct = Math.round((count / max) * 100);
+                    const barColors = [
+                      { bar: 'bg-indigo-500', badge: 'bg-indigo-100 text-indigo-700' },
+                      { bar: 'bg-emerald-500', badge: 'bg-emerald-100 text-emerald-700' },
+                      { bar: 'bg-violet-500', badge: 'bg-violet-100 text-violet-700' },
+                      { bar: 'bg-orange-400', badge: 'bg-orange-100 text-orange-700' },
+                    ];
+                    const c = barColors[idx % barColors.length];
                     return (
-                      <div key={type} className="space-y-1">
-                        <div className="flex justify-between text-sm">
-                          <span className="font-medium">{type}</span>
-                          <span className="font-bold text-primary">{count}</span>
+                      <div key={type}>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className="text-sm font-medium">{type}</span>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${c.badge}`}>
+                            {count} atend.
+                          </span>
                         </div>
-                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                          <div className="h-full rounded-full bg-primary" style={{ width: `${Math.round((count / max) * 100)}%` }} />
+                        <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${c.bar}`}
+                            style={{ width: `${pct}%` }}
+                          />
                         </div>
                       </div>
                     );
@@ -460,17 +528,17 @@ export default function SEFAZPage() {
           )}
 
           {/* Bar chart - services per month */}
-          <Card>
-            <CardHeader className="border-b bg-gradient-to-r from-primary/10 to-primary/5">
+          <Card className="overflow-hidden">
+            <CardHeader className="border-b bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
               <CardTitle className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/20"><TrendingUp className="h-5 w-5 text-primary" /></div>
+                <div className="p-2 rounded-lg bg-white/20"><TrendingUp className="h-5 w-5 text-white" /></div>
                 <div>
-                  <span className="text-lg">Atendimentos por Mês</span>
-                  <p className="text-sm font-normal text-muted-foreground">Últimos 6 meses por tipo de serviço</p>
+                  <span className="text-lg text-white">Atendimentos por Mês</span>
+                  <p className="text-sm font-normal text-white/70">Últimos 6 meses por tipo de serviço</p>
                 </div>
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-6 px-2 sm:px-6">
+            <CardContent className="pt-6 px-2 sm:px-6 bg-gradient-to-b from-blue-50/30 to-transparent">
               <div className="h-[280px] sm:h-[340px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData} barCategoryGap="20%">
@@ -487,10 +555,10 @@ export default function SEFAZPage() {
                     <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} axisLine={{ stroke: 'hsl(var(--border))' }} allowDecimals={false} />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend wrapperStyle={{ paddingTop: 16 }} formatter={v => <span className="text-foreground text-xs">{v}</span>} />
-                    <Bar dataKey="Nota Fiscal" name="Nota Fiscal" fill="hsl(210 70% 45%)" radius={[4,4,0,0]} />
-                    <Bar dataKey="GTA" name="GTA" fill="hsl(142 71% 45%)" radius={[4,4,0,0]} />
-                    <Bar dataKey="Declaração de Posse" name="Declaração de Posse" fill="hsl(280 70% 55%)" radius={[4,4,0,0]} />
-                    <Bar dataKey="Outros" name="Outros" fill="hsl(38 92% 50%)" radius={[4,4,0,0]} />
+                    <Bar dataKey="Nota Fiscal" name="Nota Fiscal" fill="#6366f1" radius={[4,4,0,0]} />
+                    <Bar dataKey="GTA" name="GTA" fill="#10b981" radius={[4,4,0,0]} />
+                    <Bar dataKey="Declaração de Posse" name="Declaração de Posse" fill="#8b5cf6" radius={[4,4,0,0]} />
+                    <Bar dataKey="Outros" name="Outros" fill="#f97316" radius={[4,4,0,0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

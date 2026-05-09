@@ -301,7 +301,7 @@ export function ServiceForm({
     onOpenChange(false);
   };
 
-  const availableDemandTypes = demandTypes.filter((d) => d.isActive && d.category !== 'entrega');
+  const availableDemandTypes = demandTypes.filter((d) => d.isActive && d.category !== 'entregas');
 
   const activeOperators = operators;
   const activeMachinery = machinery;
@@ -581,13 +581,14 @@ export function ServiceForm({
                     <FormLabel>Área Trabalhada (ha)</FormLabel>
                     <FormControl>
                       <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        {...field}
-                        onChange={(e) =>
-                          field.onChange(parseFloat(e.target.value) || 0)
-                        }
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0,00"
+                        value={field.value === 0 ? '' : String(field.value).replace('.', ',')}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(',', '.');
+                          field.onChange(parseFloat(v) || 0);
+                        }}
                       />
                     </FormControl>
                     <FormMessage />
@@ -605,11 +606,14 @@ export function ServiceForm({
                       <FormLabel>Quantidade de Calcário (ton)</FormLabel>
                       <FormControl>
                         <Input
-                          type="number"
-                          step="0.01"
-                          placeholder="0.00"
-                          {...field}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="0,00"
+                          value={field.value === 0 ? '' : String(field.value).replace('.', ',')}
+                          onChange={(e) => {
+                            const v = e.target.value.replace(',', '.');
+                            field.onChange(parseFloat(v) || 0);
+                          }}
                         />
                       </FormControl>
                       <FormMessage />
