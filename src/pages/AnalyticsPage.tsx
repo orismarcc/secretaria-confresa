@@ -176,11 +176,13 @@ export default function AnalyticsPage() {
       const monthKey = format(monthStart, 'yyyy-MM');
       const monthLabel = format(monthStart, 'MMM/yy', { locale: ptBR });
       const grade = services.filter(s => {
-        const d = parseISO(s.created_at || s.scheduled_date);
+        if (s.status !== 'completed' || !(s as any).completed_at) return false;
+        const d = parseISO((s as any).completed_at.replace(' ', 'T'));
         return format(startOfMonth(d), 'yyyy-MM') === monthKey && gradeIds.has(s.demand_type_id);
       }).length;
       const pc = services.filter(s => {
-        const d = parseISO(s.created_at || s.scheduled_date);
+        if (s.status !== 'completed' || !(s as any).completed_at) return false;
+        const d = parseISO((s as any).completed_at.replace(' ', 'T'));
         return format(startOfMonth(d), 'yyyy-MM') === monthKey && pcIds.has(s.demand_type_id);
       }).length;
       return {
@@ -453,7 +455,7 @@ export default function AnalyticsPage() {
                 </div>
                 <div>
                   <span className="text-lg">Comparativo: Operação com Grade vs PC</span>
-                  <p className="text-sm font-normal text-muted-foreground">Atendimentos por tipo de operação — últimos 6 meses</p>
+                  <p className="text-sm font-normal text-muted-foreground">Atendimentos finalizados por tipo de operação — últimos 6 meses</p>
                 </div>
               </CardTitle>
             </CardHeader>

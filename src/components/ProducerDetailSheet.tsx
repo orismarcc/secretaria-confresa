@@ -7,7 +7,8 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2, MapPin, Phone, User, FileText, Home, Navigation, ExternalLink, ClipboardList, AlertTriangle } from 'lucide-react';
+import { Pencil, Trash2, MapPin, Phone, User, FileText, Home, Navigation, ExternalLink, ClipboardList, AlertTriangle, MessageCircle } from 'lucide-react';
+import { openWhatsApp } from '@/lib/phone';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
@@ -104,7 +105,17 @@ export function ProducerDetailSheet({
               <Phone className="h-5 w-5 text-muted-foreground mt-0.5" />
               <div>
                 <p className="text-sm text-muted-foreground">Telefone</p>
-                <p className="font-medium">{producer.phone || 'Não informado'}</p>
+                {producer.phone ? (
+                  <button
+                    onClick={() => openWhatsApp(producer.phone!)}
+                    className="flex items-center gap-1.5 mt-0.5 text-sm text-success hover:text-success/80 font-medium"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    {producer.phone}
+                  </button>
+                ) : (
+                  <p className="font-medium text-muted-foreground">Não informado</p>
+                )}
               </div>
             </div>
 

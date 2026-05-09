@@ -32,17 +32,17 @@ interface AppLayoutProps {
 const adminNavItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/analytics', label: 'Análises', icon: BarChart3 },
-  { path: '/calendar', label: 'Calendário', icon: CalendarDays },
   { path: '/deliveries', label: 'Entregas', icon: Package },
-  { path: '/dam', label: 'DAMs', icon: Receipt },
   { path: '/services', label: 'Atendimentos', icon: ClipboardList },
   { path: '/producers', label: 'Produtores', icon: Users },
+  { path: '/dam', label: 'DAMs', icon: Receipt },
   { path: '/operators', label: 'Operadores', icon: UserCog },
   { path: '/demand-types', label: 'Tipos de Demanda', icon: FileText },
-  { path: '/settlements', label: 'Assentamentos', icon: Building2 },
-  { path: '/patrimony', label: 'Patrimônio', icon: Building2 },
+  { path: '/settlements', label: 'Assentamentos', icon: Landmark },
   { path: '/machinery', label: 'Maquinários', icon: Wrench },
-  { path: '/sefaz', label: 'SEFAZ', icon: Landmark },
+  { path: '/patrimony', label: 'Patrimônio', icon: Building2 },
+  { path: '/sefaz', label: 'SEFAZ', icon: FileText },
+  { path: '/calendar', label: 'Calendário', icon: CalendarDays },
 ];
 
 const operatorNavItems = [

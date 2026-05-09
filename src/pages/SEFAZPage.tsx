@@ -32,6 +32,7 @@ import {
 import {
   useSefazProducers, useCreateSefazProducer, useUpdateSefazProducer, useDeleteSefazProducer,
   useSefazServices, useCreateSefazService, useUpdateSefazService, useDeleteSefazService,
+  useSettlements,
 } from '@/hooks/useSupabaseData';
 
 const SERVICE_TYPES = [
@@ -79,6 +80,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function SEFAZPage() {
   const { data: producers = [], isLoading: producersLoading } = useSefazProducers();
   const { data: allServices = [], isLoading: servicesLoading } = useSefazServices();
+  const { data: rawSettlements = [] } = useSettlements();
+  const settlements = (rawSettlements as any[]);
   const createProducer = useCreateSefazProducer();
   const updateProducer = useUpdateSefazProducer();
   const deleteProducer = useDeleteSefazProducer();
@@ -100,7 +103,7 @@ export default function SEFAZPage() {
   const [fName, setFName] = useState('');
   const [fCpf, setFCpf] = useState('');
   const [fPhone, setFPhone] = useState('');
-  const [fSettlement, setFSettlement] = useState('');
+  const [fSettlementId, setFSettlementId] = useState('');
   const [fLocation, setFLocation] = useState('');
 
   // Detail sheet (services for a producer)
@@ -126,9 +129,10 @@ export default function SEFAZPage() {
     return (producers as any[]).filter(p =>
       p.name?.toLowerCase().includes(q) ||
       p.cpf?.includes(q) ||
-      p.settlement?.toLowerCase().includes(q)
+      p.settlement?.toLowerCase().includes(q) ||
+      settlements.find((s: any) => s.id === p.settlement_id)?.name?.toLowerCase().includes(q)
     );
-  }, [producers, search]);
+  }, [producers, search, settlements]);
 
   // Services for selected month (analytics tab)
   const monthlyServices = useMemo(() => {
@@ -143,7 +147,7 @@ export default function SEFAZPage() {
     return Array.from({ length: 6 }, (_, i) => {
       const d = subMonths(new Date(), 5 - i);
       const key = format(startOfMonth(d), 'yyyy-MM');
-      const label = format(d, 'MMM/yy', { locale: ptBR });
+      const label = format(d, 'MMM yy', { locale: ptBR });
       const month = (allServices as any[]).filter(s => (s.service_date || s.created_at || '').startsWith(key));
       const byType: Record<string, number> = {};
       SERVICE_TYPES.forEach(t => { byType[t] = month.filter(s => s.service_type === t).length; });
@@ -166,19 +170,25 @@ export default function SEFAZPage() {
   // Open producer form
   const openCreateProducer = () => {
     setEditingProducer(null);
-    setFName(''); setFCpf(''); setFPhone(''); setFSettlement(''); setFLocation('');
+    setFName(''); setFCpf(''); setFPhone(''); setFSettlementId(''); setFLocation('');
     setProducerFormOpen(true);
   };
   const openEditProducer = (p: any) => {
     setEditingProducer(p);
     setFName(p.name || ''); setFCpf(p.cpf || ''); setFPhone(p.phone || '');
-    setFSettlement(p.settlement || ''); setFLocation(p.location || '');
+    setFSettlementId(p.settlement_id || ''); setFLocation(p.location || '');
     setProducerFormOpen(true);
   };
 
   const handleSubmitProducer = (e: React.FormEvent) => {
     e.preventDefault();
-    const data = { name: fName.toUpperCase(), cpf: fCpf || null, phone: fPhone || null, settlement: fSettlement || null, location: fLocation || null };
+    const data = {
+      name: fName.toUpperCase(),
+      cpf: fCpf || null,
+      phone: fPhone || null,
+      settlement_id: fSettlementId || null,
+      location: fLocation || null
+    };
     if (editingProducer) {
       updateProducer.mutate({ id: editingProducer.id, ...data });
     } else {
@@ -225,6 +235,20 @@ export default function SEFAZPage() {
     }
     setServiceFormOpen(false);
   };
+
+  const yearServices = useMemo(() => {
+    const currentYear = new Date().getFullYear().toString();
+    return (allServices as any[]).filter(s =>
+      (s.service_date || s.created_at || '').startsWith(currentYear)
+    );
+  }, [allServices]);
+
+  const yearTypeStats = useMemo(() => {
+    return SERVICE_TYPES.map(t => ({
+      type: t,
+      count: yearServices.filter(s => s.service_type === t).length,
+    })).filter(s => s.count > 0).sort((a, b) => b.count - a.count);
+  }, [yearServices]);
 
   const isLoading = producersLoading || servicesLoading;
 
@@ -316,7 +340,12 @@ export default function SEFAZPage() {
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                           {p.cpf && <span className="flex items-center gap-1"><FileText className="h-3 w-3" />{p.cpf}</span>}
                           {p.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{p.phone}</span>}
-                          {p.settlement && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{p.settlement}</span>}
+                          {(p.settlement_id || p.settlement) && (
+                            <span className="flex items-center gap-1">
+                              <MapPin className="h-3 w-3" />
+                              {settlements.find((s: any) => s.id === p.settlement_id)?.name || p.settlement || ''}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
@@ -373,6 +402,33 @@ export default function SEFAZPage() {
             ))}
           </div>
 
+          {/* Year totals */}
+          <Card className="mb-6">
+            <CardHeader className="border-b pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-primary" />
+                Total do Ano {new Date().getFullYear()}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-center">
+                  <p className="text-2xl font-bold text-primary">{yearServices.length}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Total</p>
+                </div>
+                {SERVICE_TYPES.map(t => {
+                  const count = yearServices.filter(s => s.service_type === t).length;
+                  return (
+                    <div key={t} className="rounded-lg bg-muted/50 border p-3 text-center">
+                      <p className="text-2xl font-bold">{count}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{t}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
           {/* By service type breakdown */}
           {typeStats.length > 0 && (
             <Card className="mb-6">
@@ -415,11 +471,19 @@ export default function SEFAZPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6 px-2 sm:px-6">
-              <div className="h-[250px] sm:h-[300px]">
+              <div className="h-[280px] sm:h-[340px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData} barCategoryGap="20%">
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} axisLine={{ stroke: 'hsl(var(--border))' }} />
+                    <XAxis
+                      dataKey="month"
+                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                      axisLine={{ stroke: 'hsl(var(--border))' }}
+                      interval={0}
+                      angle={-30}
+                      textAnchor="end"
+                      height={50}
+                    />
                     <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} axisLine={{ stroke: 'hsl(var(--border))' }} allowDecimals={false} />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend wrapperStyle={{ paddingTop: 16 }} formatter={v => <span className="text-foreground text-xs">{v}</span>} />
@@ -448,8 +512,8 @@ export default function SEFAZPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="p-cpf">CPF</Label>
-                <Input id="p-cpf" value={fCpf} onChange={e => setFCpf(cpfMask(e.target.value))} placeholder="000.000.000-00" />
+                <Label htmlFor="p-cpf">CPF *</Label>
+                <Input id="p-cpf" value={fCpf} onChange={e => setFCpf(cpfMask(e.target.value))} placeholder="000.000.000-00" required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="p-phone">Telefone</Label>
@@ -459,7 +523,17 @@ export default function SEFAZPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="p-settlement">Assentamento</Label>
-                <Input id="p-settlement" value={fSettlement} onChange={e => setFSettlement(e.target.value)} placeholder="Nome do assentamento" />
+                <select
+                  id="p-settlement"
+                  value={fSettlementId}
+                  onChange={e => setFSettlementId(e.target.value)}
+                  className="w-full border border-input bg-background rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">Selecione...</option>
+                  {settlements.map((s: any) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="p-location">Localidade</Label>
@@ -487,7 +561,13 @@ export default function SEFAZPage() {
                 <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5 text-sm">
                   {sheetProducer.cpf && <p className="flex items-center gap-2 text-muted-foreground"><FileText className="h-3.5 w-3.5" />{sheetProducer.cpf}</p>}
                   {sheetProducer.phone && <p className="flex items-center gap-2 text-muted-foreground"><Phone className="h-3.5 w-3.5" />{sheetProducer.phone}</p>}
-                  {sheetProducer.settlement && <p className="flex items-center gap-2 text-muted-foreground"><MapPin className="h-3.5 w-3.5" />{sheetProducer.settlement}{sheetProducer.location ? ` · ${sheetProducer.location}` : ''}</p>}
+                  {(sheetProducer.settlement_id || sheetProducer.location) && (
+                    <p className="flex items-center gap-2 text-muted-foreground">
+                      <MapPin className="h-3.5 w-3.5" />
+                      {settlements.find((s: any) => s.id === sheetProducer.settlement_id)?.name || ''}
+                      {sheetProducer.location ? ` · ${sheetProducer.location}` : ''}
+                    </p>
+                  )}
                 </div>
 
                 <Button className="w-full gap-2" onClick={openCreateService}>

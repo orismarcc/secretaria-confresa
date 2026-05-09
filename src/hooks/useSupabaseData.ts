@@ -569,6 +569,9 @@ export function useCreateService() {
       dam_issued?: boolean;
       dam_paid?: boolean;
       dam_issued_at?: string | null;
+      limestone_quantity?: number | null;
+      dam_paid_at?: string | null;
+      dam_receipt_url?: string | null;
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
       const payload: Record<string, unknown> = { ...service, created_by: user?.id ?? null };
@@ -1002,6 +1005,7 @@ export function useCreateSefazProducer() {
       phone?: string | null;
       settlement?: string | null;
       location?: string | null;
+      settlement_id?: string | null;
     }) => {
       const { data, error } = await supabase.from('sefaz_producers').insert(producer).select().single();
       if (error) throw error;

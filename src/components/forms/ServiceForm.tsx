@@ -32,7 +32,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Producer, Settlement, Location, DemandType } from '@/types';
+import { Producer, Settlement, Location } from '@/types';
 import { format } from 'date-fns';
 import { Check, ChevronsUpDown, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -54,6 +54,8 @@ const serviceSchema = z.object({
   damIssued: z.boolean().optional(),
   damIssuedAt: z.string().optional(),
   damPaid: z.boolean().optional(),
+  damPaidAt: z.string().optional(),
+  limestoneQuantity: z.coerce.number().min(0).optional(),
 });
 
 export type ServiceFormData = z.infer<typeof serviceSchema>;
@@ -89,11 +91,20 @@ interface ServiceFormProps {
     damIssued?: boolean;
     damIssuedAt?: string;
     damPaid?: boolean;
+    limestoneQuantity?: number;
+    damPaidAt?: string;
   } | null;
   producers: Producer[];
   settlements: Settlement[];
   locations: Location[];
-  demandTypes: DemandType[];
+  demandTypes: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    isActive: boolean;
+    createdAt: Date;
+    category?: string | null;
+  }>;
   operators?: OperatorOption[];
   machinery?: MachineryOption[];
   onSubmit: (data: ServiceFormData) => void;
@@ -200,6 +211,7 @@ export function ServiceForm({
   onSubmit,
 }: ServiceFormProps) {
   const [hasAppointment, setHasAppointment] = useState(false);
+  const [damReceiptFile, setDamReceiptFile] = useState<File | null>(null);
 
   const form = useForm<ServiceFormData>({
     resolver: zodResolver(serviceSchema),
@@ -219,12 +231,18 @@ export function ServiceForm({
       damIssued: false,
       damIssuedAt: '',
       damPaid: false,
+      damPaidAt: '',
+      limestoneQuantity: 0,
     },
   });
 
   const selectedProducerId = form.watch('producerId');
   const watchedStatus = form.watch('status');
   const watchedDamIssued = form.watch('damIssued');
+  const watchedDamPaid = form.watch('damPaid');
+  const watchedDemandTypeId = form.watch('demandTypeId');
+  const selectedDemandType = demandTypes.find(d => d.id === watchedDemandTypeId);
+  const isCalcario = selectedDemandType?.category === 'calcario';
   const selectedProducer = producers.find((p) => p.id === selectedProducerId);
 
   useEffect(() => {
@@ -247,7 +265,10 @@ export function ServiceForm({
         damIssued: service.damIssued ?? false,
         damIssuedAt: service.damIssuedAt || '',
         damPaid: service.damPaid ?? false,
+        damPaidAt: service.damPaidAt || '',
+        limestoneQuantity: service.limestoneQuantity || 0,
       });
+      setDamReceiptFile(null);
     } else {
       setHasAppointment(false);
       form.reset({
@@ -266,17 +287,21 @@ export function ServiceForm({
         damIssued: false,
         damIssuedAt: '',
         damPaid: false,
+        damPaidAt: '',
+        limestoneQuantity: 0,
       });
+      setDamReceiptFile(null);
     }
   }, [service, form]);
 
   const handleSubmit = (data: ServiceFormData) => {
-    onSubmit(data);
+    onSubmit({ ...data, damReceiptFile: damReceiptFile || null } as any);
     form.reset();
+    setDamReceiptFile(null);
     onOpenChange(false);
   };
 
-  const availableDemandTypes = demandTypes.filter((d) => d.isActive);
+  const availableDemandTypes = demandTypes.filter((d) => d.isActive && d.category !== 'entrega');
 
   const activeOperators = operators;
   const activeMachinery = machinery;
@@ -570,6 +595,29 @@ export function ServiceForm({
                 )}
               />
 
+              {/* Limestone Quantity — only for calcário demand type */}
+              {isCalcario && (
+                <FormField
+                  control={form.control}
+                  name="limestoneQuantity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Quantidade de Calcário (ton)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          {...field}
+                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
               {/* Purpose */}
               <FormField
                 control={form.control}
@@ -648,6 +696,40 @@ export function ServiceForm({
                         </FormItem>
                       )}
                     />
+
+                    {/* DAM Paid details — date + receipt upload */}
+                    {watchedDamPaid && (
+                      <div className="pl-2 space-y-3 border-l-2 border-success/30 pt-1">
+                        <FormField
+                          control={form.control}
+                          name="damPaidAt"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Data de Pagamento</FormLabel>
+                              <FormControl>
+                                <Input type="date" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <div className="space-y-1.5">
+                          <label className="text-sm font-medium">Comprovante de Pagamento (opcional)</label>
+                          <Input
+                            type="file"
+                            accept="image/jpeg,image/jpg,image/png,image/webp,application/pdf"
+                            onChange={e => setDamReceiptFile(e.target.files?.[0] ?? null)}
+                            className="text-sm cursor-pointer"
+                          />
+                          {damReceiptFile && (
+                            <p className="text-xs text-muted-foreground">
+                              {damReceiptFile.name} ({(damReceiptFile.size / 1024).toFixed(0)} KB)
+                            </p>
+                          )}
+                          <p className="text-xs text-muted-foreground">PDF ou imagem (max. 10 MB)</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

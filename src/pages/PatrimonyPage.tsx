@@ -15,7 +15,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Pencil, Trash2, Building2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, MessageCircle } from 'lucide-react';
+import { openWhatsApp } from '@/lib/phone';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, parseISO } from 'date-fns';
 import {
@@ -35,9 +36,12 @@ interface PatrimonyItem {
   acquisition_date: string | null;
   is_active: boolean;
   created_at: string | null;
+  location: string | null;
+  responsible_name: string | null;
+  responsible_phone: string | null;
 }
 
-const CATEGORIES = ['Veículo', 'Equipamento', 'Imóvel', 'Móvel', 'Outro'] as const;
+const CATEGORIES = ['Veículo', 'Equipamento', 'Imóvel', 'Móvel', 'Implemento', 'Outro'] as const;
 
 function formatBRL(value: number | null): string {
   if (value == null) return '—';
@@ -72,6 +76,9 @@ export default function PatrimonyPage() {
   const [formValue, setFormValue] = useState('');
   const [formCategory, setFormCategory] = useState('');
   const [formAcquisitionDate, setFormAcquisitionDate] = useState('');
+  const [formLocation, setFormLocation] = useState('');
+  const [formResponsibleName, setFormResponsibleName] = useState('');
+  const [formResponsiblePhone, setFormResponsiblePhone] = useState('');
 
   const filtered = (patrimony as PatrimonyItem[]).filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -87,6 +94,9 @@ export default function PatrimonyPage() {
     setFormValue('');
     setFormCategory('');
     setFormAcquisitionDate('');
+    setFormLocation('');
+    setFormResponsibleName('');
+    setFormResponsiblePhone('');
     setFormOpen(true);
   };
 
@@ -98,6 +108,9 @@ export default function PatrimonyPage() {
     setFormValue(item.value != null ? String(item.value) : '');
     setFormCategory(item.category ?? '');
     setFormAcquisitionDate(item.acquisition_date ?? '');
+    setFormLocation(item.location || '');
+    setFormResponsibleName(item.responsible_name || '');
+    setFormResponsiblePhone(item.responsible_phone || '');
     setFormOpen(true);
   };
 
@@ -110,6 +123,9 @@ export default function PatrimonyPage() {
       value: formValue !== '' ? parseFloat(formValue) : null,
       category: formCategory || null,
       acquisition_date: formAcquisitionDate || null,
+      location: formLocation || null,
+      responsible_name: formResponsibleName || null,
+      responsible_phone: formResponsiblePhone || null,
     };
     if (editing) {
       updatePatrimony.mutate({ id: editing.id, ...payload });
@@ -167,6 +183,28 @@ export default function PatrimonyPage() {
       header: 'Data Aquisição',
       className: 'hidden md:table-cell',
       render: (p: PatrimonyItem) => formatDate(p.acquisition_date),
+    },
+    {
+      key: 'responsible',
+      header: 'Responsável',
+      className: 'hidden lg:table-cell',
+      render: (m: PatrimonyItem) => {
+        if (!m.responsible_name && !m.responsible_phone) return <span className="text-muted-foreground text-sm">—</span>;
+        return (
+          <div className="flex flex-col gap-0.5">
+            {m.responsible_name && <span className="text-sm font-medium">{m.responsible_name}</span>}
+            {m.responsible_phone && (
+              <button
+                onClick={() => openWhatsApp(m.responsible_phone!)}
+                className="flex items-center gap-1 text-xs text-success hover:text-success/80 w-fit"
+              >
+                <MessageCircle className="h-3 w-3" />
+                {m.responsible_phone}
+              </button>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'status',
@@ -304,6 +342,33 @@ export default function PatrimonyPage() {
                 value={formDescription}
                 onChange={(e) => setFormDescription(e.target.value)}
                 placeholder="Descrição do bem"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="location">Localização do Bem</Label>
+              <Input
+                id="location"
+                value={formLocation}
+                onChange={(e) => setFormLocation(e.target.value)}
+                placeholder="Ex: Depósito Municipal, Rua X"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="responsible">Responsável (opcional)</Label>
+              <Input
+                id="responsible"
+                value={formResponsibleName}
+                onChange={(e) => setFormResponsibleName(e.target.value)}
+                placeholder="Nome do responsável"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="resp-phone">WhatsApp do Responsável (opcional)</Label>
+              <Input
+                id="resp-phone"
+                value={formResponsiblePhone}
+                onChange={(e) => setFormResponsiblePhone(e.target.value)}
+                placeholder="(66) 99999-9999"
               />
             </div>
             <div className="flex justify-end gap-2 pt-2">

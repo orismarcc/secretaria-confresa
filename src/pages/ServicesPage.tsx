@@ -78,6 +78,18 @@ function isoToDateInput(raw: string | null | undefined): string {
   return raw.replace(' ', 'T').substring(0, 10);
 }
 
+async function uploadDamReceipt(file: File, serviceId: string): Promise<string | null> {
+  const ext = file.name.split('.').pop() ?? 'pdf';
+  const path = `${serviceId}/${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from('dam-receipts').upload(path, file, { upsert: true });
+  if (error) {
+    console.error('DAM receipt upload error:', error);
+    return null;
+  }
+  const { data } = await supabase.storage.from('dam-receipts').createSignedUrl(path, 60 * 60 * 24 * 3650);
+  return data?.signedUrl ?? null;
+}
+
 interface DbService {
   id: string;
   producer_id: string;
@@ -104,6 +116,9 @@ interface DbService {
   dam_issued?: boolean | null;
   dam_paid?: boolean | null;
   dam_issued_at?: string | null;
+  dam_paid_at?: string | null;
+  dam_receipt_url?: string | null;
+  limestone_quantity?: number | null;
   producers?: { name: string; phone?: string | null; location_name?: string | null; latitude?: number | null; longitude?: number | null } | null;
   demand_types?: { name: string } | null;
   settlements?: { name: string } | null;
@@ -167,6 +182,8 @@ export default function ServicesPage() {
   }, [queryClient]);
 
   const filteredServices = useMemo(() => services.filter((s: DbService) => {
+    const dt = demandTypes.find(d => d.id === s.demand_type_id);
+    if ((dt as any)?.category === 'entrega') return false;
     const producer = producers.find(p => p.id === s.producer_id);
     const matchesSearch =
       producer?.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -208,7 +225,7 @@ export default function ServicesPage() {
 
   // ── handlers ──────────────────────────────────────────────────────────────
 
-  const handleCreate = (data: any) => {
+  const handleCreate = async (data: any) => {
     const producer = producers.find(p => p.id === data.producerId);
 
     // Determine completed_at on create
@@ -217,6 +234,12 @@ export default function ServicesPage() {
       completedAt = dateInputToIso(data.completedAt);
     } else if (data.status === 'completed') {
       completedAt = new Date().toISOString();
+    }
+
+    // Upload DAM receipt if provided
+    let receiptUrl: string | null = null;
+    if (data.damReceiptFile && data.damPaid) {
+      receiptUrl = await uploadDamReceipt(data.damReceiptFile, 'new-' + Date.now());
     }
 
     createService.mutate({
@@ -237,19 +260,17 @@ export default function ServicesPage() {
       dam_issued: data.damIssued ?? false,
       dam_paid: data.damPaid ?? false,
       ...(data.damIssued && data.damIssuedAt ? { dam_issued_at: data.damIssuedAt } : {}),
+      ...(data.damPaid && data.damPaidAt ? { dam_paid_at: data.damPaidAt } : {}),
+      ...(receiptUrl ? { dam_receipt_url: receiptUrl } : {}),
+      ...(data.limestoneQuantity ? { limestone_quantity: data.limestoneQuantity } : {}),
     });
     setFormOpen(false);
   };
 
-  const handleEdit = (data: any) => {
+  const handleEdit = async (data: any) => {
     if (!editingService) return;
     const producer = producers.find(p => p.id === data.producerId);
 
-    // Determine completed_at:
-    // 1. Admin explicitly provided a date → use it (UTC noon to avoid shift)
-    // 2. Status just became completed → use now
-    // 3. Status was already completed → keep existing
-    // 4. Otherwise → null
     let completedAt: string | null = editingService.completed_at ?? null;
     if (isAdmin && data.completedAt) {
       completedAt = dateInputToIso(data.completedAt);
@@ -257,6 +278,13 @@ export default function ServicesPage() {
       completedAt = new Date().toISOString();
     } else if (data.status !== 'completed' && data.status !== 'proximo') {
       completedAt = null;
+    }
+
+    // Upload DAM receipt if provided
+    let receiptUrl: string | null = editingService.dam_receipt_url ?? null;
+    if (data.damReceiptFile && data.damPaid) {
+      const uploaded = await uploadDamReceipt(data.damReceiptFile, editingService.id);
+      if (uploaded) receiptUrl = uploaded;
     }
 
     updateService.mutate({
@@ -278,6 +306,9 @@ export default function ServicesPage() {
       dam_issued: data.damIssued ?? false,
       dam_paid: data.damPaid ?? false,
       dam_issued_at: (data.damIssued && data.damIssuedAt) ? data.damIssuedAt : null,
+      dam_paid_at: (data.damPaid && data.damPaidAt) ? data.damPaidAt : null,
+      dam_receipt_url: receiptUrl,
+      limestone_quantity: data.limestoneQuantity || null,
     });
     setEditingService(null);
     setFormOpen(false);
@@ -354,6 +385,8 @@ export default function ServicesPage() {
       damIssued: s.dam_issued ?? false,
       damPaid: s.dam_paid ?? false,
       damIssuedAt: s.dam_issued_at || '',
+      limestoneQuantity: s.limestone_quantity || 0,
+      damPaidAt: s.dam_paid_at || '',
     };
   };
 
@@ -388,6 +421,7 @@ export default function ServicesPage() {
     description: d.description || undefined,
     isActive: d.is_active ?? true,
     createdAt: new Date(d.created_at || Date.now()),
+    category: (d as any).category || null,
   }));
 
   // ── columns ───────────────────────────────────────────────────────────────
@@ -599,7 +633,7 @@ export default function ServicesPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os tipos</SelectItem>
-            {demandTypes.map(d => (
+            {demandTypes.filter(d => (d as any).category !== 'entrega').map(d => (
               <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
             ))}
           </SelectContent>
