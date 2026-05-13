@@ -30,7 +30,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Plus, Pencil, Trash2, Archive, CheckCircle, Eye,
-  FileDown, FileSpreadsheet, ChevronLeft, ChevronRight,
+  FileDown, FileSpreadsheet, ChevronLeft, ChevronRight, X,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -151,6 +151,9 @@ export default function ServicesPage() {
     searchParams.get('tab') === 'archived' ? 'archived' : 'active'
   );
   const [demandTypeFilter, setDemandTypeFilter] = useState<string>('all');
+  const [settlementFilter, setSettlementFilter] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -166,10 +169,10 @@ export default function ServicesPage() {
   const [detailService, setDetailService] = useState<DbService | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
-  // Reset to page 1 when filters change
+  // Reset to page 1 when any filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter, demandTypeFilter]);
+  }, [search, statusFilter, demandTypeFilter, settlementFilter, dateFrom, dateTo]);
 
   // Realtime subscription
   useEffect(() => {
@@ -194,8 +197,14 @@ export default function ServicesPage() {
     const matchesStatus = statusFilter === 'active'
       ? s.status === 'pending' || s.status === 'in_progress' || s.status === 'proximo'
       : s.status === 'completed';
-    return matchesSearch && matchesDemandType && matchesStatus;
-  }), [services, producers, search, demandTypeFilter, statusFilter]);
+    const matchesSettlement =
+      settlementFilter === 'all' || s.settlement_id === settlementFilter;
+    // Date range uses scheduled_date (YYYY-MM-DD string — direct comparison works)
+    const sDate = s.scheduled_date?.substring(0, 10) ?? '';
+    const matchesDateFrom = !dateFrom || sDate >= dateFrom;
+    const matchesDateTo   = !dateTo   || sDate <= dateTo;
+    return matchesSearch && matchesDemandType && matchesStatus && matchesSettlement && matchesDateFrom && matchesDateTo;
+  }), [services, producers, demandTypes, search, demandTypeFilter, statusFilter, settlementFilter, dateFrom, dateTo]);
 
   const sortedServices = useMemo(() => [...filteredServices].sort((a: DbService, b: DbService) => {
     if (statusFilter === 'active') {
@@ -645,23 +654,86 @@ export default function ServicesPage() {
         </TabsList>
       </Tabs>
 
-      <div className="flex gap-2 items-center flex-wrap mb-4">
-        <SearchInput value={search} onChange={(v) => { setSearch(v); setCurrentPage(1); }} placeholder="Buscar por produtor..." className="flex-1 min-w-[140px]" />
-        <Select value={demandTypeFilter} onValueChange={(v) => { setDemandTypeFilter(v); setCurrentPage(1); }}>
-          <SelectTrigger className="w-[140px] sm:w-[180px]">
-            <SelectValue placeholder="Tipo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os tipos</SelectItem>
-            {demandTypes.filter(d => (d as any).category !== 'entrega').map(d => (
-              <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button variant="outline" size="sm" onClick={handleExportPDF} className="gap-1.5 shrink-0">
-          <FileDown className="h-4 w-4" />
-          <span className="hidden sm:inline">Exportar PDF</span>
-        </Button>
+      {/* ── Filters ──────────────────────────────────────────────────────── */}
+      <div className="space-y-2 mb-4">
+        {/* Row 1: search + export */}
+        <div className="flex gap-2 items-center flex-wrap">
+          <SearchInput value={search} onChange={(v) => { setSearch(v); setCurrentPage(1); }} placeholder="Buscar por produtor..." className="flex-1 min-w-[140px]" />
+          <Button variant="outline" size="sm" onClick={handleExportPDF} className="gap-1.5 shrink-0">
+            <FileDown className="h-4 w-4" />
+            <span className="hidden sm:inline">Exportar PDF</span>
+          </Button>
+        </div>
+
+        {/* Row 2: type + settlement + date range + clear */}
+        <div className="flex gap-2 items-center flex-wrap">
+          {/* Demand type */}
+          <Select value={demandTypeFilter} onValueChange={(v) => { setDemandTypeFilter(v); setCurrentPage(1); }}>
+            <SelectTrigger className="w-[140px] sm:w-[170px]">
+              <SelectValue placeholder="Tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os tipos</SelectItem>
+              {demandTypes.filter(d => (d as any).category !== 'entregas').map(d => (
+                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Settlement */}
+          <Select value={settlementFilter} onValueChange={(v) => { setSettlementFilter(v); setCurrentPage(1); }}>
+            <SelectTrigger className="w-[150px] sm:w-[180px]">
+              <SelectValue placeholder="Assentamento" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos assentamentos</SelectItem>
+              {(settlements as any[]).map((s: any) => (
+                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Date from */}
+          <div className="flex items-center gap-1">
+            <Label className="text-xs text-muted-foreground shrink-0">De</Label>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
+              className="h-9 w-[130px] text-sm"
+            />
+          </div>
+
+          {/* Date to */}
+          <div className="flex items-center gap-1">
+            <Label className="text-xs text-muted-foreground shrink-0">Até</Label>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
+              className="h-9 w-[130px] text-sm"
+            />
+          </div>
+
+          {/* Clear filters button — only when something is active */}
+          {(demandTypeFilter !== 'all' || settlementFilter !== 'all' || dateFrom || dateTo) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setDemandTypeFilter('all');
+                setSettlementFilter('all');
+                setDateFrom('');
+                setDateTo('');
+                setCurrentPage(1);
+              }}
+              className="gap-1 text-muted-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+              Limpar
+            </Button>
+          )}
+        </div>
       </div>
 
       <DataTable

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -194,6 +194,71 @@ function ProducerCombobox({
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/**
+ * Controlled numeric input that keeps a local string buffer so the user
+ * can type "1,5" (pt-BR comma) or "1.5" without the separator disappearing
+ * mid-keystroke. Syncs the parsed float to the react-hook-form field.
+ */
+function DecimalInput({
+  value,
+  onChange,
+  placeholder = '0,00',
+  className,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [local, setLocal] = useState(() =>
+    value === 0 ? '' : String(value).replace('.', ',')
+  );
+  const externalRef = useRef(value);
+
+  // Sync when form resets or edit opens (external value change)
+  useEffect(() => {
+    if (externalRef.current !== value) {
+      externalRef.current = value;
+      setLocal(value === 0 ? '' : String(value).replace('.', ','));
+    }
+  }, [value]);
+
+  return (
+    <Input
+      type="text"
+      inputMode="decimal"
+      placeholder={placeholder}
+      className={className}
+      value={local}
+      onChange={(e) => {
+        const raw = e.target.value;
+        // Allow only digits + one separator (comma or dot)
+        if (!/^[0-9]*[,.]?[0-9]*$/.test(raw)) return;
+        setLocal(raw);
+        const n = parseFloat(raw.replace(',', '.'));
+        if (!isNaN(n)) {
+          externalRef.current = n;
+          onChange(n);
+        } else if (raw === '') {
+          externalRef.current = 0;
+          onChange(0);
+        }
+        // If mid-typing ("1," "1.") leave form value as-is until blur
+      }}
+      onBlur={() => {
+        const n = parseFloat(local.replace(',', '.')) || 0;
+        externalRef.current = n;
+        onChange(n);
+        setLocal(
+          n === 0
+            ? ''
+            : n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 4 })
+        );
+      }}
+    />
   );
 }
 
@@ -580,15 +645,10 @@ export function ServiceForm({
                   <FormItem>
                     <FormLabel>Área Trabalhada (ha)</FormLabel>
                     <FormControl>
-                      <Input
-                        type="text"
-                        inputMode="decimal"
+                      <DecimalInput
+                        value={field.value ?? 0}
+                        onChange={field.onChange}
                         placeholder="0,00"
-                        value={field.value === 0 ? '' : String(field.value).replace('.', ',')}
-                        onChange={(e) => {
-                          const v = e.target.value.replace(',', '.');
-                          field.onChange(parseFloat(v) || 0);
-                        }}
                       />
                     </FormControl>
                     <FormMessage />
@@ -605,15 +665,10 @@ export function ServiceForm({
                     <FormItem>
                       <FormLabel>Quantidade de Calcário (ton)</FormLabel>
                       <FormControl>
-                        <Input
-                          type="text"
-                          inputMode="decimal"
+                        <DecimalInput
+                          value={field.value ?? 0}
+                          onChange={field.onChange}
                           placeholder="0,00"
-                          value={field.value === 0 ? '' : String(field.value).replace('.', ',')}
-                          onChange={(e) => {
-                            const v = e.target.value.replace(',', '.');
-                            field.onChange(parseFloat(v) || 0);
-                          }}
                         />
                       </FormControl>
                       <FormMessage />
