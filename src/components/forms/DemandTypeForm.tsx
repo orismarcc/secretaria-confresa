@@ -49,6 +49,7 @@ export const DEMAND_CATEGORIES = [
   { value: 'patrulha_mecanizada', label: 'Patrulha Mecanizada' },
   { value: 'assistencia_tecnica', label: 'Assistência Técnica' },
   { value: 'calcario', label: 'Logística do Calcário' },
+  { value: 'logistica_insumos', label: 'Logística de Insumos' },
   { value: 'entregas', label: 'Entregas' },
 ];
 

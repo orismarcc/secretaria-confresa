@@ -56,6 +56,7 @@ const serviceSchema = z.object({
   damPaid: z.boolean().optional(),
   damPaidAt: z.string().optional(),
   limestoneQuantity: z.coerce.number().min(0).optional(),
+  inputQuantity: z.coerce.number().min(0).optional(),
   responsibleTechnicianId: z.string().optional(),
 });
 
@@ -99,6 +100,7 @@ interface ServiceFormProps {
     damIssuedAt?: string;
     damPaid?: boolean;
     limestoneQuantity?: number;
+    inputQuantity?: number;
     damPaidAt?: string;
     responsibleTechnicianId?: string;
   } | null;
@@ -308,6 +310,7 @@ export function ServiceForm({
       damPaid: false,
       damPaidAt: '',
       limestoneQuantity: 0,
+      inputQuantity: 0,
       responsibleTechnicianId: '',
     },
   });
@@ -320,6 +323,7 @@ export function ServiceForm({
   const selectedDemandType = demandTypes.find(d => d.id === watchedDemandTypeId);
   const isCalcario = selectedDemandType?.category === 'calcario';
   const isAssistenciaTecnica = selectedDemandType?.category === 'assistencia_tecnica';
+  const isLogisticaInsumos = selectedDemandType?.category === 'logistica_insumos';
   const selectedProducer = producers.find((p) => p.id === selectedProducerId);
 
   useEffect(() => {
@@ -344,6 +348,7 @@ export function ServiceForm({
         damPaid: service.damPaid ?? false,
         damPaidAt: service.damPaidAt || '',
         limestoneQuantity: service.limestoneQuantity || 0,
+        inputQuantity: service.inputQuantity || 0,
         responsibleTechnicianId: service.responsibleTechnicianId || '',
       });
       setDamReceiptFile(null);
@@ -367,6 +372,7 @@ export function ServiceForm({
         damPaid: false,
         damPaidAt: '',
         limestoneQuantity: 0,
+        inputQuantity: 0,
         responsibleTechnicianId: '',
       });
       setDamReceiptFile(null);
@@ -591,65 +597,69 @@ export function ServiceForm({
                 />
               )}
 
-              {/* Operator Selection */}
-              <FormField
-                control={form.control}
-                name="operatorId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Operador</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o operador" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">Nenhum</SelectItem>
-                        {activeOperators.map((op) => (
-                          <SelectItem key={op.id} value={op.id}>
-                            {op.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Operator Selection — hidden for Assistência Técnica */}
+              {!isAssistenciaTecnica && (
+                <FormField
+                  control={form.control}
+                  name="operatorId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Operador</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o operador" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">Nenhum</SelectItem>
+                          {activeOperators.map((op) => (
+                            <SelectItem key={op.id} value={op.id}>
+                              {op.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
-              {/* Machinery Selection */}
-              <FormField
-                control={form.control}
-                name="machineryId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Maquinário</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o maquinário" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">Nenhum</SelectItem>
-                        {activeMachinery.map((m) => (
-                          <SelectItem key={m.id} value={m.id}>
-                            {m.name} — Nº {m.patrimony_number}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Machinery Selection — hidden for Assistência Técnica */}
+              {!isAssistenciaTecnica && (
+                <FormField
+                  control={form.control}
+                  name="machineryId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Maquinário</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o maquinário" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">Nenhum</SelectItem>
+                          {activeMachinery.map((m) => (
+                            <SelectItem key={m.id} value={m.id}>
+                              {m.name} — Nº {m.patrimony_number}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               {/* Responsible Technician — only for Assistência Técnica */}
               {isAssistenciaTecnica && (
@@ -720,6 +730,27 @@ export function ServiceForm({
                 />
               )}
 
+              {/* Input Quantity — only for Logística de Insumos */}
+              {isLogisticaInsumos && (
+                <FormField
+                  control={form.control}
+                  name="inputQuantity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Quantidade de Insumos (ton)</FormLabel>
+                      <FormControl>
+                        <DecimalInput
+                          value={field.value ?? 0}
+                          onChange={field.onChange}
+                          placeholder="0,00"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
               {/* Purpose */}
               <FormField
                 control={form.control}
@@ -738,8 +769,8 @@ export function ServiceForm({
                 )}
               />
 
-              {/* DAM Section */}
-              <div className="md:col-span-2 rounded-lg border border-border/60 bg-muted/30 p-4 space-y-3">
+              {/* DAM Section — hidden for Assistência Técnica */}
+              {!isAssistenciaTecnica && <div className="md:col-span-2 rounded-lg border border-border/60 bg-muted/30 p-4 space-y-3">
                 <p className="text-sm font-semibold text-foreground">DAM — Documento de Arrecadação Municipal</p>
 
                 {/* DAM Issued */}
@@ -834,7 +865,7 @@ export function ServiceForm({
                     )}
                   </div>
                 )}
-              </div>
+              </div>}
 
               {/* Notes */}
               <FormField

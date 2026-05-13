@@ -121,6 +121,7 @@ interface DbService {
   dam_paid_at?: string | null;
   dam_receipt_url?: string | null;
   limestone_quantity?: number | null;
+  input_quantity?: number | null;
   responsible_technician_id?: string | null;
   producers?: { name: string; phone?: string | null; location_name?: string | null; latitude?: number | null; longitude?: number | null } | null;
   demand_types?: { name: string } | null;
@@ -276,6 +277,7 @@ export default function ServicesPage() {
       ...(data.damPaid && data.damPaidAt ? { dam_paid_at: data.damPaidAt } : {}),
       ...(receiptUrl ? { dam_receipt_url: receiptUrl } : {}),
       ...(data.limestoneQuantity ? { limestone_quantity: data.limestoneQuantity } : {}),
+      ...(data.inputQuantity ? { input_quantity: data.inputQuantity } : {}),
       responsible_technician_id: data.responsibleTechnicianId && data.responsibleTechnicianId !== 'none' ? data.responsibleTechnicianId : null,
     });
     setFormOpen(false);
@@ -323,6 +325,7 @@ export default function ServicesPage() {
       dam_paid_at: (data.damPaid && data.damPaidAt) ? data.damPaidAt : null,
       dam_receipt_url: receiptUrl,
       limestone_quantity: data.limestoneQuantity || null,
+      input_quantity: data.inputQuantity || null,
       responsible_technician_id: data.responsibleTechnicianId && data.responsibleTechnicianId !== 'none' ? data.responsibleTechnicianId : null,
     });
     setEditingService(null);
@@ -401,6 +404,7 @@ export default function ServicesPage() {
       damPaid: s.dam_paid ?? false,
       damIssuedAt: s.dam_issued_at || '',
       limestoneQuantity: s.limestone_quantity || 0,
+      inputQuantity: s.input_quantity || 0,
       damPaidAt: s.dam_paid_at || '',
       responsibleTechnicianId: s.responsible_technician_id || '',
     };

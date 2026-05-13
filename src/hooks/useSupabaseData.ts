@@ -570,6 +570,7 @@ export function useCreateService() {
       dam_paid?: boolean;
       dam_issued_at?: string | null;
       limestone_quantity?: number | null;
+      input_quantity?: number | null;
       dam_paid_at?: string | null;
       dam_receipt_url?: string | null;
     }) => {

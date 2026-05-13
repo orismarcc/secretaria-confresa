@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { DemandTypeForm, DEMAND_CATEGORIES } from '@/components/forms/DemandTypeForm';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Tractor, Package, Layers, Stethoscope } from 'lucide-react';
+import { Plus, Pencil, Trash2, Tractor, Package, Layers, Stethoscope, Truck } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   useDemandTypes,
@@ -29,6 +29,7 @@ const CATEGORY_META: Record<string, { label: string; icon: React.ElementType; co
   patrulha_mecanizada: { label: 'Patrulha Mecanizada', icon: Tractor, color: 'text-amber-600' },
   assistencia_tecnica: { label: 'Assistência Técnica', icon: Stethoscope, color: 'text-emerald-600' },
   calcario: { label: 'Logística do Calcário', icon: Layers, color: 'text-stone-600' },
+  logistica_insumos: { label: 'Logística de Insumos', icon: Truck, color: 'text-purple-600' },
   entregas: { label: 'Entregas', icon: Package, color: 'text-blue-600' },
 };
 
@@ -176,7 +177,7 @@ export default function DemandTypesPage() {
     );
   }
 
-  const categoryOrder = ['patrulha_mecanizada', 'assistencia_tecnica', 'calcario', 'entregas'];
+  const categoryOrder = ['patrulha_mecanizada', 'assistencia_tecnica', 'calcario', 'logistica_insumos', 'entregas'];
 
   return (
     <AppLayout>

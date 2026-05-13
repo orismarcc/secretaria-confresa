@@ -14,7 +14,7 @@ import {
 import { format, parseISO, startOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  TrendingUp, MapPin, ClipboardList, Tractor, Users2, Package, Layers, FileDown,
+  TrendingUp, MapPin, ClipboardList, Tractor, Users2, Package, Layers, FileDown, Truck, Stethoscope,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import jsPDF from 'jspdf';
@@ -111,6 +111,28 @@ export default function AnalyticsPage() {
       .reduce((sum: number, s: any) => sum + (Number(s.limestone_quantity) || 0), 0),
     [services, calcarioIds]
   );
+
+  const insumosIds = useMemo(() =>
+    new Set((demandTypes as any[]).filter(d => d.category === 'logistica_insumos').map((d: any) => d.id)),
+    [demandTypes]
+  );
+
+  const insumosCount = useMemo(() =>
+    (services as any[]).filter(s => s.status === 'completed' && insumosIds.has(s.demand_type_id)).length,
+    [services, insumosIds]
+  );
+
+  const insumosTotalTons = useMemo(() =>
+    (services as any[])
+      .filter(s => s.status === 'completed' && insumosIds.has(s.demand_type_id))
+      .reduce((sum: number, s: any) => sum + (Number(s.input_quantity) || 0), 0),
+    [services, insumosIds]
+  );
+
+  const assistenciaTecnicaCount = useMemo(() => {
+    const ids = new Set((demandTypes as any[]).filter(d => d.category === 'assistencia_tecnica').map((d: any) => d.id));
+    return (services as any[]).filter(s => s.status === 'completed' && ids.has(s.demand_type_id)).length;
+  }, [services, demandTypes]);
 
   // ── Monthly charts ──────────────────────────────────────────────────────────
   const monthlyData = useMemo(() => {
@@ -312,7 +334,7 @@ export default function AnalyticsPage() {
       <PageHeader title="Análise Gráfica" description="Estatísticas e métricas do sistema" />
 
       {/* Category quick-access cards */}
-      <div className="grid gap-3 grid-cols-1 sm:grid-cols-3 mb-6">
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 mb-6">
         {/* Patrulha Mecanizada */}
         <button
           onClick={() => navigate('/services')}
@@ -324,6 +346,21 @@ export default function AnalyticsPage() {
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Patrulha Mecanizada</p>
             <p className="text-3xl font-black text-foreground">{patrulhaCount}</p>
+            <p className="text-xs text-muted-foreground">atendimentos finalizados</p>
+          </div>
+        </button>
+
+        {/* Assistência Técnica */}
+        <button
+          onClick={() => navigate('/services')}
+          className="rounded-xl border bg-card p-4 flex items-center gap-4 hover:shadow-md transition-all hover:-translate-y-0.5 text-left"
+        >
+          <div className="p-3 rounded-xl bg-emerald-500/10 shrink-0">
+            <Stethoscope className="h-6 w-6 text-emerald-600" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Assistência Técnica</p>
+            <p className="text-3xl font-black text-foreground">{assistenciaTecnicaCount}</p>
             <p className="text-xs text-muted-foreground">atendimentos finalizados</p>
           </div>
         </button>
@@ -358,6 +395,26 @@ export default function AnalyticsPage() {
             {calcarioTotalTons > 0 && (
               <p className="text-xs font-semibold text-stone-600 mt-0.5">
                 {calcarioTotalTons.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ton entregues
+              </p>
+            )}
+          </div>
+        </button>
+
+        {/* Logística de Insumos */}
+        <button
+          onClick={() => navigate('/services')}
+          className="rounded-xl border bg-card p-4 flex items-center gap-4 hover:shadow-md transition-all hover:-translate-y-0.5 text-left"
+        >
+          <div className="p-3 rounded-xl bg-purple-500/10 shrink-0">
+            <Truck className="h-6 w-6 text-purple-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Logística de Insumos</p>
+            <p className="text-3xl font-black text-foreground">{insumosCount}</p>
+            <p className="text-xs text-muted-foreground">atendimentos finalizados</p>
+            {insumosTotalTons > 0 && (
+              <p className="text-xs font-semibold text-purple-600 mt-0.5">
+                {insumosTotalTons.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ton distribuídas
               </p>
             )}
           </div>
