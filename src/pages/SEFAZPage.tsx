@@ -37,7 +37,6 @@ import {
 
 const SERVICE_TYPES = [
   'Nota Fiscal',
-  'GTA',
   'Declaração de Posse',
   'Outros',
 ] as const;

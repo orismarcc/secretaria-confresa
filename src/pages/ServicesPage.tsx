@@ -53,6 +53,7 @@ import {
   useCreateService,
   useUpdateService,
   useDeleteService,
+  useResponsibleTechnicians,
 } from '@/hooks/useSupabaseData';
 import { useOperators } from '@/hooks/useOperatorData';
 import { useAuth } from '@/contexts/AuthContext';
@@ -120,6 +121,7 @@ interface DbService {
   dam_paid_at?: string | null;
   dam_receipt_url?: string | null;
   limestone_quantity?: number | null;
+  responsible_technician_id?: string | null;
   producers?: { name: string; phone?: string | null; location_name?: string | null; latitude?: number | null; longitude?: number | null } | null;
   demand_types?: { name: string } | null;
   settlements?: { name: string } | null;
@@ -142,6 +144,7 @@ export default function ServicesPage() {
   const { data: locations = [] } = useLocations();
   const { data: machinery = [] } = useMachinery();
   const { data: operators = [] } = useOperators();
+  const { data: responsibleTechnicians = [] } = useResponsibleTechnicians();
   const createService = useCreateService();
   const updateService = useUpdateService();
   const deleteService = useDeleteService();
@@ -273,6 +276,7 @@ export default function ServicesPage() {
       ...(data.damPaid && data.damPaidAt ? { dam_paid_at: data.damPaidAt } : {}),
       ...(receiptUrl ? { dam_receipt_url: receiptUrl } : {}),
       ...(data.limestoneQuantity ? { limestone_quantity: data.limestoneQuantity } : {}),
+      responsible_technician_id: data.responsibleTechnicianId && data.responsibleTechnicianId !== 'none' ? data.responsibleTechnicianId : null,
     });
     setFormOpen(false);
   };
@@ -319,6 +323,7 @@ export default function ServicesPage() {
       dam_paid_at: (data.damPaid && data.damPaidAt) ? data.damPaidAt : null,
       dam_receipt_url: receiptUrl,
       limestone_quantity: data.limestoneQuantity || null,
+      responsible_technician_id: data.responsibleTechnicianId && data.responsibleTechnicianId !== 'none' ? data.responsibleTechnicianId : null,
     });
     setEditingService(null);
     setFormOpen(false);
@@ -397,6 +402,7 @@ export default function ServicesPage() {
       damIssuedAt: s.dam_issued_at || '',
       limestoneQuantity: s.limestone_quantity || 0,
       damPaidAt: s.dam_paid_at || '',
+      responsibleTechnicianId: s.responsible_technician_id || '',
     };
   };
 
@@ -879,6 +885,7 @@ export default function ServicesPage() {
         demandTypes={mappedDemandTypes}
         operators={(operators || []).filter(op => op.is_active).map(op => ({ id: op.id, name: op.name }))}
         machinery={(machinery || []).filter((m: any) => m.is_active).map((m: any) => ({ id: m.id, name: m.name, patrimony_number: m.patrimony_number }))}
+        responsibleTechnicians={(responsibleTechnicians as any[]).filter((t: any) => t.is_active).map((t: any) => ({ id: t.id, name: t.name, cargo: t.cargo }))}
         onSubmit={editingService ? handleEdit : handleCreate}
       />
 

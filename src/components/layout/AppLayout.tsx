@@ -18,7 +18,6 @@ import {
   CalendarDays,
   Package,
   Receipt,
-  Building2,
   Landmark,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -36,8 +35,8 @@ const adminNavItems = [
   { path: '/services', label: 'Atendimentos', icon: ClipboardList },
   { path: '/producers', label: 'Produtores', icon: Users },
   { path: '/dam', label: 'DAMs', icon: Receipt },
-  { path: '/operators', label: 'Operadores', icon: UserCog },
-  { path: '/demand-types', label: 'Tipos de Demanda', icon: FileText },
+  { path: '/operators', label: 'Colaboradores', icon: UserCog },
+  { path: '/demand-types', label: 'Serviços', icon: FileText },
   { path: '/settlements', label: 'Assentamentos', icon: Landmark },
   { path: '/machinery', label: 'Maquinários', icon: Wrench },
   { path: '/patrimony', label: 'Patrimônio', icon: Building2 },

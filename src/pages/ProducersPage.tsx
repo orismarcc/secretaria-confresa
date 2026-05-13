@@ -38,6 +38,7 @@ interface DbProducer {
   property_name?: string | null;
   property_size?: number | null;
   dap_cap?: string | null;
+  caf?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   created_at?: string | null;
@@ -110,6 +111,7 @@ export default function ProducersPage() {
       location_name: data.locationName ? (data.locationName as string).toUpperCase() : undefined,
       latitude: data.latitude ? parseFloat(data.latitude) : null,
       longitude: data.longitude ? parseFloat(data.longitude) : null,
+      caf: data.caf || null,
     });
     setFormOpen(false);
   };
@@ -125,6 +127,7 @@ export default function ProducersPage() {
         location_name: data.locationName ? (data.locationName as string).toUpperCase() : undefined,
         latitude: data.latitude ? parseFloat(data.latitude) : null,
         longitude: data.longitude ? parseFloat(data.longitude) : null,
+        caf: data.caf || null,
       });
       setEditingProducer(null);
       setFormOpen(false);

@@ -47,8 +47,9 @@ interface DemandTypeFormProps {
 
 export const DEMAND_CATEGORIES = [
   { value: 'patrulha_mecanizada', label: 'Patrulha Mecanizada' },
-  { value: 'entregas', label: 'Entregas' },
+  { value: 'assistencia_tecnica', label: 'Assistência Técnica' },
   { value: 'calcario', label: 'Logística do Calcário' },
+  { value: 'entregas', label: 'Entregas' },
 ];
 
 export function DemandTypeForm({ open, onOpenChange, demandType, onSubmit }: DemandTypeFormProps) {
@@ -72,7 +73,7 @@ export function DemandTypeForm({ open, onOpenChange, demandType, onSubmit }: Dem
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{demandType ? 'Editar Tipo de Demanda' : 'Novo Tipo de Demanda'}</DialogTitle>
+          <DialogTitle>{demandType ? 'Editar Serviço' : 'Novo Serviço'}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">

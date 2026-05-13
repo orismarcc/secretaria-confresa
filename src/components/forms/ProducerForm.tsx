@@ -35,6 +35,7 @@ const producerSchema = z.object({
   locationName: z.string().optional(),
   latitude: z.string().optional(),
   longitude: z.string().optional(),
+  caf: z.string().optional(),
 });
 
 type ProducerFormData = z.infer<typeof producerSchema>;
@@ -66,6 +67,7 @@ export function ProducerForm({
       locationName: producer?.locationName?.toUpperCase() || '',
       latitude: (producer as any)?.latitude?.toString() || '',
       longitude: (producer as any)?.longitude?.toString() || '',
+      caf: (producer as any)?.caf || '',
     },
   });
 
@@ -79,6 +81,7 @@ export function ProducerForm({
         locationName: producer.locationName?.toUpperCase() || '',
         latitude: (producer as any)?.latitude?.toString() || '',
         longitude: (producer as any)?.longitude?.toString() || '',
+        caf: (producer as any)?.caf || '',
       });
     } else {
       form.reset({
@@ -89,6 +92,7 @@ export function ProducerForm({
         locationName: '',
         latitude: '',
         longitude: '',
+        caf: '',
       });
     }
   }, [producer, form]);
@@ -216,6 +220,20 @@ export function ProducerForm({
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="caf"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>CAF — Cadastro do Agricultor Familiar (opcional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Número do CAF" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {/* GPS Coordinates Section */}
             <div className="border rounded-lg p-4 bg-muted/30">

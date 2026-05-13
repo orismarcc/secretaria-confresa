@@ -986,6 +986,86 @@ export function useDeletePatrimony() {
   });
 }
 
+// ============= RESPONSIBLE TECHNICIANS =============
+export function useResponsibleTechnicians() {
+  return useQuery({
+    queryKey: ['responsible_technicians'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('responsible_technicians')
+        .select('*')
+        .order('name');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useCreateResponsibleTechnician() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (item: { name: string; cpf?: string | null; cargo?: string | null }) => {
+      const { data, error } = await supabase
+        .from('responsible_technicians')
+        .insert(item)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['responsible_technicians'] });
+      toast({ title: 'Responsável Técnico cadastrado!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao cadastrar', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useUpdateResponsibleTechnician() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string; name?: string; cpf?: string | null; cargo?: string | null; is_active?: boolean }) => {
+      const { data, error } = await supabase
+        .from('responsible_technicians')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['responsible_technicians'] });
+      toast({ title: 'Responsável Técnico atualizado!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useDeleteResponsibleTechnician() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('responsible_technicians').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['responsible_technicians'] });
+      toast({ title: 'Responsável Técnico removido!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao remover', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
 // ============= SEFAZ =============
 export function useSefazProducers() {
   return useQuery({

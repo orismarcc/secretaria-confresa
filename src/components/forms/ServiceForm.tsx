@@ -56,6 +56,7 @@ const serviceSchema = z.object({
   damPaid: z.boolean().optional(),
   damPaidAt: z.string().optional(),
   limestoneQuantity: z.coerce.number().min(0).optional(),
+  responsibleTechnicianId: z.string().optional(),
 });
 
 export type ServiceFormData = z.infer<typeof serviceSchema>;
@@ -69,6 +70,12 @@ interface MachineryOption {
   id: string;
   name: string;
   patrimony_number: string;
+}
+
+interface TechnicianOption {
+  id: string;
+  name: string;
+  cargo?: string | null;
 }
 
 interface ServiceFormProps {
@@ -93,6 +100,7 @@ interface ServiceFormProps {
     damPaid?: boolean;
     limestoneQuantity?: number;
     damPaidAt?: string;
+    responsibleTechnicianId?: string;
   } | null;
   producers: Producer[];
   settlements: Settlement[];
@@ -107,6 +115,7 @@ interface ServiceFormProps {
   }>;
   operators?: OperatorOption[];
   machinery?: MachineryOption[];
+  responsibleTechnicians?: TechnicianOption[];
   onSubmit: (data: ServiceFormData) => void;
 }
 
@@ -273,6 +282,7 @@ export function ServiceForm({
   demandTypes,
   operators = [],
   machinery = [],
+  responsibleTechnicians = [],
   onSubmit,
 }: ServiceFormProps) {
   const [hasAppointment, setHasAppointment] = useState(false);
@@ -298,6 +308,7 @@ export function ServiceForm({
       damPaid: false,
       damPaidAt: '',
       limestoneQuantity: 0,
+      responsibleTechnicianId: '',
     },
   });
 
@@ -308,6 +319,7 @@ export function ServiceForm({
   const watchedDemandTypeId = form.watch('demandTypeId');
   const selectedDemandType = demandTypes.find(d => d.id === watchedDemandTypeId);
   const isCalcario = selectedDemandType?.category === 'calcario';
+  const isAssistenciaTecnica = selectedDemandType?.category === 'assistencia_tecnica';
   const selectedProducer = producers.find((p) => p.id === selectedProducerId);
 
   useEffect(() => {
@@ -332,6 +344,7 @@ export function ServiceForm({
         damPaid: service.damPaid ?? false,
         damPaidAt: service.damPaidAt || '',
         limestoneQuantity: service.limestoneQuantity || 0,
+        responsibleTechnicianId: service.responsibleTechnicianId || '',
       });
       setDamReceiptFile(null);
     } else {
@@ -354,6 +367,7 @@ export function ServiceForm({
         damPaid: false,
         damPaidAt: '',
         limestoneQuantity: 0,
+        responsibleTechnicianId: '',
       });
       setDamReceiptFile(null);
     }
@@ -636,6 +650,35 @@ export function ServiceForm({
                   </FormItem>
                 )}
               />
+
+              {/* Responsible Technician — only for Assistência Técnica */}
+              {isAssistenciaTecnica && (
+                <FormField
+                  control={form.control}
+                  name="responsibleTechnicianId"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>Responsável Técnico</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o responsável técnico" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">Nenhum</SelectItem>
+                          {responsibleTechnicians.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name}{t.cargo ? ` — ${t.cargo}` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               {/* Worked Area */}
               <FormField

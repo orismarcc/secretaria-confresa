@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { DemandTypeForm, DEMAND_CATEGORIES } from '@/components/forms/DemandTypeForm';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Tractor, Package, Layers } from 'lucide-react';
+import { Plus, Pencil, Trash2, Tractor, Package, Layers, Stethoscope } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   useDemandTypes,
@@ -27,8 +27,9 @@ interface DemandType {
 
 const CATEGORY_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   patrulha_mecanizada: { label: 'Patrulha Mecanizada', icon: Tractor, color: 'text-amber-600' },
-  entregas: { label: 'Entregas', icon: Package, color: 'text-blue-600' },
+  assistencia_tecnica: { label: 'Assistência Técnica', icon: Stethoscope, color: 'text-emerald-600' },
   calcario: { label: 'Logística do Calcário', icon: Layers, color: 'text-stone-600' },
+  entregas: { label: 'Entregas', icon: Package, color: 'text-blue-600' },
 };
 
 export default function DemandTypesPage() {
@@ -166,7 +167,7 @@ export default function DemandTypesPage() {
   if (isLoading) {
     return (
       <AppLayout>
-        <PageHeader title="Tipos de Demanda" description="Categorias de atendimento" />
+        <PageHeader title="Serviços" description="Tipos de serviços disponíveis" />
         <div className="space-y-4">
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-64 w-full" />
@@ -175,15 +176,15 @@ export default function DemandTypesPage() {
     );
   }
 
-  const categoryOrder = ['patrulha_mecanizada', 'entregas', 'calcario'];
+  const categoryOrder = ['patrulha_mecanizada', 'assistencia_tecnica', 'calcario', 'entregas'];
 
   return (
     <AppLayout>
       <PageHeader
-        title="Tipos de Demanda"
-        description="Categorias de atendimento"
+        title="Serviços"
+        description="Tipos de serviços disponíveis"
         action={{
-          label: 'Novo',
+          label: 'Novo Serviço',
           onClick: () => { setEditingType(null); setFormOpen(true); },
           icon: <Plus className="h-4 w-4 mr-2" />,
         }}
