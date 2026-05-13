@@ -413,22 +413,7 @@ export default function SEFAZPage() {
               </CardContent>
             </Card>
 
-            {/* GTA */}
-            <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100/60">
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-emerald-500/20">
-                  <CheckSquare className="h-5 w-5 text-emerald-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-emerald-700">
-                    {monthlyServices.filter(s => s.service_type === 'GTA').length}
-                  </p>
-                  <p className="text-xs text-emerald-600/80 mt-0.5 font-medium">GTA</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Declaração */}
+            {/* Declaração de Posse */}
             <Card className="border-violet-200 bg-gradient-to-br from-violet-50 to-violet-100/60">
               <CardContent className="p-4 flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-violet-500/20">
@@ -439,6 +424,21 @@ export default function SEFAZPage() {
                     {monthlyServices.filter(s => s.service_type === 'Declaração de Posse').length}
                   </p>
                   <p className="text-xs text-violet-600/80 mt-0.5 font-medium">Declaração</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Outros */}
+            <Card className="border-orange-200 bg-gradient-to-br from-orange-50 to-orange-100/60">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-orange-500/20">
+                  <ClipboardList className="h-5 w-5 text-orange-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-orange-700">
+                    {monthlyServices.filter(s => s.service_type === 'Outros').length}
+                  </p>
+                  <p className="text-xs text-orange-600/80 mt-0.5 font-medium">Outros</p>
                 </div>
               </CardContent>
             </Card>
@@ -455,14 +455,13 @@ export default function SEFAZPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 bg-gradient-to-b from-amber-50/30 to-transparent">
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="rounded-lg bg-amber-500 p-3 text-center text-white shadow-sm">
                   <p className="text-2xl font-bold">{yearServices.length}</p>
                   <p className="text-xs font-medium mt-0.5 opacity-90">Total</p>
                 </div>
                 {[
                   { type: 'Nota Fiscal', color: 'bg-indigo-500' },
-                  { type: 'GTA', color: 'bg-emerald-500' },
                   { type: 'Declaração de Posse', color: 'bg-violet-500' },
                   { type: 'Outros', color: 'bg-orange-400' },
                 ].map(({ type, color }) => {
@@ -555,7 +554,6 @@ export default function SEFAZPage() {
                     <Tooltip content={<CustomTooltip />} />
                     <Legend wrapperStyle={{ paddingTop: 16 }} formatter={v => <span className="text-foreground text-xs">{v}</span>} />
                     <Bar dataKey="Nota Fiscal" name="Nota Fiscal" fill="#6366f1" radius={[4,4,0,0]} />
-                    <Bar dataKey="GTA" name="GTA" fill="#10b981" radius={[4,4,0,0]} />
                     <Bar dataKey="Declaração de Posse" name="Declaração de Posse" fill="#8b5cf6" radius={[4,4,0,0]} />
                     <Bar dataKey="Outros" name="Outros" fill="#f97316" radius={[4,4,0,0]} />
                   </BarChart>
