@@ -928,6 +928,12 @@ export function useCreatePatrimony() {
       value?: number | null;
       category?: string | null;
       acquisition_date?: string | null;
+      location?: string | null;
+      responsible_name?: string | null;
+      responsible_phone?: string | null;
+      condition?: string | null;
+      written_off?: boolean;
+      image_url?: string | null;
     }) => {
       const { data, error } = await supabase.from('patrimony').insert(item).select().single();
       if (error) throw error;
