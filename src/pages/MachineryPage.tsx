@@ -116,6 +116,7 @@ export default function MachineryPage() {
     {
       key: 'patrimony',
       header: 'Nº Patrimônio',
+      className: 'hidden sm:table-cell',
       render: (m: MachineryItem) => m.patrimony_number,
     },
     {
@@ -133,7 +134,7 @@ export default function MachineryPage() {
             checked={m.is_active}
             onCheckedChange={() => handleToggleActive(m)}
           />
-          <Badge variant="outline" className={m.is_active ? 'status-completed' : ''}>
+          <Badge variant="outline" className={`hidden sm:inline-flex ${m.is_active ? 'status-completed' : ''}`}>
             {m.is_active ? 'Ativo' : 'Inativo'}
           </Badge>
         </div>

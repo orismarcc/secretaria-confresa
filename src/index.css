@@ -124,15 +124,29 @@
   html {
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
+    /* Prevent pull-to-refresh in installed PWA */
+    overscroll-behavior-y: none;
   }
 
-  /* Safe area for mobile devices */
+  body {
+    /* Smooth momentum scrolling on iOS */
+    -webkit-overflow-scrolling: touch;
+    /* Prevent overscroll bounce on the body */
+    overscroll-behavior-y: none;
+  }
+
+  /* Safe area for mobile devices (notch / home indicator) */
   .safe-area-top {
     padding-top: env(safe-area-inset-top);
   }
 
   .safe-area-bottom {
     padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Extra helper for bottom sheet safe area */
+  .pb-safe {
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
   }
 
   /* Prevent text selection on interactive elements */

@@ -46,34 +46,36 @@ export function DataTable<T>({
       {emptyMessage}
     </div>
   ) : (
-    <Table>
-      <TableHeader>
-        <TableRow className="hover:bg-transparent">
-          {columns.map((col) => (
-            <TableHead key={col.key} className={col.className}>
-              {col.header}
-            </TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {data.map((item) => (
-          <TableRow
-            key={keyExtractor(item)}
-            onClick={() => onRowClick?.(item)}
-            className={cn(onRowClick && 'cursor-pointer')}
-          >
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
             {columns.map((col) => (
-              <TableCell key={col.key} className={col.className}>
-                {col.render
-                  ? col.render(item)
-                  : String((item as Record<string, unknown>)[col.key] ?? '')}
-              </TableCell>
+              <TableHead key={col.key} className={col.className}>
+                {col.header}
+              </TableHead>
             ))}
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {data.map((item) => (
+            <TableRow
+              key={keyExtractor(item)}
+              onClick={() => onRowClick?.(item)}
+              className={cn(onRowClick && 'cursor-pointer')}
+            >
+              {columns.map((col) => (
+                <TableCell key={col.key} className={col.className}>
+                  {col.render
+                    ? col.render(item)
+                    : String((item as Record<string, unknown>)[col.key] ?? '')}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 
   if (title) {

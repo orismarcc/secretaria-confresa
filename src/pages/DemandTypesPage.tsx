@@ -128,7 +128,7 @@ export default function DemandTypesPage() {
           checked={d.is_active ?? true}
           onCheckedChange={() => handleToggleStatus(d)}
         />
-        <Badge variant="outline" className={d.is_active ? 'status-completed' : ''}>
+        <Badge variant="outline" className={`hidden sm:inline-flex ${d.is_active ? 'status-completed' : ''}`}>
           {d.is_active ? 'Ativo' : 'Inativo'}
         </Badge>
         <Button variant="ghost" size="icon" onClick={() => openEditForm(d)}>

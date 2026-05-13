@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { DataTable } from '@/components/DataTable';
@@ -6,13 +6,22 @@ import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
 import { SettlementForm } from '@/components/forms/SettlementForm';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Eye, Tractor, Users2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import {
   useSettlements,
   useCreateSettlement,
   useUpdateSettlement,
-  useDeleteSettlement
+  useDeleteSettlement,
+  useServices,
+  useProducers,
+  useDemandTypes,
 } from '@/hooks/useSupabaseData';
 
 interface Settlement {
@@ -23,17 +32,61 @@ interface Settlement {
 
 export default function SettlementsPage() {
   const { data: settlements = [], isLoading } = useSettlements();
+  const { data: services = [] } = useServices();
+  const { data: producers = [] } = useProducers();
+  const { data: demandTypes = [] } = useDemandTypes();
+
   const createSettlement = useCreateSettlement();
   const updateSettlement = useUpdateSettlement();
   const deleteSettlement = useDeleteSettlement();
-  
+
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editingSettlement, setEditingSettlement] = useState<Settlement | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [settlementToDelete, setSettlementToDelete] = useState<Settlement | null>(null);
 
-  const filtered = settlements.filter(s => 
+  // Mobile detail sheet
+  const [detailSheetOpen, setDetailSheetOpen] = useState(false);
+  const [detailSettlement, setDetailSettlement] = useState<Settlement | null>(null);
+
+  // ── Computed stats ──────────────────────────────────────────────────────────
+
+  const patrulhaIds = useMemo(() =>
+    new Set(
+      (demandTypes as any[])
+        .filter(d => d.category === 'patrulha_mecanizada')
+        .map((d: any) => d.id)
+    ),
+    [demandTypes]
+  );
+
+  /** PM finalised count + total producers registered per settlement */
+  const settlementStats = useMemo(() => {
+    const stats: Record<string, { pmCount: number; producersCount: number }> = {};
+
+    // Count finalised PM services per settlement
+    (services as any[])
+      .filter(s => s.status === 'completed' && patrulhaIds.has(s.demand_type_id))
+      .forEach(s => {
+        if (!s.settlement_id) return;
+        if (!stats[s.settlement_id]) stats[s.settlement_id] = { pmCount: 0, producersCount: 0 };
+        stats[s.settlement_id].pmCount++;
+      });
+
+    // Count producers registered per settlement
+    (producers as any[]).forEach(p => {
+      if (!p.settlement_id) return;
+      if (!stats[p.settlement_id]) stats[p.settlement_id] = { pmCount: 0, producersCount: 0 };
+      stats[p.settlement_id].producersCount++;
+    });
+
+    return stats;
+  }, [services, producers, patrulhaIds]);
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
+
+  const filtered = settlements.filter(s =>
     s.name.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -68,23 +121,74 @@ export default function SettlementsPage() {
     setDeleteDialogOpen(true);
   };
 
+  // ── Table columns ────────────────────────────────────────────────────────────
+
   const columns = [
     { key: 'name', header: 'Nome do Assentamento' },
-    { 
-      key: 'actions', 
-      header: 'Ações', 
+
+    // PM finalizados — desktop only
+    {
+      key: 'pm_count',
+      header: 'PM Finalizados',
+      className: 'hidden sm:table-cell text-center',
+      render: (s: Settlement) => {
+        const stat = settlementStats[s.id];
+        return (
+          <div className="flex items-center justify-center gap-1.5">
+            <Tractor className="h-4 w-4 text-amber-600" />
+            <span className="font-semibold text-amber-700">{stat?.pmCount ?? 0}</span>
+          </div>
+        );
+      },
+    },
+
+    // Produtores cadastrados — desktop only
+    {
+      key: 'producers_count',
+      header: 'Produtores',
+      className: 'hidden sm:table-cell text-center',
+      render: (s: Settlement) => {
+        const stat = settlementStats[s.id];
+        return (
+          <div className="flex items-center justify-center gap-1.5">
+            <Users2 className="h-4 w-4 text-primary" />
+            <span className="font-semibold">{stat?.producersCount ?? 0}</span>
+          </div>
+        );
+      },
+    },
+
+    {
+      key: 'actions',
+      header: '',
       render: (s: Settlement) => (
-        <div className="flex gap-2">
+        <div className="flex gap-1 justify-end">
+          {/* Eye icon: mobile only — opens bottom sheet with PM + producers stats */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="sm:hidden"
+            onClick={() => { setDetailSettlement(s); setDetailSheetOpen(true); }}
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
           <Button variant="ghost" size="icon" onClick={() => openEditForm(s)}>
             <Pencil className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => openDeleteDialog(s)} className="text-destructive hover:text-destructive">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => openDeleteDialog(s)}
+            className="text-destructive hover:text-destructive"
+          >
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
-      )
+      ),
     },
   ];
+
+  // ── Render ───────────────────────────────────────────────────────────────────
 
   if (isLoading) {
     return (
@@ -103,27 +207,42 @@ export default function SettlementsPage() {
       <PageHeader
         title="Assentamentos"
         description="Gerenciar assentamentos"
-        action={{ label: 'Novo', onClick: () => { setEditingSettlement(null); setFormOpen(true); }, icon: <Plus className="h-4 w-4 mr-2" /> }}
+        action={{
+          label: 'Novo',
+          onClick: () => { setEditingSettlement(null); setFormOpen(true); },
+          icon: <Plus className="h-4 w-4 mr-2" />,
+        }}
       />
 
       <div className="mb-4">
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar assentamento..." className="max-w-sm" />
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Buscar assentamento..."
+          className="max-w-sm"
+        />
       </div>
 
-      <DataTable 
-        data={filtered} 
-        columns={columns} 
-        keyExtractor={(s) => s.id} 
-        emptyMessage="Nenhum assentamento cadastrado" 
+      <DataTable
+        data={filtered}
+        columns={columns}
+        keyExtractor={(s) => s.id}
+        emptyMessage="Nenhum assentamento cadastrado"
       />
 
+      {/* Settlement Form */}
       <SettlementForm
         open={formOpen}
         onOpenChange={setFormOpen}
-        settlement={editingSettlement ? { ...editingSettlement, createdAt: new Date(editingSettlement.created_at || Date.now()) } : null}
+        settlement={
+          editingSettlement
+            ? { ...editingSettlement, createdAt: new Date(editingSettlement.created_at || Date.now()) }
+            : null
+        }
         onSubmit={editingSettlement ? handleEdit : handleCreate}
       />
 
+      {/* Delete Confirm */}
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
@@ -133,6 +252,39 @@ export default function SettlementsPage() {
         confirmLabel="Excluir"
         variant="destructive"
       />
+
+      {/* Mobile detail bottom sheet */}
+      <Sheet open={detailSheetOpen} onOpenChange={setDetailSheetOpen}>
+        <SheetContent side="bottom" className="rounded-t-2xl pb-safe">
+          <SheetHeader className="pb-5 text-left">
+            <SheetTitle className="text-left">{detailSettlement?.name}</SheetTitle>
+          </SheetHeader>
+          <div className="grid grid-cols-2 gap-3 pb-8">
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+              <Tractor className="h-6 w-6 text-amber-600 shrink-0" />
+              <div>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                  PM Finalizados
+                </p>
+                <p className="text-3xl font-black text-amber-700">
+                  {detailSettlement ? (settlementStats[detailSettlement.id]?.pmCount ?? 0) : 0}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-primary/10 border border-primary/20">
+              <Users2 className="h-6 w-6 text-primary shrink-0" />
+              <div>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                  Produtores
+                </p>
+                <p className="text-3xl font-black text-primary">
+                  {detailSettlement ? (settlementStats[detailSettlement.id]?.producersCount ?? 0) : 0}
+                </p>
+              </div>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
     </AppLayout>
   );
 }
