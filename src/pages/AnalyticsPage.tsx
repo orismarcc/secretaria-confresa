@@ -39,7 +39,16 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 // ─── Ranking item ─────────────────────────────────────────────────────────────
-interface RankingItemProps { position: number; name: string; count: number; maxCount: number; }
+interface RankingItemProps {
+  position: number;
+  name: string;
+  count: number;
+  maxCount: number;
+  /** Finalised Patrulha Mecanizada services for this settlement */
+  patrulha?: number;
+  /** Total registered producers linked to this settlement */
+  producersCount?: number;
+}
 
 const rankConfig = [
   { label: '1°', cardClass: 'bg-warning/5 border-warning/30', badgeClass: 'bg-warning text-warning-foreground', barClass: 'bg-warning', textClass: 'text-warning' },
@@ -47,7 +56,7 @@ const rankConfig = [
   { label: '3°', cardClass: 'bg-secondary/5 border-secondary/20', badgeClass: 'bg-secondary text-secondary-foreground', barClass: 'bg-secondary', textClass: 'text-secondary' },
 ];
 
-function RankingItem({ position, name, count, maxCount }: RankingItemProps) {
+function RankingItem({ position, name, count, maxCount, patrulha, producersCount }: RankingItemProps) {
   const config = rankConfig[position - 1];
   const pct = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0;
   return (
@@ -63,10 +72,24 @@ function RankingItem({ position, name, count, maxCount }: RankingItemProps) {
         <div className="h-1.5 rounded-full bg-border overflow-hidden">
           <div className={cn('h-full rounded-full transition-all duration-700', config.barClass)} style={{ width: `${pct}%` }} />
         </div>
-        <p className="text-xs text-muted-foreground">
-          {count} {count === 1 ? 'atendimento' : 'atendimentos'}
-          {position > 1 && ` · ${pct}% em relação ao 1°`}
-        </p>
+        <div className="flex items-center flex-wrap gap-2">
+          <p className="text-xs text-muted-foreground">
+            {count} {count === 1 ? 'finalizado' : 'finalizados'}
+            {position > 1 && ` · ${pct}%`}
+          </p>
+          {patrulha !== undefined && (
+            <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-500/10 rounded-full px-2 py-0.5 font-medium">
+              <Tractor className="h-3 w-3" />
+              {patrulha} PM
+            </span>
+          )}
+          {producersCount !== undefined && (
+            <span className="inline-flex items-center gap-1 text-xs text-primary bg-primary/10 rounded-full px-2 py-0.5 font-medium">
+              <Users2 className="h-3 w-3" />
+              {producersCount} prod.
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -180,23 +203,45 @@ export default function AnalyticsPage() {
     });
   }, [services, demandTypes]);
 
-  // ── Top 3 rankings ──────────────────────────────────────────────────────────
+  // ── Top 3 rankings — COMPLETED ONLY ───────────────────────────────────────
   const topSettlements = useMemo(() => {
-    const counts: Record<string, { name: string; count: number }> = {};
-    (services as any[]).forEach(s => {
+    const patrulhaIds = new Set(
+      (demandTypes as any[]).filter(d => d.category === 'patrulha_mecanizada').map((d: any) => d.id)
+    );
+    // Only completed services count toward the ranking
+    const completedServices = (services as any[]).filter(s => s.status === 'completed');
+    const stats: Record<string, { name: string; count: number; patrulha: number }> = {};
+
+    completedServices.forEach(s => {
       if (!s.settlement_id) return;
-      const name = (settlements as any[]).find(st => st.id === s.settlement_id)?.name || s.settlements?.name || 'Desconhecido';
-      if (!counts[s.settlement_id]) counts[s.settlement_id] = { name, count: 0 };
-      counts[s.settlement_id].count++;
+      const name =
+        (settlements as any[]).find(st => st.id === s.settlement_id)?.name ||
+        s.settlements?.name ||
+        'Desconhecido';
+      if (!stats[s.settlement_id]) stats[s.settlement_id] = { name, count: 0, patrulha: 0 };
+      stats[s.settlement_id].count++;
+      if (patrulhaIds.has(s.demand_type_id)) stats[s.settlement_id].patrulha++;
     });
-    return Object.values(counts).sort((a, b) => b.count - a.count).slice(0, 3);
-  }, [services, settlements]);
+
+    return Object.entries(stats)
+      .map(([id, data]) => ({
+        ...data,
+        // All producers registered to this settlement (not just ones with services)
+        producersCount: (producers as any[]).filter((p: any) => p.settlement_id === id).length,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3);
+  }, [services, settlements, demandTypes, producers]);
 
   const topDemandTypes = useMemo(() => {
     const counts: Record<string, { name: string; count: number }> = {};
-    (services as any[]).forEach(s => {
+    // Only completed services
+    (services as any[]).filter(s => s.status === 'completed').forEach(s => {
       if (!s.demand_type_id) return;
-      const name = (demandTypes as any[]).find(d => d.id === s.demand_type_id)?.name || s.demand_types?.name || 'Desconhecido';
+      const name =
+        (demandTypes as any[]).find(d => d.id === s.demand_type_id)?.name ||
+        s.demand_types?.name ||
+        'Desconhecido';
       if (!counts[s.demand_type_id]) counts[s.demand_type_id] = { name, count: 0 };
       counts[s.demand_type_id].count++;
     });
@@ -238,12 +283,12 @@ export default function AnalyticsPage() {
       doc.setFontSize(13);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(45, 90, 39);
-      doc.text('Relatório por Assentamento', pageWidth / 2, 16, { align: 'center' });
+      doc.text('Relatório de Atendimentos Finalizados', pageWidth / 2, 16, { align: 'center' });
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(100);
       doc.text(
-        `Gerado em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`,
+        `Por assentamento · Gerado em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`,
         pageWidth / 2, 23, { align: 'center' }
       );
       const headerH = Math.max(logoH + 10, 32);
@@ -251,15 +296,16 @@ export default function AnalyticsPage() {
       doc.line(14, headerH, pageWidth - 14, headerH);
       doc.setTextColor(0);
 
-      // Group all services by settlement
-      const grouped: Record<string, { settlementName: string; rows: any[] }> = {};
-      (services as any[]).forEach(s => {
+      // Group ONLY completed services by settlement
+      const completedOnly = (services as any[]).filter(s => s.status === 'completed');
+      const grouped: Record<string, { settlementId: string; settlementName: string; rows: any[] }> = {};
+      completedOnly.forEach(s => {
         const key = s.settlement_id || '__none__';
         const settlementName =
           (settlements as any[]).find(st => st.id === s.settlement_id)?.name ||
           s.settlements?.name ||
           'Sem assentamento';
-        if (!grouped[key]) grouped[key] = { settlementName, rows: [] };
+        if (!grouped[key]) grouped[key] = { settlementId: key, settlementName, rows: [] };
         grouped[key].rows.push(s);
       });
 
@@ -269,12 +315,16 @@ export default function AnalyticsPage() {
 
       let cursorY = headerH + 6;
 
-      sortedGroups.forEach(({ settlementName, rows }) => {
-        // Reserve enough space for header + at least 1 row; add new page if needed
+      sortedGroups.forEach(({ settlementId, settlementName, rows }) => {
         if (cursorY > 255) {
           doc.addPage();
           cursorY = 14;
         }
+
+        // Count producers registered to this settlement
+        const producerCount = settlementId !== '__none__'
+          ? (producers as any[]).filter((p: any) => p.settlement_id === settlementId).length
+          : 0;
 
         // Settlement colour band
         doc.setFillColor(45, 90, 39);
@@ -283,7 +333,10 @@ export default function AnalyticsPage() {
         doc.setFont('helvetica', 'bold');
         doc.rect(14, cursorY, pageWidth - 28, 7, 'F');
         doc.text(` ${settlementName}`, 14, cursorY + 5);
-        doc.text(`${rows.length} atend.`, pageWidth - 14, cursorY + 5, { align: 'right' });
+        doc.text(
+          `${rows.length} finalizado(s) · ${producerCount} produtor(es)`,
+          pageWidth - 14, cursorY + 5, { align: 'right' }
+        );
         doc.setTextColor(0);
 
         const tableRows = rows.map(s => {
@@ -295,23 +348,18 @@ export default function AnalyticsPage() {
             s.demand_types?.name ||
             (demandTypes as any[]).find((d: any) => d.id === s.demand_type_id)?.name ||
             'N/A';
-          const statusLabel =
-            s.status === 'completed' ? 'Finalizado'
-            : s.status === 'in_progress' ? 'Em Execução'
-            : s.status === 'proximo' ? 'Próximo'
-            : 'Pendente';
-          const date = s.scheduled_date
-            ? format(new Date(s.scheduled_date + 'T12:00:00'), 'dd/MM/yyyy')
+          const completedAt = s.completed_at
+            ? format(new Date(s.completed_at.replace(' ', 'T')), 'dd/MM/yyyy')
             : '-';
           const area = s.worked_area
             ? `${Number(s.worked_area).toFixed(2).replace('.', ',')} ha`
             : '-';
-          return [producerName, dtName, statusLabel, date, area];
+          return [producerName, dtName, completedAt, area];
         });
 
         autoTable(doc, {
           startY: cursorY + 8,
-          head: [['Produtor', 'Tipo de Demanda', 'Status', 'Data', 'Área']],
+          head: [['Produtor', 'Tipo de Demanda', 'Finalizado em', 'Área']],
           body: tableRows,
           styles: { fontSize: 8, cellPadding: 2 },
           headStyles: { fillColor: [237, 247, 237], textColor: [45, 90, 39], fontStyle: 'bold', fontSize: 7.5 },
@@ -323,7 +371,7 @@ export default function AnalyticsPage() {
         cursorY = (doc as any).lastAutoTable.finalY + 6;
       });
 
-      doc.save(`relatorio-assentamentos-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+      doc.save(`relatorio-finalizados-assentamentos-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
     };
     img.src = logoTransparent;
   };
@@ -591,7 +639,7 @@ export default function AnalyticsPage() {
                     <div className="p-2 rounded-lg bg-amber-500/20"><MapPin className="h-5 w-5 text-amber-500" /></div>
                     <div>
                       <span className="text-lg">Top 3 Assentamentos</span>
-                      <p className="text-sm font-normal text-muted-foreground">Por quantidade de atendimentos</p>
+                      <p className="text-sm font-normal text-muted-foreground">Por atendimentos finalizados</p>
                     </div>
                   </CardTitle>
                   <Button
@@ -608,10 +656,18 @@ export default function AnalyticsPage() {
               <CardContent className="pt-6">
                 <div className="space-y-3">
                   {topSettlements.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">Nenhum assentamento com atendimentos cadastrados</p>
+                    <p className="text-center text-muted-foreground py-8">Nenhum assentamento com atendimentos finalizados</p>
                   ) : (
                     topSettlements.map((s, i) => (
-                      <RankingItem key={i} position={i + 1} name={s.name} count={s.count} maxCount={topSettlements[0].count} />
+                      <RankingItem
+                        key={i}
+                        position={i + 1}
+                        name={s.name}
+                        count={s.count}
+                        maxCount={topSettlements[0].count}
+                        patrulha={s.patrulha}
+                        producersCount={s.producersCount}
+                      />
                     ))
                   )}
                 </div>
@@ -625,14 +681,14 @@ export default function AnalyticsPage() {
                   <div className="p-2 rounded-lg bg-amber-500/20"><ClipboardList className="h-5 w-5 text-amber-500" /></div>
                   <div>
                     <span className="text-lg">Top 3 Demandas</span>
-                    <p className="text-sm font-normal text-muted-foreground">Por quantidade de atendimentos</p>
+                    <p className="text-sm font-normal text-muted-foreground">Por atendimentos finalizados</p>
                   </div>
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-6">
                 <div className="space-y-3">
                   {topDemandTypes.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">Nenhuma demanda com atendimentos cadastrados</p>
+                    <p className="text-center text-muted-foreground py-8">Nenhuma demanda com atendimentos finalizados</p>
                   ) : (
                     topDemandTypes.map((d, i) => (
                       <RankingItem key={i} position={i + 1} name={d.name} count={d.count} maxCount={topDemandTypes[0].count} />
