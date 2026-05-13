@@ -59,12 +59,26 @@ export function useDemandTypes() {
   return useQuery({
     queryKey: ['demand_types'],
     queryFn: async () => {
+      // Try ordering by category first; fall back to name-only if the column
+      // doesn't exist yet (schema cache lag before migration runs).
       const { data, error } = await supabase
         .from('demand_types')
         .select('*')
         .order('category', { nullsFirst: false })
         .order('name');
-      if (error) throw error;
+
+      if (error) {
+        if (error.message.includes('category')) {
+          // category column not yet present — return results ordered by name only
+          const fallback = await supabase
+            .from('demand_types')
+            .select('*')
+            .order('name');
+          if (fallback.error) throw fallback.error;
+          return fallback.data;
+        }
+        throw error;
+      }
       return data;
     },
   });
@@ -76,13 +90,12 @@ export function useCreateDemandType() {
 
   return useMutation({
     mutationFn: async ({ name, description, category }: { name: string; description?: string; category?: string | null }) => {
-      const { data, error } = await supabase
-        .from('demand_types')
-        .insert({ name, description, category })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      const payload: Record<string, unknown> = { name, description, category };
+      const result = await withMissingColumnRetry(
+        (p) => supabase.from('demand_types').insert(p).select().single(),
+        payload,
+      );
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['demand_types'] });
@@ -100,14 +113,11 @@ export function useUpdateDemandType() {
 
   return useMutation({
     mutationFn: async ({ id, ...updates }: { id: string; name?: string; description?: string; is_active?: boolean; category?: string | null }) => {
-      const { data, error } = await supabase
-        .from('demand_types')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      const result = await withMissingColumnRetry(
+        (p) => supabase.from('demand_types').update(p).eq('id', id).select().single(),
+        updates as Record<string, unknown>,
+      );
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['demand_types'] });
