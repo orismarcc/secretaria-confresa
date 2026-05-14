@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { SearchInput } from '@/components/SearchInput';
@@ -21,7 +22,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import {
   Plus, Pencil, Trash2, User, Phone, MapPin, FileText,
   ClipboardList, CheckSquare, Square, CalendarDays, BarChart3,
-  Users, TrendingUp,
+  Users, TrendingUp, FileUp,
 } from 'lucide-react';
 import { format, startOfMonth, subMonths, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -77,6 +78,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function SEFAZPage() {
+  const navigate = useNavigate();
   const { data: producers = [], isLoading: producersLoading } = useSefazProducers();
   const { data: allServices = [], isLoading: servicesLoading } = useSefazServices();
   const { data: rawSettlements = [] } = useSettlements();
@@ -257,7 +259,17 @@ export default function SEFAZPage() {
         title="SEFAZ"
         description="Controle de atendimentos tributários e fiscais"
         action={mainTab === 'producers' ? { label: 'Novo Produtor', onClick: openCreateProducer, icon: <Plus className="h-4 w-4 mr-2" /> } : undefined}
-      />
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate('/import-sefaz')}
+          className="gap-1.5 text-xs"
+        >
+          <FileUp className="h-3.5 w-3.5" />
+          Importar Planilha 2026
+        </Button>
+      </PageHeader>
 
       <Tabs value={mainTab} onValueChange={v => setMainTab(v as any)}>
         <TabsList className="mb-4">
