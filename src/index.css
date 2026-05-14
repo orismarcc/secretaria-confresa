@@ -170,9 +170,13 @@
     @apply bg-success/15 text-success border-success/30;
   }
 
-  /* Card hover effect */
+  /* Card hover effect
+     Uses transition-shadow (not transition-all) to avoid triggering GPU
+     compositing layers on Android Chrome.
+     The translateY lift is gated behind @media (hover: hover) so it only
+     applies on devices with a real pointer (desktop), never on touch screens. */
   .card-interactive {
-    @apply transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5;
+    @apply transition-shadow duration-200 hover:shadow-lg;
   }
 
   /* Offline indicator */
@@ -183,5 +187,15 @@
   /* Sync indicator */
   .sync-pending {
     @apply animate-pulse;
+  }
+}
+
+/* Hover lift — only on pointer devices (never on touch/Android) */
+@media (hover: hover) {
+  .card-interactive:hover {
+    transform: translateY(-0.125rem); /* -translate-y-0.5 */
+    transition-property: box-shadow, transform;
+    transition-duration: 200ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   }
 }

@@ -166,14 +166,37 @@ function formatDate(raw: string | null | undefined): string {
 // ─── Data fetch ───────────────────────────────────────────────────────────────
 
 /**
- * Fetches all completed services that have a responsible_technician_id,
- * filters them by the given year, and returns them grouped by technician.
+ * Fetches all completed services, filters them by the given year, and
+ * returns them grouped by technician.
+ *
+ * Services without a responsible_technician_id are automatically assigned
+ * to "Cassio Rodrigues da Costa" (looked up from the responsible_technicians
+ * table; a synthetic fallback entry is used if he is not found in the DB).
  *
  * Falls back gracefully if `responsible_technician_id` or `purpose` columns
  * do not yet exist in the DB (schema cache lag after migration).
  */
 export async function fetchAterData(year: number): Promise<TechnicianGroup[]> {
-  // Try the full join first
+  // ── Resolve the default technician (Cassio Rodrigues da Costa) ────────────
+  const { data: cassioRow } = await supabase
+    .from('responsible_technicians')
+    .select('id, name, cargo')
+    .ilike('name', '%Cassio Rodrigues%')
+    .maybeSingle();
+
+  const defaultTech = cassioRow
+    ? {
+        id: cassioRow.id as string,
+        name: cassioRow.name as string,
+        role: (cassioRow.cargo as string) || 'Engenheiro Agrônomo',
+      }
+    : {
+        id: 'cassio-rodrigues-da-costa',
+        name: 'Cassio Rodrigues da Costa',
+        role: 'Engenheiro Agrônomo',
+      };
+
+  // ── Fetch all completed services (with or without a linked technician) ────
   const { data: services, error } = await supabase
     .from('services')
     .select(
@@ -193,20 +216,9 @@ export async function fetchAterData(year: number): Promise<TechnicianGroup[]> {
     `,
     )
     .eq('status', 'completed')
-    .not('responsible_technician_id', 'is', null)
     .order('completed_at', { ascending: true, nullsLast: true });
 
   if (error) {
-    // Provide a clear, actionable error message
-    if (
-      error.message.includes('responsible_technician_id') ||
-      error.message.includes('responsible_technicians')
-    ) {
-      throw new Error(
-        'O campo "Responsável Técnico" ainda não está vinculado nos atendimentos. ' +
-          'Cadastre atendimentos com o responsável técnico preenchido e tente novamente.',
-      );
-    }
     throw new Error(error.message);
   }
 
@@ -255,11 +267,21 @@ export async function fetchAterData(year: number): Promise<TechnicianGroup[]> {
   const techMap = new Map<string, TechnicianGroup>();
 
   for (const s of filtered) {
-    const tech = (s.responsible_technicians as any) ?? {};
-    const techId: string =
-      (tech.id as string) ?? (s.responsible_technician_id as string) ?? 'unknown';
-    const techName: string = (tech.name as string) ?? 'Técnico não identificado';
-    const techRole: string = (tech.cargo as string) ?? 'Técnico Agropecuário';
+    let techId: string;
+    let techName: string;
+    let techRole: string;
+
+    if (!s.responsible_technician_id) {
+      // No technician assigned → fall back to Cassio Rodrigues da Costa
+      techId = defaultTech.id;
+      techName = defaultTech.name;
+      techRole = defaultTech.role;
+    } else {
+      const tech = (s.responsible_technicians as any) ?? {};
+      techId = (tech.id as string) ?? (s.responsible_technician_id as string) ?? 'unknown';
+      techName = (tech.name as string) ?? 'Técnico não identificado';
+      techRole = (tech.cargo as string) ?? 'Técnico Agropecuário';
+    }
 
     if (!techMap.has(techId)) {
       techMap.set(techId, {
