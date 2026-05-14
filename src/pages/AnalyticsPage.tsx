@@ -118,6 +118,14 @@ export default function AnalyticsPage() {
     [deliveries]
   );
 
+  /** Sum of `quantity` field across all finalized deliveries */
+  const entregasTotalQty = useMemo(() =>
+    (deliveries as any[])
+      .filter((d: any) => d.status === 'completed')
+      .reduce((sum: number, d: any) => sum + (Number(d.quantity) || 0), 0),
+    [deliveries]
+  );
+
   const calcarioIds = useMemo(() =>
     new Set((demandTypes as any[]).filter(d => d.category === 'calcario').map((d: any) => d.id)),
     [demandTypes]
@@ -421,10 +429,15 @@ export default function AnalyticsPage() {
           <div className="p-3 rounded-xl bg-blue-500/10 shrink-0">
             <Package className="h-6 w-6 text-blue-600" />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Entregas</p>
             <p className="text-3xl font-black text-foreground">{entregasCount}</p>
             <p className="text-xs text-muted-foreground">realizadas</p>
+            {entregasTotalQty > 0 && (
+              <p className="text-xs font-semibold text-blue-600 mt-0.5">
+                {entregasTotalQty.toLocaleString('pt-BR')} itens entregues
+              </p>
+            )}
           </div>
         </button>
 
@@ -462,7 +475,7 @@ export default function AnalyticsPage() {
             <p className="text-xs text-muted-foreground">atendimentos finalizados</p>
             {insumosTotalTons > 0 && (
               <p className="text-xs font-semibold text-purple-600 mt-0.5">
-                {insumosTotalTons.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ton distribuídas
+                {insumosTotalTons.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ton entregues
               </p>
             )}
           </div>
