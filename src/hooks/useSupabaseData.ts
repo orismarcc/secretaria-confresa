@@ -810,7 +810,17 @@ export function useDeliveries() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('deliveries')
-        .select('*, producers(name, phone), demand_types(name, category), settlements(name), profiles!created_by(name)')
+        .select(`
+          *,
+          producers:producer_id(
+            name, cpf, phone, settlement_id, location_id, location_name,
+            settlements(name),
+            locations(name)
+          ),
+          demand_types(name, category),
+          settlements(name),
+          profiles!created_by(name)
+        `)
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
@@ -831,15 +841,16 @@ export function useCreateDelivery() {
       notes?: string | null;
       delivery_date_start?: string | null;
       delivery_date_end?: string | null;
+      status?: string;
+      completed_at?: string | null;
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data, error } = await supabase
-        .from('deliveries')
-        .insert({ ...delivery, created_by: user?.id ?? null })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      const payload: Record<string, unknown> = { ...delivery, created_by: user?.id ?? null };
+      const result = await withMissingColumnRetry(
+        (p) => supabase.from('deliveries').insert(p).select().single(),
+        payload,
+      );
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
@@ -857,14 +868,11 @@ export function useUpdateDelivery() {
 
   return useMutation({
     mutationFn: async ({ id, ...updates }: { id: string; [key: string]: unknown }) => {
-      const { data, error } = await supabase
-        .from('deliveries')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      const result = await withMissingColumnRetry(
+        (p) => supabase.from('deliveries').update(p).eq('id', id).select().single(),
+        updates as Record<string, unknown>,
+      );
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
