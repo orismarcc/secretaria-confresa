@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { SearchInput } from '@/components/SearchInput';
@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
+import { Progress } from '@/components/ui/progress';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -57,11 +58,14 @@ import {
   MapPin,
   Phone,
   CreditCard,
-  TrendingUp,
   Box,
-  X,
+  AlertTriangle,
+  Layers,
+  Warehouse,
+  TrendingUp,
+  MinusCircle,
 } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, subMonths, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import {
@@ -72,7 +76,31 @@ import {
   useProducers,
   useDemandTypes,
   useSettlements,
+  useDeliveryLots,
+  useCreateDeliveryLot,
+  useUpdateDeliveryLot,
+  useDeleteDeliveryLot,
+  useDeliveryItems,
+  useSaveDeliveryItems,
 } from '@/hooks/useSupabaseData';
+
+// ─── Delivery type color palette ─────────────────────────────────────────────
+
+const TYPE_COLORS = [
+  { bg: 'bg-blue-50',    border: 'border-blue-200',    badge: 'bg-blue-100 text-blue-800',      dot: 'bg-blue-500',    text: 'text-blue-700'   },
+  { bg: 'bg-violet-50',  border: 'border-violet-200',  badge: 'bg-violet-100 text-violet-800',  dot: 'bg-violet-500',  text: 'text-violet-700' },
+  { bg: 'bg-amber-50',   border: 'border-amber-200',   badge: 'bg-amber-100 text-amber-800',    dot: 'bg-amber-500',   text: 'text-amber-700'  },
+  { bg: 'bg-emerald-50', border: 'border-emerald-200', badge: 'bg-emerald-100 text-emerald-800',dot: 'bg-emerald-500', text: 'text-emerald-700'},
+  { bg: 'bg-rose-50',    border: 'border-rose-200',    badge: 'bg-rose-100 text-rose-800',      dot: 'bg-rose-500',    text: 'text-rose-700'   },
+  { bg: 'bg-cyan-50',    border: 'border-cyan-200',    badge: 'bg-cyan-100 text-cyan-800',      dot: 'bg-cyan-500',    text: 'text-cyan-700'   },
+  { bg: 'bg-orange-50',  border: 'border-orange-200',  badge: 'bg-orange-100 text-orange-800',  dot: 'bg-orange-500',  text: 'text-orange-700' },
+  { bg: 'bg-indigo-50',  border: 'border-indigo-200',  badge: 'bg-indigo-100 text-indigo-800',  dot: 'bg-indigo-500',  text: 'text-indigo-700' },
+] as const;
+
+function getTypeColor(demandTypeId: string, allTypes: any[]) {
+  const idx = allTypes.findIndex((t: any) => t.id === demandTypeId);
+  return TYPE_COLORS[idx >= 0 ? idx % TYPE_COLORS.length : 0];
+}
 
 // ─── Producer searchable combobox ─────────────────────────────────────────────
 
@@ -164,6 +192,534 @@ function ProducerCombobox({
   );
 }
 
+// ─── Lot picker — shown in delivery form when lots exist for a demand type ────
+
+interface LotItem { lot_id: string; quantity: number }
+
+function LotPicker({
+  lots,
+  selectedLots,
+  onChange,
+}: {
+  lots: any[];
+  selectedLots: LotItem[];
+  onChange: (items: LotItem[]) => void;
+}) {
+  const toggle = (lotId: string) => {
+    const exists = selectedLots.find((l) => l.lot_id === lotId);
+    if (exists) {
+      onChange(selectedLots.filter((l) => l.lot_id !== lotId));
+    } else {
+      onChange([...selectedLots, { lot_id: lotId, quantity: 0 }]);
+    }
+  };
+
+  const setQty = (lotId: string, qty: number) => {
+    onChange(selectedLots.map((l) => (l.lot_id === lotId ? { ...l, quantity: qty } : l)));
+  };
+
+  if (lots.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Warehouse className="h-4 w-4 text-primary" />
+        <label className="text-sm font-medium">Lotes disponíveis</label>
+      </div>
+      <div className="space-y-2 rounded-lg border p-3 bg-muted/30">
+        {lots.map((lot: any) => {
+          const remaining = Number(lot.remaining_quantity ?? 0);
+          const isSelected = !!selectedLots.find((l) => l.lot_id === lot.id);
+          const pct = lot.initial_quantity > 0
+            ? Math.round(((lot.initial_quantity - remaining) / lot.initial_quantity) * 100)
+            : 0;
+          const depleted = remaining <= 0;
+
+          return (
+            <div
+              key={lot.id}
+              className={cn(
+                'rounded-lg border bg-card p-3 transition-colors',
+                isSelected && 'border-primary/40 bg-primary/5',
+                depleted && 'opacity-60',
+              )}
+            >
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  checked={isSelected}
+                  onCheckedChange={() => !depleted && toggle(lot.id)}
+                  disabled={depleted}
+                  className="mt-0.5"
+                />
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium truncate">{lot.name}</p>
+                    {depleted ? (
+                      <Badge variant="destructive" className="text-xs shrink-0 gap-1">
+                        <AlertTriangle className="h-3 w-3" />Esgotado
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-xs shrink-0">
+                        {remaining.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} {lot.unit}
+                      </Badge>
+                    )}
+                  </div>
+                  {lot.supplier && (
+                    <p className="text-xs text-muted-foreground">Fornecedor: {lot.supplier}</p>
+                  )}
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Usado: {Number(lot.used_quantity ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} / {Number(lot.initial_quantity).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} {lot.unit}</span>
+                      <span>{pct}%</span>
+                    </div>
+                    <Progress value={pct} className="h-1.5" />
+                  </div>
+                  {isSelected && !depleted && (
+                    <div className="pt-1">
+                      <Input
+                        type="number"
+                        min="0.001"
+                        max={remaining}
+                        step="0.001"
+                        placeholder={`Qtd. (máx ${remaining.toLocaleString('pt-BR', { maximumFractionDigits: 3 })})`}
+                        value={selectedLots.find((l) => l.lot_id === lot.id)?.quantity || ''}
+                        onChange={(e) => setQty(lot.id, Number(e.target.value))}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {selectedLots.length > 0 && (
+        <p className="text-xs text-muted-foreground pl-1">
+          Total selecionado:{' '}
+          <strong>
+            {selectedLots
+              .reduce((s, l) => s + (l.quantity || 0), 0)
+              .toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
+          </strong>{' '}
+          {lots[0]?.unit || 'unidade(s)'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Lot form dialog ───────────────────────────────────────────────────────────
+
+const UNITS = ['unidade', 'kg', 'g', 'ton', 'saco', 'caixa', 'litro', 'ml', 'dose'];
+
+interface LotFormState {
+  demand_type_id: string;
+  name: string;
+  initial_quantity: string;
+  unit: string;
+  supplier: string;
+  lot_date: string;
+  notes: string;
+}
+
+const EMPTY_LOT: LotFormState = {
+  demand_type_id: '',
+  name: '',
+  initial_quantity: '',
+  unit: 'unidade',
+  supplier: '',
+  lot_date: format(new Date(), 'yyyy-MM-dd'),
+  notes: '',
+};
+
+function LotFormDialog({
+  open,
+  onOpenChange,
+  demandTypes,
+  editing,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  demandTypes: any[];
+  editing: any | null;
+  onSubmit: (data: LotFormState) => void;
+}) {
+  const [form, setForm] = useState<LotFormState>(EMPTY_LOT);
+
+  useEffect(() => {
+    if (open) {
+      setForm(
+        editing
+          ? {
+              demand_type_id: editing.demand_type_id || '',
+              name: editing.name || '',
+              initial_quantity: editing.initial_quantity != null ? String(editing.initial_quantity) : '',
+              unit: editing.unit || 'unidade',
+              supplier: editing.supplier || '',
+              lot_date: editing.lot_date || format(new Date(), 'yyyy-MM-dd'),
+              notes: editing.notes || '',
+            }
+          : EMPTY_LOT,
+      );
+    }
+  }, [open, editing]);
+
+  const valid = form.demand_type_id && form.name && form.initial_quantity && Number(form.initial_quantity) > 0;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{editing ? 'Editar Lote' : 'Novo Lote de Estoque'}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 pt-1">
+          <div className="space-y-1.5">
+            <Label>Tipo de Entrega *</Label>
+            <Select
+              value={form.demand_type_id}
+              onValueChange={(v) => setForm((f) => ({ ...f, demand_type_id: v }))}
+            >
+              <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
+              <SelectContent>
+                {demandTypes.map((d: any) => (
+                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Nome / Identificação do Lote *</Label>
+            <Input
+              placeholder="Ex: Calcário Lote 01/2026"
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Quantidade Inicial *</Label>
+              <Input
+                type="number"
+                min="0.001"
+                step="0.001"
+                placeholder="0"
+                value={form.initial_quantity}
+                onChange={(e) => setForm((f) => ({ ...f, initial_quantity: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Unidade</Label>
+              <Select value={form.unit} onValueChange={(v) => setForm((f) => ({ ...f, unit: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {UNITS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Fornecedor / Origem</Label>
+              <Input
+                placeholder="Nome do fornecedor"
+                value={form.supplier}
+                onChange={(e) => setForm((f) => ({ ...f, supplier: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Data de Recebimento</Label>
+              <Input
+                type="date"
+                value={form.lot_date}
+                onChange={(e) => setForm((f) => ({ ...f, lot_date: e.target.value }))}
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Observações</Label>
+            <Textarea
+              placeholder="Informações adicionais do lote..."
+              rows={2}
+              value={form.notes}
+              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+            />
+          </div>
+        </div>
+        <DialogFooter className="pt-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button disabled={!valid} onClick={() => { if (valid) { onSubmit(form); onOpenChange(false); } }}>
+            {editing ? 'Salvar' : 'Cadastrar Lote'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Lots management tab ───────────────────────────────────────────────────────
+
+function LotsTab({ demandTypes }: { demandTypes: any[] }) {
+  const { data: allLots = [], isLoading } = useDeliveryLots();
+  const createLot = useCreateDeliveryLot();
+  const updateLot = useUpdateDeliveryLot();
+  const deleteLot = useDeleteDeliveryLot();
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [toDelete, setToDelete] = useState<any | null>(null);
+  const [filterType, setFilterType] = useState('all');
+
+  const lots = (allLots as any[]);
+
+  const displayed = useMemo(() =>
+    filterType === 'all' ? lots : lots.filter((l: any) => l.demand_type_id === filterType),
+    [lots, filterType],
+  );
+
+  // Group by demand type for summary cards
+  const summaryByType = useMemo(() => {
+    const map: Record<string, { name: string; total: number; used: number; remaining: number; count: number }> = {};
+    lots.forEach((l: any) => {
+      if (!map[l.demand_type_id]) {
+        map[l.demand_type_id] = {
+          name: l.demand_type_name || '—',
+          total: 0, used: 0, remaining: 0, count: 0,
+        };
+      }
+      map[l.demand_type_id].total += Number(l.initial_quantity || 0);
+      map[l.demand_type_id].used += Number(l.used_quantity || 0);
+      map[l.demand_type_id].remaining += Number(l.remaining_quantity || 0);
+      map[l.demand_type_id].count += 1;
+    });
+    return Object.entries(map).map(([id, v]) => ({ id, ...v }));
+  }, [lots]);
+
+  const handleSubmit = (form: LotFormState) => {
+    const payload = {
+      demand_type_id: form.demand_type_id,
+      name: form.name,
+      initial_quantity: Number(form.initial_quantity),
+      unit: form.unit,
+      supplier: form.supplier || null,
+      lot_date: form.lot_date || null,
+      notes: form.notes || null,
+    };
+    if (editing) {
+      updateLot.mutate({ id: editing.id, ...payload });
+    } else {
+      createLot.mutate(payload);
+    }
+    setEditing(null);
+  };
+
+  if (isLoading) {
+    return <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Summary cards by type */}
+      {summaryByType.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {summaryByType.map((s, idx) => {
+            const color = TYPE_COLORS[idx % TYPE_COLORS.length];
+            const pct = s.total > 0 ? Math.round((s.used / s.total) * 100) : 0;
+            return (
+              <Card key={s.id} className={cn('border', color.border)}>
+                <CardContent className={cn('p-4', color.bg)}>
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="min-w-0">
+                      <p className={cn('font-semibold text-sm truncate', color.text)}>{s.name}</p>
+                      <p className="text-xs text-muted-foreground">{s.count} lote{s.count !== 1 ? 's' : ''}</p>
+                    </div>
+                    <div className={cn('p-2 rounded-lg', color.bg)}>
+                      <Warehouse className={cn('h-4 w-4', color.text)} />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Total</span>
+                      <span className="font-medium">{s.total.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Distribuído</span>
+                      <span className="font-medium text-warning">{s.used.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</span>
+                    </div>
+                    <div className="flex justify-between text-xs font-semibold">
+                      <span>Saldo</span>
+                      <span className={s.remaining > 0 ? 'text-success' : 'text-destructive'}>
+                        {s.remaining.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
+                      </span>
+                    </div>
+                    <Progress value={pct} className="h-1.5 mt-1" />
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Filter + New Lot button */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+          className="border border-input bg-background rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          <option value="all">Todos os tipos</option>
+          {demandTypes.map((d: any) => (
+            <option key={d.id} value={d.id}>{d.name}</option>
+          ))}
+        </select>
+        <Button
+          className="gap-1.5 ml-auto"
+          onClick={() => { setEditing(null); setFormOpen(true); }}
+        >
+          <Plus className="h-4 w-4" /> Novo Lote
+        </Button>
+      </div>
+
+      {/* Lots list */}
+      {displayed.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-3">
+          <Warehouse className="h-12 w-12 opacity-30" />
+          <p className="text-sm">Nenhum lote cadastrado</p>
+          <p className="text-xs text-center max-w-xs">
+            Cadastre lotes de insumos para controlar o estoque e rastrear cada entrega.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {displayed.map((lot: any, idx: number) => {
+            const remaining = Number(lot.remaining_quantity ?? 0);
+            const used = Number(lot.used_quantity ?? 0);
+            const total = Number(lot.initial_quantity);
+            const pct = total > 0 ? Math.round((used / total) * 100) : 0;
+            const depleted = remaining <= 0;
+            const color = getTypeColor(lot.demand_type_id, demandTypes);
+
+            return (
+              <div
+                key={lot.id}
+                className={cn('rounded-xl border p-4 bg-card', color.border)}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 space-y-2">
+                    {/* Header */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm">{lot.name}</span>
+                      <Badge className={cn('text-xs', color.badge)} variant="secondary">
+                        {lot.demand_type_name || '—'}
+                      </Badge>
+                      {depleted ? (
+                        <Badge variant="destructive" className="text-xs gap-1">
+                          <AlertTriangle className="h-3 w-3" />Esgotado
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs text-success border-success/30 bg-success/5">
+                          Disponível
+                        </Badge>
+                      )}
+                    </div>
+
+                    {/* Quantities */}
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-lg bg-muted/50 p-2">
+                        <p className="text-xs text-muted-foreground">Total</p>
+                        <p className="font-bold text-sm tabular-nums">{total.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</p>
+                      </div>
+                      <div className="rounded-lg bg-warning/10 p-2">
+                        <p className="text-xs text-muted-foreground">Distribuído</p>
+                        <p className="font-bold text-sm tabular-nums text-warning">{used.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</p>
+                      </div>
+                      <div className={cn('rounded-lg p-2', depleted ? 'bg-destructive/10' : 'bg-success/10')}>
+                        <p className="text-xs text-muted-foreground">Saldo</p>
+                        <p className={cn('font-bold text-sm tabular-nums', depleted ? 'text-destructive' : 'text-success')}>
+                          {remaining.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>{lot.unit}</span>
+                        <span>{pct}% distribuído</span>
+                      </div>
+                      <Progress value={pct} className="h-2" />
+                    </div>
+
+                    {/* Meta */}
+                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                      {lot.supplier && <span>Fornecedor: <strong>{lot.supplier}</strong></span>}
+                      {lot.lot_date && (
+                        <span>
+                          Recebido:{' '}
+                          <strong>
+                            {format(new Date(lot.lot_date + 'T12:00:00'), 'dd/MM/yyyy')}
+                          </strong>
+                        </span>
+                      )}
+                    </div>
+                    {lot.notes && (
+                      <p className="text-xs text-muted-foreground border-t pt-1.5 line-clamp-2">{lot.notes}</p>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-1 shrink-0">
+                    <Button
+                      variant="ghost" size="icon"
+                      onClick={() => { setEditing(lot); setFormOpen(true); }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost" size="icon"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => { setToDelete(lot); setDeleteOpen(true); }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Dialogs */}
+      <LotFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        demandTypes={demandTypes}
+        editing={editing}
+        onSubmit={handleSubmit}
+      />
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Remover Lote"
+        description={`Remover o lote "${toDelete?.name}"? Esta ação não pode ser desfeita. O lote não pode ser removido se houver entregas vinculadas.`}
+        onConfirm={() => {
+          if (toDelete) {
+            deleteLot.mutate(toDelete.id);
+            setToDelete(null);
+            setDeleteOpen(false);
+          }
+        }}
+        confirmLabel="Remover"
+        variant="destructive"
+      />
+    </div>
+  );
+}
+
 // ─── Form data type ───────────────────────────────────────────────────────────
 
 interface DeliveryFormData {
@@ -252,13 +808,11 @@ function DeliveryStats({
   const GREEN = 'hsl(113 38% 26%)';
   const GREEN2 = 'hsl(142 55% 40%)';
 
-  // Completed deliveries only
   const completed = useMemo(
     () => deliveries.filter((d) => d.status === 'completed'),
     [deliveries],
   );
 
-  // Available years derived from data
   const availableYears = useMemo(() => {
     const years = new Set<number>();
     for (const d of completed) {
@@ -268,377 +822,188 @@ function DeliveryStats({
     return Array.from(years).sort((a, b) => b - a);
   }, [completed]);
 
-  // Apply all filters
   const filtered = useMemo(() => {
     return completed
       .filter((d) => {
         const raw = d.completed_at || d.created_at;
         const date = raw ? new Date(raw.replace(' ', 'T')) : null;
-
-        if (filterYear !== 'all' && date?.getFullYear() !== parseInt(filterYear, 10))
-          return false;
-        if (
-          filterMonth !== 'all' &&
-          date &&
-          String(date.getMonth() + 1) !== filterMonth
-        )
-          return false;
-
+        if (filterYear !== 'all' && date?.getFullYear() !== parseInt(filterYear, 10)) return false;
+        if (filterMonth !== 'all' && date && String(date.getMonth() + 1) !== filterMonth) return false;
         const settlementId = d.settlement_id || d.producers?.settlement_id;
-        if (filterSettlement !== 'all' && settlementId !== filterSettlement)
-          return false;
-
+        if (filterSettlement !== 'all' && settlementId !== filterSettlement) return false;
         if (filterType !== 'all' && d.demand_type_id !== filterType) return false;
-
         if (filterProducer) {
           const name = (d.producers?.name || '').toLowerCase();
           if (!name.includes(filterProducer.toLowerCase())) return false;
         }
-
         return true;
       })
       .sort((a, b) => {
         const aRaw = a.completed_at || a.created_at || '';
         const bRaw = b.completed_at || b.created_at || '';
-        return (
-          new Date(bRaw.replace(' ', 'T')).getTime() -
-          new Date(aRaw.replace(' ', 'T')).getTime()
-        );
+        return new Date(bRaw.replace(' ', 'T')).getTime() - new Date(aRaw.replace(' ', 'T')).getTime();
       });
   }, [completed, filterYear, filterMonth, filterSettlement, filterType, filterProducer]);
 
-  // Totals
   const totalCount = filtered.length;
   const totalQty = filtered.reduce((acc, d) => acc + (d.quantity || 0), 0);
   const uniqueProducers = new Set(filtered.map((d) => d.producer_id)).size;
   const uniqueSettlements = new Set(
-    filtered
-      .map((d) => d.settlement_id || d.producers?.settlement_id)
-      .filter(Boolean),
+    filtered.map((d) => d.settlement_id || d.producers?.settlement_id).filter(Boolean),
   ).size;
 
-  // Stats grouped by delivery type — for bar chart
   const statsByType = useMemo(() => {
-    const map = new Map<string, { name: string; entregas: number; quantidade: number }>();
-    for (const d of filtered) {
-      const key = d.demand_type_id || 'unknown';
-      const name = d.demand_types?.name || 'Desconhecido';
-      if (!map.has(key)) map.set(key, { name, entregas: 0, quantidade: 0 });
-      const entry = map.get(key)!;
-      entry.entregas++;
-      entry.quantidade += d.quantity || 0;
-    }
-    return Array.from(map.values()).sort((a, b) => b.entregas - a.entregas);
+    const map: Record<string, { name: string; entregas: number; quantidade: number }> = {};
+    filtered.forEach((d) => {
+      const name = d.demand_types?.name || '—';
+      if (!map[name]) map[name] = { name, entregas: 0, quantidade: 0 };
+      map[name].entregas += 1;
+      map[name].quantidade += Number(d.quantity || 0);
+    });
+    return Object.values(map).sort((a, b) => b.entregas - a.entregas);
   }, [filtered]);
 
-  // Monthly timeline — last 12 months (uses all completed, not filtered, for the full timeline)
+  const barData = useMemo(() => {
+    return statsByType.slice(0, 8).map((s) => ({ name: s.name, Entregas: s.entregas }));
+  }, [statsByType]);
+
   const monthlyData = useMemo(() => {
-    const months: Record<string, { month: string; entregas: number; quantidade: number }> = {};
     const now = new Date();
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      months[key] = {
-        month: format(d, 'MMM/yy', { locale: ptBR }),
-        entregas: 0,
-        quantidade: 0,
-      };
-    }
-    for (const d of completed) {
-      const raw = d.completed_at || d.created_at;
-      if (!raw) continue;
-      const date = new Date(raw.replace(' ', 'T'));
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      if (months[key]) {
-        months[key].entregas++;
-        months[key].quantidade += d.quantity || 0;
-      }
-    }
-    return Object.values(months);
+    return Array.from({ length: 12 }, (_, i) => {
+      const monthDate = subMonths(now, 11 - i);
+      const key = format(startOfMonth(monthDate), 'yyyy-MM');
+      const label = format(monthDate, 'MMM/yy', { locale: ptBR });
+      const count = completed.filter((d) => {
+        const raw = d.completed_at || d.created_at;
+        return raw && raw.startsWith(key);
+      }).length;
+      return { month: label.charAt(0).toUpperCase() + label.slice(1), entregas: count };
+    });
   }, [completed]);
 
-  const hasActiveFilters =
-    filterYear !== 'all' ||
-    filterMonth !== 'all' ||
-    filterSettlement !== 'all' ||
-    filterType !== 'all' ||
-    filterProducer !== '';
-
-  const clearFilters = () => {
-    setFilterYear('all');
-    setFilterMonth('all');
-    setFilterSettlement('all');
-    setFilterType('all');
-    setFilterProducer('');
-  };
-
   return (
-    <div className="space-y-5">
-      {/* ── Filters ── */}
-      <div className="flex flex-wrap gap-3 items-end">
-        {/* Year */}
-        <div className="space-y-1.5 w-[100px]">
-          <label className="text-xs font-medium text-muted-foreground">Ano</label>
-          <Select
-            value={filterYear}
-            onValueChange={(v) => {
-              setFilterYear(v);
-              if (v === 'all') setFilterMonth('all');
-            }}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Todos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              {availableYears.map((y) => (
-                <SelectItem key={y} value={String(y)}>
-                  {y}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Month — only visible when year is selected */}
-        {filterYear !== 'all' && (
-          <div className="space-y-1.5 w-[130px]">
-            <label className="text-xs font-medium text-muted-foreground">Mês</label>
-            <Select value={filterMonth} onValueChange={setFilterMonth}>
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {[
-                  'Janeiro', 'Fevereiro', 'Março', 'Abril',
-                  'Maio', 'Junho', 'Julho', 'Agosto',
-                  'Setembro', 'Outubro', 'Novembro', 'Dezembro',
-                ].map((m, i) => (
-                  <SelectItem key={i + 1} value={String(i + 1)}>
-                    {m}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {/* Settlement */}
-        <div className="space-y-1.5 w-[180px]">
-          <label className="text-xs font-medium text-muted-foreground">Assentamento</label>
-          <Select value={filterSettlement} onValueChange={setFilterSettlement}>
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Todos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              {settlements.map((s: any) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Type */}
-        <div className="space-y-1.5 w-[180px]">
-          <label className="text-xs font-medium text-muted-foreground">Tipo de Entrega</label>
-          <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Todos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              {demandTypes.map((d: any) => (
-                <SelectItem key={d.id} value={d.id}>
-                  {d.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Producer text search */}
-        <div className="space-y-1.5 flex-1 min-w-[160px]">
-          <label className="text-xs font-medium text-muted-foreground">Produtor</label>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              placeholder="Buscar produtor..."
-              value={filterProducer}
-              onChange={(e) => setFilterProducer(e.target.value)}
-              className="pl-8 h-9"
-            />
-          </div>
-        </div>
-
-        {hasActiveFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-9 gap-1.5 text-muted-foreground"
-            onClick={clearFilters}
-          >
-            <X className="h-3.5 w-3.5" />
-            Limpar
-          </Button>
-        )}
-      </div>
-
-      {/* ── Summary cards ── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <MiniStatCard
-          title="Entregas Realizadas"
-          value={totalCount}
-          icon={Package}
-          colorClass="bg-success/10 text-success"
-        />
-        <MiniStatCard
-          title="Quantidade Total"
-          value={totalQty > 0 ? totalQty.toLocaleString('pt-BR') : '—'}
-          icon={Box}
-          colorClass="bg-primary/10 text-primary"
-        />
-        <MiniStatCard
-          title="Produtores Atendidos"
-          value={uniqueProducers}
-          icon={User}
-          colorClass="bg-info/10 text-info"
-        />
-        <MiniStatCard
-          title="Assentamentos"
-          value={uniqueSettlements}
-          icon={MapPin}
-          colorClass="bg-warning/10 text-warning"
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)} className="border border-input bg-background rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+          <option value="all">Todos os anos</option>
+          {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <select value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)} className="border border-input bg-background rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+          <option value="all">Todos os meses</option>
+          {Array.from({ length: 12 }, (_, i) => (
+            <option key={i + 1} value={i + 1}>
+              {format(new Date(2000, i, 1), 'MMMM', { locale: ptBR })}
+            </option>
+          ))}
+        </select>
+        <select value={filterSettlement} onChange={(e) => setFilterSettlement(e.target.value)} className="border border-input bg-background rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+          <option value="all">Todos os assentamentos</option>
+          {(settlements as any[]).map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+        <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="border border-input bg-background rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+          <option value="all">Todos os tipos</option>
+          {(demandTypes as any[]).map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
+        <Input
+          placeholder="Filtrar por produtor..."
+          value={filterProducer}
+          onChange={(e) => setFilterProducer(e.target.value)}
+          className="h-9"
         />
       </div>
 
-      {/* ── No data state ── */}
-      {filtered.length === 0 && completed.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-3">
-          <Package className="h-12 w-12 opacity-30" />
-          <p className="text-sm">Nenhuma entrega finalizada ainda.</p>
-          <p className="text-xs">Finalize entregas para visualizar as estatísticas.</p>
-        </div>
-      )}
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MiniStatCard title="Entregas realizadas" value={totalCount} icon={Package} colorClass="bg-primary/10 text-primary" />
+        <MiniStatCard title="Total de itens" value={totalQty.toLocaleString('pt-BR')} icon={Hash} colorClass="bg-blue-500/10 text-blue-600" />
+        <MiniStatCard title="Produtores atendidos" value={uniqueProducers} icon={User} colorClass="bg-success/10 text-success" />
+        <MiniStatCard title="Assentamentos" value={uniqueSettlements} icon={MapPin} colorClass="bg-amber-500/10 text-amber-600" />
+      </div>
 
-      {filtered.length === 0 && completed.length > 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-          <Search className="h-10 w-10 opacity-30" />
-          <p className="text-sm">Nenhuma entrega encontrada com os filtros aplicados.</p>
-          <Button variant="outline" size="sm" onClick={clearFilters}>
-            Limpar filtros
-          </Button>
+      {filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2">
+          <TrendingUp className="h-10 w-10 opacity-30" />
+          <p>Nenhuma entrega encontrada para os filtros selecionados</p>
         </div>
-      )}
-
-      {filtered.length > 0 && (
+      ) : (
         <>
-          {/* ── Charts ── */}
-          <div className="grid gap-4 md:grid-cols-2">
-            {/* Bar chart — deliveries by type */}
+          {/* Charts */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            {barData.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Por tipo de entrega</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={barData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={46} />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={28} />
+                      <Tooltip content={<ChartTooltip />} />
+                      <Bar dataKey="Entregas" fill={GREEN} radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            )}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <BarChart2 className="h-4 w-4 text-primary" />
-                  Entregas por Tipo
-                </CardTitle>
+                <CardTitle className="text-sm font-medium">Evolução mensal (12 meses)</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart
-                    data={statsByType}
-                    margin={{ top: 4, right: 8, bottom: statsByType.some(d => d.name.length > 10) ? 50 : 20, left: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fontSize: 10 }}
-                      angle={statsByType.length > 3 ? -30 : 0}
-                      textAnchor={statsByType.length > 3 ? 'end' : 'middle'}
-                      interval={0}
-                    />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={28} />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="entregas" name="Entregas" fill={GREEN} radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            {/* Area chart — monthly evolution */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-primary" />
-                  Evolução Mensal — últimos 12 meses
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={220}>
-                  <AreaChart
-                    data={monthlyData}
-                    margin={{ top: 4, right: 8, bottom: 0, left: 0 }}
-                  >
+                <ResponsiveContainer width="100%" height={200}>
+                  <AreaChart data={monthlyData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
                     <defs>
                       <linearGradient id="delivGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor={GREEN} stopOpacity={0.35} />
                         <stop offset="95%" stopColor={GREEN} stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="qtyGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={GREEN2} stopOpacity={0.25} />
-                        <stop offset="95%" stopColor={GREEN2} stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="month" tick={{ fontSize: 10 }} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={28} />
                     <Tooltip content={<ChartTooltip />} />
-                    <Area
-                      type="monotone"
-                      dataKey="entregas"
-                      name="Entregas"
-                      stroke={GREEN}
-                      fill="url(#delivGrad)"
-                      strokeWidth={2}
-                    />
+                    <Area type="monotone" dataKey="entregas" name="Entregas" stroke={GREEN} fill="url(#delivGrad)" strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
           </div>
 
-          {/* ── Grouped by type summary ── */}
+          {/* By type summary */}
           {statsByType.length > 0 && (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {statsByType.map((typeData) => (
-                <Card key={typeData.name} className="border-success/20">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm truncate">{typeData.name}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Tipo de entrega</p>
+              {statsByType.map((typeData, idx) => {
+                const color = TYPE_COLORS[idx % TYPE_COLORS.length];
+                return (
+                  <Card key={typeData.name} className={cn('border', color.border)}>
+                    <CardContent className={cn('p-4', color.bg)}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className={cn('font-medium text-sm truncate', color.text)}>{typeData.name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Tipo de entrega</p>
+                        </div>
+                        <Badge className={cn('text-xs shrink-0', color.badge)} variant="secondary">
+                          {typeData.entregas}
+                        </Badge>
                       </div>
-                      <Badge variant="secondary" className="shrink-0 text-success bg-success/10 border-success/20">
-                        {typeData.entregas}
-                      </Badge>
-                    </div>
-                    {typeData.quantidade > 0 && (
-                      <p className="text-xs text-muted-foreground mt-2 pt-2 border-t">
-                        Total: <span className="font-semibold text-foreground">
-                          {typeData.quantidade.toLocaleString('pt-BR')} unidades
-                        </span>
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+                      {typeData.quantidade > 0 && (
+                        <p className="text-xs text-muted-foreground mt-2 pt-2 border-t">
+                          Total: <span className="font-semibold text-foreground">
+                            {typeData.quantidade.toLocaleString('pt-BR')} unidades
+                          </span>
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
 
-          {/* ── Individual records table ── */}
+          {/* Records table */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -662,50 +1027,28 @@ function DeliveryStats({
                   </thead>
                   <tbody>
                     {filtered.map((d: any) => {
-                      const settlementName =
-                        d.settlements?.name ||
-                        d.producers?.settlements?.name ||
-                        '—';
+                      const settlementName = d.settlements?.name || d.producers?.settlements?.name || '—';
                       const rawDate = d.completed_at || d.created_at;
                       const dateLabel = rawDate
                         ? (() => {
-                            try {
-                              return format(
-                                new Date(rawDate.replace(' ', 'T')),
-                                'dd/MM/yyyy',
-                                { locale: ptBR },
-                              );
-                            } catch {
-                              return '—';
-                            }
+                            try { return format(new Date(rawDate.replace(' ', 'T')), 'dd/MM/yyyy', { locale: ptBR }); }
+                            catch { return '—'; }
                           })()
                         : '—';
-
+                      const typeIdx = demandTypes.findIndex((dt: any) => dt.id === d.demand_type_id);
+                      const color = TYPE_COLORS[typeIdx >= 0 ? typeIdx % TYPE_COLORS.length : 0];
                       return (
-                        <tr
-                          key={d.id}
-                          className="border-b last:border-0 hover:bg-muted/30 transition-colors"
-                        >
-                          <td className="p-3 font-medium">
-                            {d.producers?.name || '—'}
-                          </td>
-                          <td className="p-3 text-muted-foreground hidden sm:table-cell text-xs tabular-nums">
-                            {d.producers?.cpf || '—'}
-                          </td>
-                          <td className="p-3 text-muted-foreground hidden md:table-cell">
-                            {settlementName}
-                          </td>
+                        <tr key={d.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                          <td className="p-3 font-medium">{d.producers?.name || '—'}</td>
+                          <td className="p-3 text-muted-foreground hidden sm:table-cell text-xs tabular-nums">{d.producers?.cpf || '—'}</td>
+                          <td className="p-3 text-muted-foreground hidden md:table-cell">{settlementName}</td>
                           <td className="p-3">
-                            <Badge variant="secondary" className="text-xs whitespace-nowrap">
+                            <Badge className={cn('text-xs whitespace-nowrap', color.badge)} variant="secondary">
                               {d.demand_types?.name || '—'}
                             </Badge>
                           </td>
-                          <td className="p-3 text-right tabular-nums">
-                            {d.quantity ?? '—'}
-                          </td>
-                          <td className="p-3 text-right text-muted-foreground text-xs whitespace-nowrap">
-                            {dateLabel}
-                          </td>
+                          <td className="p-3 text-right tabular-nums">{d.quantity ?? '—'}</td>
+                          <td className="p-3 text-right text-muted-foreground text-xs whitespace-nowrap">{dateLabel}</td>
                         </tr>
                       );
                     })}
@@ -722,6 +1065,8 @@ function DeliveryStats({
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+type TabType = 'pending' | 'completed' | 'stats' | 'lots';
+
 export default function DeliveriesPage() {
   const { data: deliveries = [], isLoading } = useDeliveries();
   const { data: producers = [] } = useProducers();
@@ -730,44 +1075,58 @@ export default function DeliveriesPage() {
   const createDelivery = useCreateDelivery();
   const updateDelivery = useUpdateDelivery();
   const deleteDelivery = useDeleteDelivery();
+  const saveDeliveryItems = useSaveDeliveryItems();
 
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<'pending' | 'completed' | 'stats'>('pending');
+  const [tab, setTab] = useState<TabType>('pending');
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<DeliveryFormData>(EMPTY_FORM);
+  const [selectedLots, setSelectedLots] = useState<LotItem[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteName, setDeleteName] = useState('');
-
-  // Realize (finalize) existing pending delivery
   const [realizeDialogOpen, setRealizeDialogOpen] = useState(false);
   const [realizeId, setRealizeId] = useState<string | null>(null);
   const [realizeName, setRealizeName] = useState('');
   const [realizeDate, setRealizeDate] = useState('');
 
+  // Lots for selected demand type (in form)
+  const { data: lotsForType = [] } = useDeliveryLots(formData.demand_type_id || undefined);
+  // Existing items when editing
+  const { data: editingItems = [] } = useDeliveryItems(editingId ?? undefined);
+
+  // Pre-populate lots when editing
+  useEffect(() => {
+    if (editingId && (editingItems as any[]).length > 0) {
+      setSelectedLots(
+        (editingItems as any[]).map((item: any) => ({
+          lot_id: item.lot_id,
+          quantity: Number(item.quantity),
+        })),
+      );
+    }
+  }, [editingId, editingItems]);
+
+  // Reset lot selection when demand type changes
+  useEffect(() => {
+    setSelectedLots([]);
+  }, [formData.demand_type_id]);
+
   // ── Derived data ─────────────────────────────────────────────────────────────
 
-  // Only delivery-category demand types
   const deliveryDemandTypes = useMemo(
-    () =>
-      (demandTypes as any[]).filter(
-        (d) => d.category === 'entregas' && d.is_active !== false,
-      ),
+    () => (demandTypes as any[]).filter((d) => d.category === 'entregas' && d.is_active !== false),
     [demandTypes],
   );
 
-  // Selected producer (for form summary card)
   const selectedProducer = useMemo(
     () => (producers as any[]).find((p) => p.id === formData.producer_id),
     [producers, formData.producer_id],
   );
 
-  // Is the delivery being edited already completed?
   const isEditingCompleted = useMemo(
-    () =>
-      editingId !== null &&
-      (deliveries as any[]).find((d) => d.id === editingId)?.status === 'completed',
+    () => editingId !== null && (deliveries as any[]).find((d) => d.id === editingId)?.status === 'completed',
     [editingId, deliveries],
   );
 
@@ -780,24 +1139,20 @@ export default function DeliveriesPage() {
     [deliveries],
   );
 
-  // Filtered list for Pendentes / Realizadas tabs
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return (deliveries as any[])
       .filter((d) => {
         const isPending = !d.status || d.status === 'pending';
-        const matchesTab =
-          tab === 'pending' ? isPending : d.status === 'completed';
+        const matchesTab = tab === 'pending' ? isPending : d.status === 'completed';
         const matchesSearch =
           (d.producers?.name || '').toLowerCase().includes(q) ||
           (d.demand_types?.name || '').toLowerCase().includes(q);
         return matchesTab && matchesSearch;
       })
       .sort((a: any, b: any) => {
-        const aDate =
-          (tab === 'completed' ? a.completed_at : null) || a.created_at || '';
-        const bDate =
-          (tab === 'completed' ? b.completed_at : null) || b.created_at || '';
+        const aDate = (tab === 'completed' ? a.completed_at : null) || a.created_at || '';
+        const bDate = (tab === 'completed' ? b.completed_at : null) || b.created_at || '';
         return new Date(bDate).getTime() - new Date(aDate).getTime();
       });
   }, [deliveries, search, tab]);
@@ -807,26 +1162,22 @@ export default function DeliveriesPage() {
   const openCreate = () => {
     setEditingId(null);
     setFormData(EMPTY_FORM);
+    setSelectedLots([]);
     setFormOpen(true);
   };
 
   const openEdit = (d: any) => {
     setEditingId(d.id);
+    setSelectedLots([]); // will be populated by useEffect
     setFormData({
       producer_id: d.producer_id || '',
       demand_type_id: d.demand_type_id || '',
       quantity: d.quantity != null ? String(d.quantity) : '',
       notes: d.notes || '',
-      delivery_date_start: d.delivery_date_start
-        ? d.delivery_date_start.slice(0, 10)
-        : '',
-      delivery_date_end: d.delivery_date_end
-        ? d.delivery_date_end.slice(0, 10)
-        : '',
+      delivery_date_start: d.delivery_date_start ? d.delivery_date_start.slice(0, 10) : '',
+      delivery_date_end: d.delivery_date_end ? d.delivery_date_end.slice(0, 10) : '',
       finalize_now: false,
-      completed_at: d.completed_at
-        ? d.completed_at.slice(0, 10)
-        : format(new Date(), 'yyyy-MM-dd'),
+      completed_at: d.completed_at ? d.completed_at.slice(0, 10) : format(new Date(), 'yyyy-MM-dd'),
     });
     setFormOpen(true);
   };
@@ -844,23 +1195,25 @@ export default function DeliveriesPage() {
     setRealizeDialogOpen(true);
   };
 
-  const handleSubmit = () => {
+  // Derived total quantity from lot selections (used as fallback if manual qty is empty)
+  const lotsTotal = selectedLots.reduce((s, l) => s + (l.quantity || 0), 0);
+
+  const handleSubmit = async () => {
     if (!formData.producer_id || !formData.demand_type_id) return;
 
-    // Settlement is always derived from the producer — never manual
     const settlementId = selectedProducer?.settlement_id || null;
+    const resolvedQty = formData.quantity ? Number(formData.quantity) : (lotsTotal > 0 ? lotsTotal : null);
 
     const payload: Record<string, unknown> = {
       producer_id: formData.producer_id,
       demand_type_id: formData.demand_type_id,
       settlement_id: settlementId,
-      quantity: formData.quantity ? Number(formData.quantity) : null,
+      quantity: resolvedQty,
       notes: formData.notes || null,
       delivery_date_start: formData.delivery_date_start || null,
       delivery_date_end: formData.delivery_date_end || null,
     };
 
-    // Finalize now (create) or update completion date (edit completed)
     const shouldFinalize = formData.finalize_now || isEditingCompleted;
     if (shouldFinalize) {
       payload.status = 'completed';
@@ -869,12 +1222,26 @@ export default function DeliveriesPage() {
         : new Date().toISOString();
     }
 
-    if (editingId) {
-      updateDelivery.mutate({ id: editingId, ...payload });
-    } else {
-      createDelivery.mutate(payload as any);
+    try {
+      let deliveryId: string;
+      if (editingId) {
+        await updateDelivery.mutateAsync({ id: editingId, ...payload });
+        deliveryId = editingId;
+      } else {
+        const result = await createDelivery.mutateAsync(payload as any);
+        deliveryId = (result as any).id;
+      }
+
+      // Save lot items
+      const validLots = selectedLots.filter((l) => l.lot_id && l.quantity > 0);
+      if (validLots.length > 0 || editingId) {
+        await saveDeliveryItems.mutateAsync({ deliveryId, items: validLots });
+      }
+
+      setFormOpen(false);
+    } catch {
+      // errors are handled by the mutation's onError
     }
-    setFormOpen(false);
   };
 
   const handleDelete = () => {
@@ -887,25 +1254,16 @@ export default function DeliveriesPage() {
 
   const handleRealize = () => {
     if (!realizeId) return;
-    const completedAt = realizeDate
-      ? `${realizeDate}T12:00:00.000Z`
-      : new Date().toISOString();
-    updateDelivery.mutate({
-      id: realizeId,
-      status: 'completed',
-      completed_at: completedAt,
-    });
+    const completedAt = realizeDate ? `${realizeDate}T12:00:00.000Z` : new Date().toISOString();
+    updateDelivery.mutate({ id: realizeId, status: 'completed', completed_at: completedAt });
     setRealizeId(null);
     setRealizeDialogOpen(false);
   };
 
   const formatDate = (dateStr: string | null | undefined) => {
     if (!dateStr) return null;
-    try {
-      return format(parseISO(dateStr), 'dd/MM/yyyy', { locale: ptBR });
-    } catch {
-      return dateStr;
-    }
+    try { return format(parseISO(dateStr), 'dd/MM/yyyy', { locale: ptBR }); }
+    catch { return dateStr; }
   };
 
   // ── Loading skeleton ──────────────────────────────────────────────────────────
@@ -924,26 +1282,22 @@ export default function DeliveriesPage() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
+  const pageAction = tab === 'pending' || tab === 'completed'
+    ? { label: 'Nova Entrega', onClick: openCreate, icon: <Plus className="h-4 w-4 mr-2" /> }
+    : undefined;
+
   return (
     <AppLayout>
       <PageHeader
         title="Entregas"
         description="Controle de entregas aos produtores"
-        action={
-          tab !== 'stats'
-            ? {
-                label: 'Nova Entrega',
-                onClick: openCreate,
-                icon: <Plus className="h-4 w-4 mr-2" />,
-              }
-            : undefined
-        }
+        action={pageAction}
       />
 
       {/* ── Tabs ── */}
       <Tabs
         value={tab}
-        onValueChange={(v) => setTab(v as 'pending' | 'completed' | 'stats')}
+        onValueChange={(v) => setTab(v as TabType)}
         className="mb-4"
       >
         <TabsList>
@@ -965,11 +1319,15 @@ export default function DeliveriesPage() {
             <BarChart2 className="h-4 w-4" />
             Estatísticas
           </TabsTrigger>
+          <TabsTrigger value="lots" className="gap-1.5">
+            <Warehouse className="h-4 w-4" />
+            Lotes
+          </TabsTrigger>
         </TabsList>
       </Tabs>
 
       {/* ── Pending / Completed tab content ── */}
-      {tab !== 'stats' && (
+      {(tab === 'pending' || tab === 'completed') && (
         <>
           <div className="mb-4">
             <SearchInput
@@ -984,9 +1342,7 @@ export default function DeliveriesPage() {
             <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-3">
               <Package className="h-12 w-12 opacity-30" />
               <p className="text-sm">
-                {tab === 'pending'
-                  ? 'Nenhuma entrega pendente'
-                  : 'Nenhuma entrega realizada'}
+                {tab === 'pending' ? 'Nenhuma entrega pendente' : 'Nenhuma entrega realizada'}
               </p>
             </div>
           ) : (
@@ -994,52 +1350,41 @@ export default function DeliveriesPage() {
               {filtered.map((d: any) => {
                 const startDate = formatDate(d.delivery_date_start);
                 const endDate = formatDate(d.delivery_date_end);
-                const completedDate = d.completed_at
-                  ? formatDate(d.completed_at.slice(0, 10))
-                  : null;
+                const completedDate = d.completed_at ? formatDate(d.completed_at.slice(0, 10)) : null;
                 const isCompleted = d.status === 'completed';
-
-                // Settlement: delivery's own, or fall back to producer's
-                const settlementLabel =
-                  d.settlements?.name ||
-                  d.producers?.settlements?.name ||
-                  null;
+                const settlementLabel = d.settlements?.name || d.producers?.settlements?.name || null;
+                const color = getTypeColor(d.demand_type_id, deliveryDemandTypes);
 
                 return (
                   <div
                     key={d.id}
                     className={cn(
-                      'rounded-xl border bg-card p-4 space-y-3 hover:shadow-sm transition-shadow',
-                      isCompleted && 'border-success/30 bg-success/5',
+                      'rounded-xl border p-4 space-y-3 hover:shadow-sm transition-shadow',
+                      isCompleted ? 'border-success/30 bg-success/5' : cn('bg-card', color.border),
                     )}
                   >
                     {/* Header */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 mb-1">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          {/* Color dot indicator */}
+                          <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', color.dot)} />
                           <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                          <span className="truncate font-medium text-sm">
-                            {d.producers?.name || '—'}
-                          </span>
+                          <span className="truncate font-medium text-sm">{d.producers?.name || '—'}</span>
                         </div>
                         <Badge
-                          variant={isCompleted ? 'default' : 'secondary'}
-                          className={cn(
-                            'text-xs',
-                            isCompleted &&
-                              'bg-success/10 text-success border-success/20 hover:bg-success/20',
-                          )}
+                          variant="secondary"
+                          className={cn('text-xs', isCompleted ? 'bg-success/10 text-success border-success/20' : color.badge)}
                         >
                           {d.demand_types?.name || '—'}
                         </Badge>
                       </div>
 
-                      {/* Action buttons */}
+                      {/* Actions */}
                       <div className="flex gap-1 shrink-0">
                         {!isCompleted && (
                           <Button
-                            variant="ghost"
-                            size="icon"
+                            variant="ghost" size="icon"
                             className="h-8 w-8 text-success hover:text-success hover:bg-success/10"
                             title="Marcar como realizada"
                             onClick={() => openRealize(d)}
@@ -1047,18 +1392,11 @@ export default function DeliveriesPage() {
                             <CheckCircle className="h-3.5 w-3.5" />
                           </Button>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          title="Editar"
-                          onClick={() => openEdit(d)}
-                        >
+                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => openEdit(d)}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
                         <Button
-                          variant="ghost"
-                          size="icon"
+                          variant="ghost" size="icon"
                           className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                           title="Remover"
                           onClick={() => openDelete(d)}
@@ -1068,7 +1406,7 @@ export default function DeliveriesPage() {
                       </div>
                     </div>
 
-                    {/* Completed date badge */}
+                    {/* Completed badge */}
                     {isCompleted && completedDate && (
                       <div className="flex items-center gap-1.5 text-sm font-medium text-success">
                         <CheckCircle className="h-4 w-4 shrink-0" />
@@ -1093,28 +1431,17 @@ export default function DeliveriesPage() {
                       {d.quantity != null && (
                         <div className="flex items-center gap-1.5 text-muted-foreground">
                           <Hash className="h-3.5 w-3.5 shrink-0" />
-                          <span>
-                            Quantidade:{' '}
-                            <span className="text-foreground font-medium">
-                              {d.quantity}
-                            </span>
-                          </span>
+                          <span>Quantidade: <span className="text-foreground font-medium">{d.quantity}</span></span>
                         </div>
                       )}
                       {(startDate || endDate) && (
                         <div className="flex items-center gap-1.5 text-muted-foreground">
                           <CalendarRange className="h-3.5 w-3.5 shrink-0" />
-                          <span>
-                            {startDate && endDate
-                              ? `${startDate} → ${endDate}`
-                              : startDate || endDate}
-                          </span>
+                          <span>{startDate && endDate ? `${startDate} → ${endDate}` : startDate || endDate}</span>
                         </div>
                       )}
                       {d.notes && (
-                        <p className="text-xs text-muted-foreground line-clamp-2 pt-1 border-t">
-                          {d.notes}
-                        </p>
+                        <p className="text-xs text-muted-foreground line-clamp-2 pt-1 border-t">{d.notes}</p>
                       )}
                     </div>
 
@@ -1142,15 +1469,20 @@ export default function DeliveriesPage() {
         />
       )}
 
-      {/* ── Form Dialog ── */}
+      {/* ── Lots tab ── */}
+      {tab === 'lots' && (
+        <LotsTab demandTypes={deliveryDemandTypes} />
+      )}
+
+      {/* ── Delivery Form Dialog ── */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[520px] max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? 'Editar Entrega' : 'Nova Entrega'}</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 pt-2">
-            {/* Producer — searchable combobox */}
+            {/* Producer */}
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Produtor *</label>
               <ProducerCombobox
@@ -1160,7 +1492,7 @@ export default function DeliveriesPage() {
               />
             </div>
 
-            {/* Producer summary card — auto-populated, read-only */}
+            {/* Producer summary card */}
             {selectedProducer && (
               <div className="p-3 rounded-lg bg-muted/60 border text-sm space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
@@ -1187,14 +1519,12 @@ export default function DeliveriesPage() {
                       {selectedProducer.settlements?.name || '—'}
                     </span>
                   </div>
-                  {(selectedProducer.locations?.name ||
-                    selectedProducer.location_name) && (
+                  {(selectedProducer.locations?.name || selectedProducer.location_name) && (
                     <div className="flex items-center gap-1.5 text-muted-foreground col-span-2">
                       <MapPin className="h-3.5 w-3.5 shrink-0 opacity-0" />
                       <span className="text-xs">
                         <strong>Localidade:</strong>{' '}
-                        {selectedProducer.locations?.name ||
-                          selectedProducer.location_name}
+                        {selectedProducer.locations?.name || selectedProducer.location_name}
                       </span>
                     </div>
                   )}
@@ -1212,33 +1542,59 @@ export default function DeliveriesPage() {
               <label className="text-sm font-medium">Tipo de Entrega *</label>
               <Select
                 value={formData.demand_type_id}
-                onValueChange={(v) =>
-                  setFormData((f) => ({ ...f, demand_type_id: v }))
-                }
+                onValueChange={(v) => setFormData((f) => ({ ...f, demand_type_id: v }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o tipo" />
                 </SelectTrigger>
                 <SelectContent>
-                  {deliveryDemandTypes.map((d: any) => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.name}
-                    </SelectItem>
-                  ))}
+                  {deliveryDemandTypes.map((d: any) => {
+                    const color = getTypeColor(d.id, deliveryDemandTypes);
+                    return (
+                      <SelectItem key={d.id} value={d.id}>
+                        <span className="flex items-center gap-2">
+                          <span className={cn('w-2 h-2 rounded-full shrink-0', color.dot)} />
+                          {d.name}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Quantity */}
+            {/* Lot picker — shown when demand type selected and lots exist */}
+            {formData.demand_type_id && (lotsForType as any[]).length > 0 && (
+              <LotPicker
+                lots={lotsForType as any[]}
+                selectedLots={selectedLots}
+                onChange={setSelectedLots}
+              />
+            )}
+
+            {/* Warning if demand type selected but NO lots exist */}
+            {formData.demand_type_id && (lotsForType as any[]).length === 0 && (
+              <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 p-3 text-sm text-warning">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>Nenhum lote cadastrado para este tipo de entrega. Vá à aba <strong>Lotes</strong> para adicionar estoque.</span>
+              </div>
+            )}
+
+            {/* Manual quantity (fallback / override) */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Quantidade</label>
+              <label className="text-sm font-medium">
+                Quantidade
+                {lotsTotal > 0 && (
+                  <span className="ml-2 text-xs text-muted-foreground font-normal">
+                    (soma dos lotes: {lotsTotal.toLocaleString('pt-BR', { maximumFractionDigits: 3 })})
+                  </span>
+                )}
+              </label>
               <Input
                 type="number"
-                placeholder="Ex: 500"
+                placeholder={lotsTotal > 0 ? `${lotsTotal}` : 'Ex: 500'}
                 value={formData.quantity}
-                onChange={(e) =>
-                  setFormData((f) => ({ ...f, quantity: e.target.value }))
-                }
+                onChange={(e) => setFormData((f) => ({ ...f, quantity: e.target.value }))}
               />
             </div>
 
@@ -1249,12 +1605,7 @@ export default function DeliveriesPage() {
                 <Input
                   type="date"
                   value={formData.delivery_date_start}
-                  onChange={(e) =>
-                    setFormData((f) => ({
-                      ...f,
-                      delivery_date_start: e.target.value,
-                    }))
-                  }
+                  onChange={(e) => setFormData((f) => ({ ...f, delivery_date_start: e.target.value }))}
                 />
               </div>
               <div className="space-y-1.5">
@@ -1262,12 +1613,7 @@ export default function DeliveriesPage() {
                 <Input
                   type="date"
                   value={formData.delivery_date_end}
-                  onChange={(e) =>
-                    setFormData((f) => ({
-                      ...f,
-                      delivery_date_end: e.target.value,
-                    }))
-                  }
+                  onChange={(e) => setFormData((f) => ({ ...f, delivery_date_end: e.target.value }))}
                 />
               </div>
             </div>
@@ -1278,18 +1624,15 @@ export default function DeliveriesPage() {
               <Textarea
                 placeholder="Informações adicionais..."
                 value={formData.notes}
-                onChange={(e) =>
-                  setFormData((f) => ({ ...f, notes: e.target.value }))
-                }
+                onChange={(e) => setFormData((f) => ({ ...f, notes: e.target.value }))}
                 rows={2}
               />
             </div>
 
             <Separator />
 
-            {/* ── Finalization section ── */}
+            {/* Finalization section */}
             {!isEditingCompleted ? (
-              /* Creating or editing a pending delivery — offer "finalize now" toggle */
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Checkbox
@@ -1299,22 +1642,15 @@ export default function DeliveriesPage() {
                       setFormData((f) => ({
                         ...f,
                         finalize_now: !!checked,
-                        completed_at:
-                          !!checked && !f.completed_at
-                            ? format(new Date(), 'yyyy-MM-dd')
-                            : f.completed_at,
+                        completed_at: !!checked && !f.completed_at ? format(new Date(), 'yyyy-MM-dd') : f.completed_at,
                       }))
                     }
                   />
-                  <label
-                    htmlFor="finalize_now"
-                    className="text-sm font-medium cursor-pointer select-none flex items-center gap-1.5"
-                  >
+                  <label htmlFor="finalize_now" className="text-sm font-medium cursor-pointer select-none flex items-center gap-1.5">
                     <CheckCircle className="h-4 w-4 text-success" />
                     Finalizar entrega agora
                   </label>
                 </div>
-
                 {formData.finalize_now && (
                   <div className="space-y-1.5 pl-6">
                     <Label htmlFor="completed-at-new">Data de Realização</Label>
@@ -1322,109 +1658,73 @@ export default function DeliveriesPage() {
                       id="completed-at-new"
                       type="date"
                       value={formData.completed_at}
-                      onChange={(e) =>
-                        setFormData((f) => ({
-                          ...f,
-                          completed_at: e.target.value,
-                        }))
-                      }
+                      onChange={(e) => setFormData((f) => ({ ...f, completed_at: e.target.value }))}
                     />
                   </div>
                 )}
               </div>
             ) : (
-              /* Editing a completed delivery — always show the date field */
               <div className="space-y-1.5">
-                <Label
-                  htmlFor="completed-at-edit"
-                  className="flex items-center gap-1.5"
-                >
-                  <CalendarCheck className="h-4 w-4 text-success" />
+                <Label htmlFor="completed-at-edit" className="flex items-center gap-1.5">
+                  <CheckCircle className="h-4 w-4 text-success" />
                   Data de Realização
                 </Label>
                 <Input
                   id="completed-at-edit"
                   type="date"
                   value={formData.completed_at}
-                  onChange={(e) =>
-                    setFormData((f) => ({
-                      ...f,
-                      completed_at: e.target.value,
-                    }))
-                  }
+                  onChange={(e) => setFormData((f) => ({ ...f, completed_at: e.target.value }))}
                 />
               </div>
             )}
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setFormOpen(false)}>
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleSubmit}
-                disabled={
-                  !formData.producer_id ||
-                  !formData.demand_type_id ||
-                  createDelivery.isPending ||
-                  updateDelivery.isPending
-                }
-              >
-                {editingId
-                  ? 'Salvar'
-                  : formData.finalize_now
-                    ? 'Cadastrar e Finalizar'
-                    : 'Cadastrar'}
-              </Button>
-            </div>
           </div>
+
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => setFormOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={!formData.producer_id || !formData.demand_type_id || createDelivery.isPending || updateDelivery.isPending}
+            >
+              {editingId ? 'Salvar' : 'Cadastrar'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ── Realize dialog (finalize existing pending delivery) ── */}
+      {/* ── Realize dialog ── */}
       <Dialog open={realizeDialogOpen} onOpenChange={setRealizeDialogOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Marcar Entrega como Realizada</DialogTitle>
+            <DialogTitle>Marcar como Realizada</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="space-y-3 py-2">
             <p className="text-sm text-muted-foreground">
-              Produtor: <strong>{realizeName}</strong>
+              Confirmar entrega para <strong>{realizeName}</strong>?
             </p>
             <div className="space-y-1.5">
-              <Label htmlFor="realize-date">Data de Realização</Label>
+              <Label>Data de Realização</Label>
               <Input
-                id="realize-date"
                 type="date"
                 value={realizeDate}
                 onChange={(e) => setRealizeDate(e.target.value)}
               />
             </div>
           </div>
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setRealizeDialogOpen(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              className="bg-success hover:bg-success/90 text-white"
-              onClick={handleRealize}
-              disabled={!realizeDate || updateDelivery.isPending}
-            >
-              <CheckCircle className="h-4 w-4 mr-2" />
-              Confirmar Entrega
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRealizeDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleRealize} className="gap-1.5">
+              <CheckCircle className="h-4 w-4" /> Confirmar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ── Delete confirm dialog ── */}
+      {/* Confirm Dialogs */}
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         title="Remover Entrega"
-        description={`Deseja remover a entrega de "${deleteName}"?`}
+        description={`Remover entrega de "${deleteName}"? Esta ação não pode ser desfeita.`}
         onConfirm={handleDelete}
         confirmLabel="Remover"
         variant="destructive"

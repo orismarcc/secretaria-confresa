@@ -1085,6 +1085,160 @@ export function useDeleteResponsibleTechnician() {
   });
 }
 
+// ============= DELIVERY LOTS =============
+
+export function useDeliveryLots(demandTypeId?: string) {
+  return useQuery({
+    queryKey: ['delivery_lots', demandTypeId ?? 'all'],
+    queryFn: async () => {
+      let query = (supabase as any)
+        .from('delivery_lot_summary')
+        .select('*')
+        .order('lot_date', { ascending: false });
+      if (demandTypeId) {
+        query = query.eq('demand_type_id', demandTypeId);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+}
+
+export function useCreateDeliveryLot() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (lot: {
+      demand_type_id: string;
+      name: string;
+      initial_quantity: number;
+      unit: string;
+      supplier?: string | null;
+      lot_date?: string | null;
+      notes?: string | null;
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase
+        .from('delivery_lots' as any)
+        .insert({ ...lot, created_by: user?.id ?? null })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['delivery_lots'] });
+      toast({ title: 'Lote cadastrado!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao cadastrar lote', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useUpdateDeliveryLot() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string; [key: string]: unknown }) => {
+      const { data, error } = await supabase
+        .from('delivery_lots' as any)
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['delivery_lots'] });
+      toast({ title: 'Lote atualizado!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao atualizar lote', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useDeleteDeliveryLot() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('delivery_lots' as any).delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['delivery_lots'] });
+      toast({ title: 'Lote removido!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao remover lote', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useDeliveryItems(deliveryId?: string) {
+  return useQuery({
+    queryKey: ['delivery_items', deliveryId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('delivery_items' as any)
+        .select('*, delivery_lots(name, unit, initial_quantity)')
+        .eq('delivery_id', deliveryId!);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+    enabled: !!deliveryId,
+  });
+}
+
+export function useSaveDeliveryItems() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({
+      deliveryId,
+      items,
+    }: {
+      deliveryId: string;
+      items: { lot_id: string; quantity: number }[];
+    }) => {
+      // Delete all existing items for this delivery first
+      const { error: delErr } = await supabase
+        .from('delivery_items' as any)
+        .delete()
+        .eq('delivery_id', deliveryId);
+      if (delErr) throw delErr;
+
+      // Insert new items if any
+      if (items.length > 0) {
+        const rows = items.map((item) => ({
+          delivery_id: deliveryId,
+          lot_id: item.lot_id,
+          quantity: item.quantity,
+        }));
+        const { error: insErr } = await supabase
+          .from('delivery_items' as any)
+          .insert(rows);
+        if (insErr) throw new Error(insErr.message);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['delivery_items'] });
+      queryClient.invalidateQueries({ queryKey: ['delivery_lots'] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Erro ao salvar lotes da entrega',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
 // ============= SEFAZ =============
 export function useSefazProducers() {
   return useQuery({
