@@ -65,8 +65,9 @@ interface DbService {
   profiles?: { name: string } | null;
 }
 
-// Sortable Card Component for Operator
-interface SortableOperatorCardProps {
+// ─── Shared card body ────────────────────────────────────────────────────────
+
+interface OperatorCardBodyProps {
   service: DbService;
   settlementName: string;
   locationName: string;
@@ -75,14 +76,117 @@ interface SortableOperatorCardProps {
   isPending: boolean;
 }
 
-function SortableOperatorCard({
+function OperatorCardBody({
   service,
   settlementName,
   locationName,
   onStart,
   onFinalize,
   isPending,
-}: SortableOperatorCardProps) {
+}: OperatorCardBodyProps) {
+  const canStart = service.status === 'pending' || service.status === 'proximo';
+  const canFinalize = service.status === 'in_progress' || service.status === 'proximo';
+
+  return (
+    <div className="flex-1">
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <p className="font-semibold text-lg">{service.producers?.name || 'N/A'}</p>
+          <p className="text-sm text-primary">{service.demand_types?.name}</p>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <StatusBadge status={service.status as 'pending' | 'in_progress' | 'completed'} />
+          {service.status === 'in_progress' && service.profiles?.name && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <User className="h-3 w-3" />
+              {service.profiles.name}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-2 text-sm mb-4">
+        {(() => {
+          const isOverdue = (service.status === 'pending' || service.status === 'proximo') &&
+            new Date(service.scheduled_date + 'T12:00:00') < new Date(new Date().toDateString());
+          return (
+            <div className={cn('flex items-center gap-2', isOverdue ? 'text-destructive' : 'text-muted-foreground')}>
+              <Calendar className="h-4 w-4" />
+              <span className={isOverdue ? 'font-medium' : ''}>
+                {isOverdue && '⚠ '}
+                {format(new Date(service.scheduled_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
+              </span>
+            </div>
+          );
+        })()}
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <MapPin className="h-4 w-4" />
+          {settlementName} - {locationName}
+        </div>
+        <div className="flex items-center gap-2">
+          <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+          {service.producers?.phone ? (
+            <a
+              href={`https://wa.me/${service.producers.phone.replace(/\D/g, '').replace(/^(?!55)/, '55')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-[#25D366] hover:text-[#25D366]/80 font-medium text-sm"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+              {service.producers.phone}
+            </a>
+          ) : (
+            <span className="text-muted-foreground text-sm">N/A</span>
+          )}
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        {service.producers?.latitude && service.producers?.longitude && (
+          <Button variant="outline" size="sm" className="gap-1.5" asChild>
+            <a
+              href={`geo:${service.producers.latitude},${service.producers.longitude}?q=${service.producers.latitude},${service.producers.longitude}`}
+              onClick={(e) => {
+                if (!/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+                  e.preventDefault();
+                  window.open(`https://www.google.com/maps?q=${service.producers!.latitude},${service.producers!.longitude}`, '_blank');
+                }
+              }}
+            >
+              <Navigation className="h-4 w-4" />
+              Maps
+            </a>
+          </Button>
+        )}
+        {canStart && (
+          <Button
+            className="flex-1"
+            onClick={() => onStart(service.id)}
+            disabled={isPending}
+          >
+            Iniciar
+          </Button>
+        )}
+        {canFinalize && (
+          <Button
+            className="flex-1 bg-success hover:bg-success/90"
+            onClick={() => onFinalize(service)}
+            disabled={isPending}
+          >
+            Finalizar
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Sortable card (pending / proximo) ───────────────────────────────────────
+
+interface SortableOperatorCardProps extends OperatorCardBodyProps {}
+
+function SortableOperatorCard(props: SortableOperatorCardProps) {
   const {
     attributes,
     listeners,
@@ -90,7 +194,7 @@ function SortableOperatorCard({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: service.id });
+  } = useSortable({ id: props.service.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -108,7 +212,6 @@ function SortableOperatorCard({
     >
       <CardContent className="p-4">
         <div className="flex items-start gap-2">
-          {/* Drag Handle */}
           <button
             {...attributes}
             {...listeners}
@@ -117,103 +220,23 @@ function SortableOperatorCard({
           >
             <GripVertical className="h-5 w-5 text-muted-foreground" />
           </button>
+          <OperatorCardBody {...props} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
-          <div className="flex-1">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <p className="font-semibold text-lg">{service.producers?.name || 'N/A'}</p>
-                <p className="text-sm text-primary">{service.demand_types?.name}</p>
-              </div>
-              <div className="flex flex-col items-end gap-1">
-                <StatusBadge status={service.status as 'pending' | 'in_progress' | 'completed'} />
-                {service.status === 'in_progress' && service.profiles?.name && (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <User className="h-3 w-3" />
-                    {service.profiles.name}
-                  </span>
-                )}
-              </div>
-            </div>
-            
-            <div className="grid gap-2 text-sm mb-4">
-              {(() => {
-                const isOverdue = service.status === 'pending' && new Date(service.scheduled_date + 'T12:00:00') < new Date(new Date().toDateString());
-                return (
-                  <div className={cn('flex items-center gap-2', isOverdue ? 'text-destructive' : 'text-muted-foreground')}>
-                    <Calendar className="h-4 w-4" />
-                    <span className={isOverdue ? 'font-medium' : ''}>
-                      {isOverdue && '⚠ '}
-                      {format(new Date(service.scheduled_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
-                    </span>
-                  </div>
-                );
-              })()}
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <MapPin className="h-4 w-4" />
-                {settlementName} - {locationName}
-              </div>
-              <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
-                {service.producers?.phone ? (
-                  <a
-                    href={`https://wa.me/${service.producers.phone.replace(/\D/g, '').replace(/^(?!55)/, '55')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-[#25D366] hover:text-[#25D366]/80 font-medium text-sm"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <MessageCircle className="h-3.5 w-3.5" />
-                    {service.producers.phone}
-                  </a>
-                ) : (
-                  <span className="text-muted-foreground text-sm">N/A</span>
-                )}
-              </div>
-            </div>
-            
-            <div className="flex gap-2">
-              {service.producers?.latitude && service.producers?.longitude && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  asChild
-                >
-                  <a
-                    href={`geo:${service.producers.latitude},${service.producers.longitude}?q=${service.producers.latitude},${service.producers.longitude}`}
-                    onClick={(e) => {
-                      // Fallback to Google Maps on desktop
-                      if (!/Android|iPhone|iPad/i.test(navigator.userAgent)) {
-                        e.preventDefault();
-                        window.open(`https://www.google.com/maps?q=${service.producers!.latitude},${service.producers!.longitude}`, '_blank');
-                      }
-                    }}
-                  >
-                    <Navigation className="h-4 w-4" />
-                    Maps
-                  </a>
-                </Button>
-              )}
-              {service.status === 'pending' && (
-                <Button 
-                  className="flex-1" 
-                  onClick={() => onStart(service.id)}
-                  disabled={isPending}
-                >
-                  Iniciar
-                </Button>
-              )}
-              {service.status === 'in_progress' && (
-                <Button 
-                  className="flex-1 bg-success hover:bg-success/90" 
-                  onClick={() => onFinalize(service)}
-                  disabled={isPending}
-                >
-                  Finalizar
-                </Button>
-              )}
-            </div>
-          </div>
+// ─── Static card (in_progress — no drag) ─────────────────────────────────────
+
+function StaticOperatorCard(props: OperatorCardBodyProps) {
+  return (
+    <Card className="overflow-hidden transition-all border-amber-200 bg-amber-50/30 dark:border-amber-800 dark:bg-amber-950/10">
+      <CardContent className="p-4">
+        <div className="flex items-start gap-2">
+          {/* spacer matching drag-handle width */}
+          <div className="w-7 shrink-0" />
+          <OperatorCardBody {...props} />
         </div>
       </CardContent>
     </Card>
@@ -262,8 +285,8 @@ export default function OperatorPage() {
     })
   );
 
-  // Sort pending services by position
-  const pendingServices = useMemo(() => {
+  // Sort all non-completed services by position
+  const sortedServices = useMemo(() => {
     return [...pendingServicesRaw].sort((a, b) => {
       const posA = (a as DbService).position ?? 999999;
       const posB = (b as DbService).position ?? 999999;
@@ -271,6 +294,16 @@ export default function OperatorPage() {
       return new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime();
     });
   }, [pendingServicesRaw]);
+
+  // Split into sections
+  const inProgressServices = useMemo(
+    () => sortedServices.filter((s) => s.status === 'in_progress'),
+    [sortedServices],
+  );
+  const nextServices = useMemo(
+    () => sortedServices.filter((s) => s.status !== 'in_progress'),
+    [sortedServices],
+  );
 
   // Setup realtime subscription
   useEffect(() => {
@@ -335,22 +368,22 @@ export default function OperatorPage() {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
-      const oldIndex = pendingServices.findIndex((s) => s.id === active.id);
-      const newIndex = pendingServices.findIndex((s) => s.id === over.id);
+      const oldIndex = nextServices.findIndex((s) => s.id === active.id);
+      const newIndex = nextServices.findIndex((s) => s.id === over.id);
 
       if (oldIndex !== -1 && newIndex !== -1) {
-        const reordered = arrayMove(pendingServices, oldIndex, newIndex);
-        
+        const reordered = arrayMove(nextServices, oldIndex, newIndex);
+
         const updates = reordered.map((service, index) => ({
           id: service.id,
           position: index + 1,
         }));
-        
+
         updatePositions.mutate(updates);
         toast({ title: 'Ordem atualizada!' });
       }
     }
-  }, [pendingServices, updatePositions, toast]);
+  }, [nextServices, updatePositions, toast]);
 
   // Map service for modal compatibility
   const mapServiceForModal = (s: DbService | null) => {
@@ -396,7 +429,7 @@ export default function OperatorPage() {
   if (isLoading) {
     return (
       <AppLayout>
-        <PageHeader title="Meus Atendimentos" description="Próximos serviços programados">
+        <PageHeader title="Meus Atendimentos" description="Serviços programados">
           <OnlineIndicator />
         </PageHeader>
         <div className="space-y-4">
@@ -408,43 +441,96 @@ export default function OperatorPage() {
     );
   }
 
+  const totalServices = sortedServices.length;
+
   return (
     <AppLayout>
-      <PageHeader title="Meus Atendimentos" description="Próximos serviços programados (arraste para reordenar)">
+      <PageHeader title="Meus Atendimentos" description="Serviços programados">
         <OnlineIndicator />
       </PageHeader>
 
-      {pendingServices.length === 0 ? (
-        <Card><CardContent className="py-12 text-center text-muted-foreground">Nenhum atendimento pendente</CardContent></Card>
+      {totalServices === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            Nenhum atendimento pendente
+          </CardContent>
+        </Card>
       ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={pendingServices.map(s => s.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="space-y-4">
-              {pendingServices.map((service: DbService) => {
-                const settlement = settlements.find(s => s.id === service.settlement_id);
-                const location = locations.find(l => l.id === service.location_id);
-                return (
-                  <SortableOperatorCard
-                    key={service.id}
-                    service={service}
-                    settlementName={settlement?.name || service.settlements?.name || 'N/A'}
-                    locationName={service.producers?.location_name || location?.name || service.locations?.name || 'N/A'}
-                    onStart={handleStartService}
-                    onFinalize={handleOpenFinalize}
-                    isPending={updateService.isPending}
-                  />
-                );
-              })}
+        <div className="space-y-6">
+          {/* ── Em Execução ─────────────────────────────────────────── */}
+          {inProgressServices.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Em Execução
+                  <span className="ml-2 font-bold text-amber-600">{inProgressServices.length}</span>
+                </h2>
+              </div>
+              <div className="space-y-4">
+                {inProgressServices.map((service: DbService) => {
+                  const settlement = settlements.find(s => s.id === service.settlement_id);
+                  const location = locations.find(l => l.id === service.location_id);
+                  return (
+                    <StaticOperatorCard
+                      key={service.id}
+                      service={service}
+                      settlementName={settlement?.name || service.settlements?.name || 'N/A'}
+                      locationName={service.producers?.location_name || location?.name || service.locations?.name || 'N/A'}
+                      onStart={handleStartService}
+                      onFinalize={handleOpenFinalize}
+                      isPending={updateService.isPending}
+                    />
+                  );
+                })}
+              </div>
             </div>
-          </SortableContext>
-        </DndContext>
+          )}
+
+          {/* ── Próximos Atendimentos ────────────────────────────────── */}
+          {nextServices.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-primary shrink-0" />
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Próximos Atendimentos
+                  <span className="ml-2 font-bold text-primary">{nextServices.length}</span>
+                </h2>
+                <span className="text-xs text-muted-foreground ml-auto hidden sm:inline">
+                  arraste para reordenar
+                </span>
+              </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={nextServices.map(s => s.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-4">
+                    {nextServices.map((service: DbService) => {
+                      const settlement = settlements.find(s => s.id === service.settlement_id);
+                      const location = locations.find(l => l.id === service.location_id);
+                      return (
+                        <SortableOperatorCard
+                          key={service.id}
+                          service={service}
+                          settlementName={settlement?.name || service.settlements?.name || 'N/A'}
+                          locationName={service.producers?.location_name || location?.name || service.locations?.name || 'N/A'}
+                          onStart={handleStartService}
+                          onFinalize={handleOpenFinalize}
+                          isPending={updateService.isPending}
+                        />
+                      );
+                    })}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            </div>
+          )}
+        </div>
       )}
 
       <FinalizeServiceModal

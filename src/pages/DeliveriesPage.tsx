@@ -82,6 +82,7 @@ import {
   useDeleteDeliveryLot,
   useDeliveryItems,
   useSaveDeliveryItems,
+  useResponsibleTechnicians,
 } from '@/hooks/useSupabaseData';
 
 // ─── Delivery type color palette ─────────────────────────────────────────────
@@ -321,6 +322,7 @@ interface LotFormState {
   supplier: string;
   lot_date: string;
   notes: string;
+  responsible_technician_id: string;
 }
 
 const EMPTY_LOT: LotFormState = {
@@ -331,18 +333,21 @@ const EMPTY_LOT: LotFormState = {
   supplier: '',
   lot_date: format(new Date(), 'yyyy-MM-dd'),
   notes: '',
+  responsible_technician_id: '',
 };
 
 function LotFormDialog({
   open,
   onOpenChange,
   demandTypes,
+  technicians,
   editing,
   onSubmit,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   demandTypes: any[];
+  technicians: any[];
   editing: any | null;
   onSubmit: (data: LotFormState) => void;
 }) {
@@ -360,6 +365,7 @@ function LotFormDialog({
               supplier: editing.supplier || '',
               lot_date: editing.lot_date || format(new Date(), 'yyyy-MM-dd'),
               notes: editing.notes || '',
+              responsible_technician_id: editing.responsible_technician_id || '',
             }
           : EMPTY_LOT,
       );
@@ -437,6 +443,23 @@ function LotFormDialog({
               />
             </div>
           </div>
+          {technicians.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Responsável Técnico</Label>
+              <Select
+                value={form.responsible_technician_id}
+                onValueChange={(v) => setForm((f) => ({ ...f, responsible_technician_id: v }))}
+              >
+                <SelectTrigger><SelectValue placeholder="Selecione o responsável" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Nenhum</SelectItem>
+                  {technicians.map((t: any) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>Observações</Label>
             <Textarea
@@ -462,6 +485,7 @@ function LotFormDialog({
 
 function LotsTab({ demandTypes }: { demandTypes: any[] }) {
   const { data: allLots = [], isLoading } = useDeliveryLots();
+  const { data: technicians = [] } = useResponsibleTechnicians();
   const createLot = useCreateDeliveryLot();
   const updateLot = useUpdateDeliveryLot();
   const deleteLot = useDeleteDeliveryLot();
@@ -506,6 +530,7 @@ function LotsTab({ demandTypes }: { demandTypes: any[] }) {
       supplier: form.supplier || null,
       lot_date: form.lot_date || null,
       notes: form.notes || null,
+      responsible_technician_id: form.responsible_technician_id || null,
     };
     if (editing) {
       updateLot.mutate({ id: editing.id, ...payload });
@@ -698,6 +723,7 @@ function LotsTab({ demandTypes }: { demandTypes: any[] }) {
         open={formOpen}
         onOpenChange={setFormOpen}
         demandTypes={demandTypes}
+        technicians={technicians as any[]}
         editing={editing}
         onSubmit={handleSubmit}
       />
@@ -1579,24 +1605,6 @@ export default function DeliveriesPage() {
                 <span>Nenhum lote cadastrado para este tipo de entrega. Vá à aba <strong>Lotes</strong> para adicionar estoque.</span>
               </div>
             )}
-
-            {/* Manual quantity (fallback / override) */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">
-                Quantidade
-                {lotsTotal > 0 && (
-                  <span className="ml-2 text-xs text-muted-foreground font-normal">
-                    (soma dos lotes: {lotsTotal.toLocaleString('pt-BR', { maximumFractionDigits: 3 })})
-                  </span>
-                )}
-              </label>
-              <Input
-                type="number"
-                placeholder={lotsTotal > 0 ? `${lotsTotal}` : 'Ex: 500'}
-                value={formData.quantity}
-                onChange={(e) => setFormData((f) => ({ ...f, quantity: e.target.value }))}
-              />
-            </div>
 
             {/* Date range */}
             <div className="grid grid-cols-2 gap-3">

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/contexts/AuthContext';
+
 import { useToast } from '@/hooks/use-toast';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { User, KeyRound, Save, Eye, EyeOff, Download, Smartphone, CheckCircle2 } from 'lucide-react';
@@ -28,7 +29,8 @@ const JOB_TITLES = [
 ];
 
 export default function SettingsPage() {
-  const { profile, updateProfile, updatePassword } = useAuth();
+  const { profile, updateProfile, updatePassword, hasRole } = useAuth();
+  const isAdmin = hasRole('admin');
   const { toast } = useToast();
   const { canInstall, isInstalled, install } = usePWAInstall();
 
@@ -125,19 +127,21 @@ export default function SettingsPage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="jobTitle">Função</Label>
-              <Select value={jobTitle} onValueChange={setJobTitle}>
-                <SelectTrigger id="jobTitle">
-                  <SelectValue placeholder="Selecione sua função" />
-                </SelectTrigger>
-                <SelectContent>
-                  {JOB_TITLES.map(t => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {isAdmin && (
+              <div className="space-y-2">
+                <Label htmlFor="jobTitle">Função</Label>
+                <Select value={jobTitle} onValueChange={setJobTitle}>
+                  <SelectTrigger id="jobTitle">
+                    <SelectValue placeholder="Selecione sua função" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {JOB_TITLES.map(t => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <Button onClick={handleSaveProfile} disabled={savingProfile} className="w-full sm:w-auto">
               <Save className="h-4 w-4 mr-2" />
@@ -209,11 +213,11 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Prestação de Contas / AVI Card */}
-        <AVIPrestacaoContas />
+        {/* Prestação de Contas / AVI Card — admin only */}
+        {isAdmin && <AVIPrestacaoContas />}
 
-        {/* Relatório de ATER */}
-        <AterRelatorio />
+        {/* Relatório de ATER — admin only */}
+        {isAdmin && <AterRelatorio />}
 
         {/* Password Card */}
         <Card>
