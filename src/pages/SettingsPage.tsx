@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { User, KeyRound, Save, Eye, EyeOff, Download, Smartphone, CheckCircle2 } from 'lucide-react';
 import { AVIPrestacaoContas } from '@/components/AVIPrestacaoContas';
+import { AterRelatorio } from '@/components/AterRelatorio';
 
 const JOB_TITLES = [
   'Secretário de Agricultura',
@@ -210,6 +211,9 @@ export default function SettingsPage() {
 
         {/* Prestação de Contas / AVI Card */}
         <AVIPrestacaoContas />
+
+        {/* Relatório de ATER */}
+        <AterRelatorio />
 
         {/* Password Card */}
         <Card>
