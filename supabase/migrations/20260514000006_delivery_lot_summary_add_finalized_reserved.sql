@@ -6,7 +6,9 @@
 --   used_quantity       = finalized + reserved           (kept for backward compat / stock validation)
 --   remaining_quantity  = initial − used_quantity        (truly available to register)
 
-CREATE OR REPLACE VIEW public.delivery_lot_summary AS
+DROP VIEW IF EXISTS public.delivery_lot_summary;
+
+CREATE VIEW public.delivery_lot_summary AS
 SELECT
   l.id,
   l.demand_type_id,

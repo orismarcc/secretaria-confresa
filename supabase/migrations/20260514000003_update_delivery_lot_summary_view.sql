@@ -1,7 +1,10 @@
 -- Update delivery_lot_summary view to include responsible_technician_id
 -- (added to delivery_lots in migration 20260514000002)
+-- Using DROP + CREATE because CREATE OR REPLACE cannot reorder/insert columns.
 
-CREATE OR REPLACE VIEW public.delivery_lot_summary AS
+DROP VIEW IF EXISTS public.delivery_lot_summary;
+
+CREATE VIEW public.delivery_lot_summary AS
 SELECT
   l.id,
   l.demand_type_id,
