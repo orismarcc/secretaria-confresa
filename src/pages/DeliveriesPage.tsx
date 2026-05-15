@@ -236,6 +236,12 @@ function LotPicker({
             : 0;
           const depleted = remaining <= 0;
 
+          const finalized  = Number(lot.finalized_quantity  ?? 0);
+          const reserved   = Number(lot.reserved_quantity   ?? 0);
+          const total      = Number(lot.initial_quantity);
+          const pctFin     = total > 0 ? Math.round((finalized / total) * 100) : 0;
+          const pctRes     = total > 0 ? Math.round((reserved  / total) * 100) : 0;
+
           return (
             <div
               key={lot.id}
@@ -260,21 +266,34 @@ function LotPicker({
                         <AlertTriangle className="h-3 w-3" />Esgotado
                       </Badge>
                     ) : (
-                      <Badge variant="secondary" className="text-xs shrink-0">
-                        {remaining.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} {lot.unit}
+                      <Badge variant="secondary" className="text-xs shrink-0 gap-1">
+                        <MinusCircle className="h-3 w-3 text-success" />
+                        {remaining.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} {lot.unit} disp.
                       </Badge>
                     )}
                   </div>
                   {lot.supplier && (
                     <p className="text-xs text-muted-foreground">Fornecedor: {lot.supplier}</p>
                   )}
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Usado: {Number(lot.used_quantity ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} / {Number(lot.initial_quantity).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} {lot.unit}</span>
-                      <span>{pct}%</span>
+
+                  {/* Finalizado bar (green) */}
+                  <div className="space-y-0.5">
+                    <div className="flex justify-between text-xs text-emerald-700 dark:text-emerald-400">
+                      <span>Finalizado: {finalized.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} / {total.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} {lot.unit}</span>
+                      <span>{pctFin}%</span>
                     </div>
-                    <Progress value={pct} className="h-1.5" />
+                    <Progress value={pctFin} className="h-1.5 [&>div]:bg-emerald-500" />
                   </div>
+
+                  {/* Reservado bar (amber) */}
+                  <div className="space-y-0.5">
+                    <div className="flex justify-between text-xs text-amber-600 dark:text-amber-400">
+                      <span>Reservado: {reserved.toLocaleString('pt-BR', { maximumFractionDigits: 3 })} {lot.unit}</span>
+                      <span>{pctRes}%</span>
+                    </div>
+                    <Progress value={pctRes} className="h-1.5 [&>div]:bg-amber-500" />
+                  </div>
+
                   {isSelected && !depleted && (
                     <div className="pt-1">
                       <Input
@@ -507,16 +526,17 @@ function LotsTab({ demandTypes }: { demandTypes: any[] }) {
 
   // Group by demand type for summary cards
   const summaryByType = useMemo(() => {
-    const map: Record<string, { name: string; total: number; used: number; remaining: number; count: number }> = {};
+    const map: Record<string, { name: string; total: number; finalized: number; reserved: number; remaining: number; count: number }> = {};
     lots.forEach((l: any) => {
       if (!map[l.demand_type_id]) {
         map[l.demand_type_id] = {
           name: l.demand_type_name || '—',
-          total: 0, used: 0, remaining: 0, count: 0,
+          total: 0, finalized: 0, reserved: 0, remaining: 0, count: 0,
         };
       }
-      map[l.demand_type_id].total += Number(l.initial_quantity || 0);
-      map[l.demand_type_id].used += Number(l.used_quantity || 0);
+      map[l.demand_type_id].total     += Number(l.initial_quantity   || 0);
+      map[l.demand_type_id].finalized += Number(l.finalized_quantity || 0);
+      map[l.demand_type_id].reserved  += Number(l.reserved_quantity  || 0);
       map[l.demand_type_id].remaining += Number(l.remaining_quantity || 0);
       map[l.demand_type_id].count += 1;
     });
@@ -553,7 +573,8 @@ function LotsTab({ demandTypes }: { demandTypes: any[] }) {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {summaryByType.map((s, idx) => {
             const color = TYPE_COLORS[idx % TYPE_COLORS.length];
-            const pct = s.total > 0 ? Math.round((s.used / s.total) * 100) : 0;
+            const pctFin = s.total > 0 ? Math.round((s.finalized / s.total) * 100) : 0;
+            const pctRes = s.total > 0 ? Math.round((s.reserved  / s.total) * 100) : 0;
             return (
               <Card key={s.id} className={cn('border', color.border)}>
                 <CardContent className={cn('p-4', color.bg)}>
@@ -572,16 +593,21 @@ function LotsTab({ demandTypes }: { demandTypes: any[] }) {
                       <span className="font-medium">{s.total.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</span>
                     </div>
                     <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Distribuído</span>
-                      <span className="font-medium text-warning">{s.used.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</span>
+                      <span className="text-emerald-700 dark:text-emerald-400">Finalizado</span>
+                      <span className="font-medium text-emerald-600">{s.finalized.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-amber-600">Reservado</span>
+                      <span className="font-medium text-amber-600">{s.reserved.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</span>
                     </div>
                     <div className="flex justify-between text-xs font-semibold">
-                      <span>Saldo</span>
+                      <span>Disponível</span>
                       <span className={s.remaining > 0 ? 'text-success' : 'text-destructive'}>
                         {s.remaining.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
                       </span>
                     </div>
-                    <Progress value={pct} className="h-1.5 mt-1" />
+                    <Progress value={pctFin} className="h-1 mt-1 [&>div]:bg-emerald-500" />
+                    <Progress value={pctRes} className="h-1 [&>div]:bg-amber-500" />
                   </div>
                 </CardContent>
               </Card>
@@ -622,12 +648,15 @@ function LotsTab({ demandTypes }: { demandTypes: any[] }) {
       ) : (
         <div className="space-y-3">
           {displayed.map((lot: any, idx: number) => {
-            const remaining = Number(lot.remaining_quantity ?? 0);
-            const used = Number(lot.used_quantity ?? 0);
-            const total = Number(lot.initial_quantity);
-            const pct = total > 0 ? Math.round((used / total) * 100) : 0;
-            const depleted = remaining <= 0;
-            const color = getTypeColor(lot.demand_type_id, demandTypes);
+            const remaining  = Number(lot.remaining_quantity  ?? 0);
+            const finalized  = Number(lot.finalized_quantity  ?? 0);
+            const reserved   = Number(lot.reserved_quantity   ?? 0);
+            const total      = Number(lot.initial_quantity);
+            const pctFin     = total > 0 ? Math.round((finalized / total) * 100) : 0;
+            const pctRes     = total > 0 ? Math.round((reserved  / total) * 100) : 0;
+            const depleted   = remaining <= 0;
+            const color      = getTypeColor(lot.demand_type_id, demandTypes);
+            const technician = (technicians as any[]).find((t: any) => t.id === lot.responsible_technician_id);
 
             return (
               <div
@@ -653,35 +682,48 @@ function LotsTab({ demandTypes }: { demandTypes: any[] }) {
                       )}
                     </div>
 
-                    {/* Quantities */}
-                    <div className="grid grid-cols-3 gap-2 text-center">
+                    {/* Quantities — 4 columns */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
                       <div className="rounded-lg bg-muted/50 p-2">
                         <p className="text-xs text-muted-foreground">Total</p>
                         <p className="font-bold text-sm tabular-nums">{total.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</p>
                       </div>
-                      <div className="rounded-lg bg-warning/10 p-2">
-                        <p className="text-xs text-muted-foreground">Distribuído</p>
-                        <p className="font-bold text-sm tabular-nums text-warning">{used.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</p>
+                      <div className="rounded-lg bg-emerald-500/10 p-2">
+                        <p className="text-xs text-emerald-700 dark:text-emerald-400">Finalizado</p>
+                        <p className="font-bold text-sm tabular-nums text-emerald-600">{finalized.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</p>
+                      </div>
+                      <div className="rounded-lg bg-amber-500/10 p-2">
+                        <p className="text-xs text-amber-600">Reservado</p>
+                        <p className="font-bold text-sm tabular-nums text-amber-600">{reserved.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</p>
                       </div>
                       <div className={cn('rounded-lg p-2', depleted ? 'bg-destructive/10' : 'bg-success/10')}>
-                        <p className="text-xs text-muted-foreground">Saldo</p>
+                        <p className="text-xs text-muted-foreground">Disponível</p>
                         <p className={cn('font-bold text-sm tabular-nums', depleted ? 'text-destructive' : 'text-success')}>
                           {remaining.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
                         </p>
                       </div>
                     </div>
 
-                    {/* Progress bar */}
+                    {/* Progress bars — finalizado (green) + reservado (amber) */}
                     <div className="space-y-1">
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>{lot.unit}</span>
-                        <span>{pct}% distribuído</span>
+                      <div className="flex justify-between text-xs text-emerald-700 dark:text-emerald-400">
+                        <span>{lot.unit} · {pctFin}% finalizado</span>
+                        {pctRes > 0 && <span className="text-amber-600">{pctRes}% reservado</span>}
                       </div>
-                      <Progress value={pct} className="h-2" />
+                      <Progress value={pctFin} className="h-2 [&>div]:bg-emerald-500" />
+                      {reserved > 0 && (
+                        <Progress value={pctRes} className="h-1.5 [&>div]:bg-amber-500" />
+                      )}
                     </div>
 
                     {/* Meta */}
                     <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                      {technician && (
+                        <span className="flex items-center gap-1">
+                          <User className="h-3 w-3 shrink-0" />
+                          <strong>{technician.name}</strong>
+                        </span>
+                      )}
                       {lot.supplier && <span>Fornecedor: <strong>{lot.supplier}</strong></span>}
                       {lot.lot_date && (
                         <span>
