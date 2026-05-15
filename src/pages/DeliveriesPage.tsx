@@ -1120,7 +1120,7 @@ export default function DeliveriesPage() {
   const [realizeDate, setRealizeDate] = useState('');
 
   // Lots for selected demand type (in form)
-  const { data: lotsForType = [] } = useDeliveryLots(formData.demand_type_id || undefined);
+  const { data: lotsForType = [], isLoading: lotsLoading } = useDeliveryLots(formData.demand_type_id || undefined);
   // Existing items when editing
   const { data: editingItems = [] } = useDeliveryItems(editingId ?? undefined);
 
@@ -1136,9 +1136,10 @@ export default function DeliveriesPage() {
     }
   }, [editingId, editingItems]);
 
-  // Reset lot selection when demand type changes
+  // Reset lot selection and manual quantity when demand type changes
   useEffect(() => {
     setSelectedLots([]);
+    setFormData((f) => ({ ...f, quantity: '' }));
   }, [formData.demand_type_id]);
 
   // ── Derived data ─────────────────────────────────────────────────────────────
@@ -1328,28 +1329,28 @@ export default function DeliveriesPage() {
         onValueChange={(v) => setTab(v as TabType)}
         className="mb-4"
       >
-        <TabsList>
-          <TabsTrigger value="pending" className="gap-1.5">
-            <Clock className="h-4 w-4" />
-            Pendentes
+        <TabsList className="w-full">
+          <TabsTrigger value="pending" className="flex-1 gap-1 px-2 sm:gap-1.5 sm:px-3">
+            <Clock className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">Pendentes</span>
             <span className="bg-warning/20 text-warning px-1.5 py-0.5 rounded-full text-xs font-medium">
               {pendingCount}
             </span>
           </TabsTrigger>
-          <TabsTrigger value="completed" className="gap-1.5">
-            <CalendarCheck className="h-4 w-4" />
-            Realizadas
+          <TabsTrigger value="completed" className="flex-1 gap-1 px-2 sm:gap-1.5 sm:px-3">
+            <CalendarCheck className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">Realizadas</span>
             <span className="bg-success/20 text-success px-1.5 py-0.5 rounded-full text-xs font-medium">
               {completedCount}
             </span>
           </TabsTrigger>
-          <TabsTrigger value="stats" className="gap-1.5">
-            <BarChart2 className="h-4 w-4" />
-            Estatísticas
+          <TabsTrigger value="stats" className="flex-1 gap-1 px-2 sm:gap-1.5 sm:px-3">
+            <BarChart2 className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">Estatísticas</span>
           </TabsTrigger>
-          <TabsTrigger value="lots" className="gap-1.5">
-            <Warehouse className="h-4 w-4" />
-            Lotes
+          <TabsTrigger value="lots" className="flex-1 gap-1 px-2 sm:gap-1.5 sm:px-3">
+            <Warehouse className="h-4 w-4 shrink-0" />
+            <span className="hidden sm:inline">Lotes</span>
           </TabsTrigger>
         </TabsList>
       </Tabs>
@@ -1600,11 +1601,24 @@ export default function DeliveriesPage() {
               />
             )}
 
-            {/* Warning if demand type selected but NO lots exist */}
-            {formData.demand_type_id && (lotsForType as any[]).length === 0 && (
-              <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 p-3 text-sm text-warning">
-                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                <span>Nenhum lote cadastrado para este tipo de entrega. Vá à aba <strong>Lotes</strong> para adicionar estoque.</span>
+            {/* Manual quantity — shown when demand type selected but no lots exist for it */}
+            {formData.demand_type_id && !lotsLoading && (lotsForType as any[]).length === 0 && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium flex items-center gap-1.5">
+                  <Box className="h-4 w-4 text-muted-foreground" />
+                  Quantidade
+                </label>
+                <Input
+                  type="number"
+                  min="0.001"
+                  step="0.001"
+                  placeholder="Informe a quantidade entregue"
+                  value={formData.quantity}
+                  onChange={(e) => setFormData((f) => ({ ...f, quantity: e.target.value }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Este tipo de entrega não possui lotes cadastrados. Informe a quantidade manualmente ou crie um lote na aba <strong>Lotes</strong>.
+                </p>
               </div>
             )}
 
