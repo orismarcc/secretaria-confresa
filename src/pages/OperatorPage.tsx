@@ -324,12 +324,11 @@ export default function OperatorPage() {
   }, [queryClient]);
 
   const handleStartService = (id: string) => {
-    updateService.mutate({ 
-      id, 
+    updateService.mutate({
+      id,
       status: 'in_progress',
-      operator_id: user?.id 
+      operator_id: user?.id,
     });
-    toast({ title: 'Atendimento iniciado! Atribuído a você.' });
   };
 
   const handleOpenFinalize = (service: DbService) => {
@@ -354,12 +353,7 @@ export default function OperatorPage() {
       completion_notes: data.completion_notes,
       sync_status: 'synced',
     });
-    
-    toast({
-      title: 'Atendimento finalizado!',
-      description: 'Atendimento concluído com sucesso.',
-    });
-    
+
     setSelectedService(null);
     setShowFinalizeModal(false);
   };

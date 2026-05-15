@@ -447,12 +447,14 @@ function LotFormDialog({
             <div className="space-y-1.5">
               <Label>Responsável Técnico</Label>
               <Select
-                value={form.responsible_technician_id}
-                onValueChange={(v) => setForm((f) => ({ ...f, responsible_technician_id: v }))}
+                value={form.responsible_technician_id || '__none__'}
+                onValueChange={(v) =>
+                  setForm((f) => ({ ...f, responsible_technician_id: v === '__none__' ? '' : v }))
+                }
               >
                 <SelectTrigger><SelectValue placeholder="Selecione o responsável" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhum</SelectItem>
+                  <SelectItem value="__none__">Nenhum</SelectItem>
                   {technicians.map((t: any) => (
                     <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                   ))}
