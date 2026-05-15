@@ -301,7 +301,14 @@ export default function OperatorPage() {
     [sortedServices],
   );
   const nextServices = useMemo(
-    () => sortedServices.filter((s) => s.status !== 'in_progress'),
+    () =>
+      sortedServices
+        .filter((s) => s.status !== 'in_progress')
+        .sort((a, b) => {
+          // 'proximo' always ranks above 'pending'
+          const rank = (s: DbService) => (s.status === 'proximo' ? 0 : 1);
+          return rank(a) - rank(b);
+        }),
     [sortedServices],
   );
 
