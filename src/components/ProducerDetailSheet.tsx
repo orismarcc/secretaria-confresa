@@ -7,13 +7,18 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Trash2, MapPin, Phone, User, FileText, Home, Navigation, ExternalLink, ClipboardList, AlertTriangle, MessageCircle } from 'lucide-react';
+import {
+  Pencil, Trash2, MapPin, Phone, User, FileText, Home, Navigation,
+  ExternalLink, ClipboardList, AlertTriangle, MessageCircle, Eye,
+  Tractor, Layers, Truck, Package,
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { openWhatsApp } from '@/lib/phone';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useServicesByProducer } from '@/hooks/useSupabaseData';
+import { useServicesByProducer, useDeliveriesByProducer } from '@/hooks/useSupabaseData';
 import { StatusBadge } from '@/components/StatusBadge';
 
 function isDamOverdue(s: any): boolean {
@@ -32,6 +37,11 @@ function openInMaps(lat: number, lng: number) {
   } else {
     window.open(googleMapsUrl, '_blank', 'noopener,noreferrer');
   }
+}
+
+/** Format a number with pt-BR locale, stripping trailing zeros */
+function fmtNum(n: number, decimals = 2) {
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: decimals });
 }
 
 interface ProducerDetailSheetProps {
@@ -55,7 +65,12 @@ export function ProducerDetailSheet({
   onEdit,
   onDelete,
 }: ProducerDetailSheetProps) {
+  const navigate = useNavigate();
+
   const { data: services = [], isLoading: servicesLoading } = useServicesByProducer(
+    open ? producer?.id : undefined
+  );
+  const { data: deliveries = [], isLoading: deliveriesLoading } = useDeliveriesByProducer(
     open ? producer?.id : undefined
   );
 
@@ -74,6 +89,128 @@ export function ProducerDetailSheet({
     onOpenChange(false);
     onDelete(producer);
   };
+
+  // ── Build unified history ────────────────────────────────────────────────────
+  type HistoryItem = {
+    id: string;
+    type: 'service' | 'delivery';
+    sortDate: string;
+    raw: any;
+  };
+
+  const history: HistoryItem[] = [
+    ...(services as any[]).map(s => ({
+      id: s.id,
+      type: 'service' as const,
+      sortDate: s.completed_at || s.scheduled_date,
+      raw: s,
+    })),
+    ...(deliveries as any[]).map(d => ({
+      id: d.id,
+      type: 'delivery' as const,
+      sortDate: d.completed_at || d.created_at,
+      raw: d,
+    })),
+  ].sort((a, b) => {
+    // Supabase returns timestamps with a space separator ("2026-05-01 14:00:00+00"),
+    // which is invalid in Safari. Normalise to ISO before parsing.
+    const parse = (d: string) => new Date(d.replace(' ', 'T')).getTime();
+    return parse(b.sortDate) - parse(a.sortDate);
+  });
+
+  const isHistoryLoading = servicesLoading || deliveriesLoading;
+
+  // ── Navigate to detail ───────────────────────────────────────────────────────
+  const handleViewService = (serviceId: string) => {
+    onOpenChange(false);
+    navigate(`/services?detail=${serviceId}`);
+  };
+
+  const handleViewDelivery = (deliveryId: string) => {
+    onOpenChange(false);
+    navigate(`/deliveries?detail=${deliveryId}`);
+  };
+
+  // ── Service card metadata ────────────────────────────────────────────────────
+  function ServiceMeta({ s }: { s: any }) {
+    const category = s.demand_types?.category as string | undefined;
+    const bits: React.ReactNode[] = [];
+
+    if (s.worked_area) {
+      bits.push(
+        <span key="area" className="inline-flex items-center gap-0.5 text-[11px] bg-amber-500/10 text-amber-700 rounded px-1.5 py-0.5 font-medium">
+          {fmtNum(Number(s.worked_area))} ha
+        </span>
+      );
+    }
+
+    if ((category === 'patrulha_mecanizada' || category === 'logistica_insumos') && s.worked_hours) {
+      bits.push(
+        <span key="hours" className="inline-flex items-center gap-0.5 text-[11px] bg-blue-500/10 text-blue-700 rounded px-1.5 py-0.5 font-medium">
+          <Tractor className="h-3 w-3" />
+          {fmtNum(Number(s.worked_hours))} h
+        </span>
+      );
+    }
+
+    if ((category === 'patrulha_mecanizada' || category === 'logistica_insumos') && s.fuel_liters) {
+      bits.push(
+        <span key="fuel" className="inline-flex items-center gap-0.5 text-[11px] bg-red-500/10 text-red-700 rounded px-1.5 py-0.5 font-medium">
+          {fmtNum(Number(s.fuel_liters))} L
+        </span>
+      );
+    }
+
+    if (category === 'calcario' && s.limestone_quantity) {
+      bits.push(
+        <span key="calc" className="inline-flex items-center gap-0.5 text-[11px] bg-stone-500/10 text-stone-700 rounded px-1.5 py-0.5 font-medium">
+          <Layers className="h-3 w-3" />
+          {fmtNum(Number(s.limestone_quantity))} ton
+        </span>
+      );
+    }
+
+    if (category === 'logistica_insumos' && s.input_quantity) {
+      bits.push(
+        <span key="input" className="inline-flex items-center gap-0.5 text-[11px] bg-purple-500/10 text-purple-700 rounded px-1.5 py-0.5 font-medium">
+          <Truck className="h-3 w-3" />
+          {fmtNum(Number(s.input_quantity))} ton
+        </span>
+      );
+    }
+
+    if (bits.length === 0) return null;
+    return <div className="flex flex-wrap gap-1 mt-1">{bits}</div>;
+  }
+
+  // ── Delivery card metadata ───────────────────────────────────────────────────
+  function DeliveryMeta({ d }: { d: any }) {
+    const items = (d.delivery_items ?? []) as any[];
+    const hasItems = items.length > 0;
+    const directQty = d.quantity != null ? Number(d.quantity) : null;
+
+    if (!hasItems && directQty == null) return null;
+
+    return (
+      <div className="flex flex-wrap gap-1 mt-1">
+        {hasItems ? (
+          items.map((item: any, idx: number) => (
+            <span key={idx} className="inline-flex items-center gap-0.5 text-[11px] bg-blue-500/10 text-blue-700 rounded px-1.5 py-0.5 font-medium">
+              <Package className="h-3 w-3" />
+              {fmtNum(Number(item.quantity))} {item.delivery_lots?.unit || 'un'} — {item.delivery_lots?.name || 'Lote'}
+            </span>
+          ))
+        ) : (
+          directQty != null && (
+            <span className="inline-flex items-center gap-0.5 text-[11px] bg-blue-500/10 text-blue-700 rounded px-1.5 py-0.5 font-medium">
+              <Package className="h-3 w-3" />
+              {fmtNum(directQty)} un entregues
+            </span>
+          )
+        )}
+      </div>
+    );
+  }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -175,13 +312,13 @@ export function ProducerDetailSheet({
 
           <Separator />
 
-          {/* Histórico de atendimentos */}
+          {/* Histórico de atendimentos + entregas */}
           <div>
             <div className="flex items-center gap-2 mb-3">
               <ClipboardList className="h-4 w-4 text-muted-foreground" />
-              <p className="text-sm font-medium">Histórico de Atendimentos</p>
-              {services.length > 0 && (
-                <Badge variant="secondary" className="text-xs">{services.length}</Badge>
+              <p className="text-sm font-medium">Histórico</p>
+              {history.length > 0 && (
+                <Badge variant="secondary" className="text-xs">{history.length}</Badge>
               )}
             </div>
 
@@ -204,26 +341,20 @@ export function ProducerDetailSheet({
               );
             })()}
 
-            {servicesLoading ? (
+            {isHistoryLoading ? (
               <div className="space-y-2">
                 <Skeleton className="h-14 w-full rounded-lg" />
                 <Skeleton className="h-14 w-full rounded-lg" />
               </div>
-            ) : services.length === 0 ? (
+            ) : history.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center bg-muted/30 rounded-lg">
-                Nenhum atendimento registrado
+                Nenhum atendimento ou entrega registrado
               </p>
             ) : (
-              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                {(services as any[])
-                  .slice()
-                  .sort((a: any, b: any) => {
-                    // Most recent first: prefer completed_at, fallback to scheduled_date
-                    const aDate = a.completed_at || a.scheduled_date;
-                    const bDate = b.completed_at || b.scheduled_date;
-                    return new Date(bDate).getTime() - new Date(aDate).getTime();
-                  })
-                  .map((s: any) => {
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                {history.map((item) => {
+                  if (item.type === 'service') {
+                    const s = item.raw;
                     const isCompleted = s.status === 'completed';
                     const completedAt = s.completed_at
                       ? format(new Date(s.completed_at.replace(' ', 'T')), 'dd/MM/yyyy', { locale: ptBR })
@@ -233,16 +364,20 @@ export function ProducerDetailSheet({
                       : null;
 
                     return (
-                      <div
-                        key={s.id}
-                        className={`flex items-start justify-between gap-2 p-3 rounded-lg border ${
+                      <button
+                        key={`svc-${s.id}`}
+                        type="button"
+                        onClick={() => handleViewService(s.id)}
+                        className={`w-full text-left flex items-start justify-between gap-2 p-3 rounded-lg border transition-all hover:shadow-sm hover:-translate-y-0.5 ${
                           isCompleted
-                            ? 'bg-success/5 border-success/20'
-                            : 'bg-muted/30 border-border/50'
+                            ? 'bg-success/5 border-success/20 hover:border-success/40'
+                            : 'bg-muted/30 border-border/50 hover:border-border'
                         }`}
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate">{s.demand_types?.name || 'N/A'}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-medium truncate">{s.demand_types?.name || 'N/A'}</p>
+                          </div>
                           {isCompleted && completedAt ? (
                             <p className="text-xs font-semibold text-success mt-0.5">
                               ✓ Finalizado em {completedAt}
@@ -252,30 +387,86 @@ export function ProducerDetailSheet({
                               Cadastro: {scheduledDate}
                             </p>
                           )}
-                          {s.settlements?.name && (
-                            <p className="text-xs text-muted-foreground truncate">{s.settlements.name}</p>
-                          )}
-                          {/* DAM status */}
+                          <ServiceMeta s={s} />
                           {isDamOverdue(s) && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 rounded px-1.5 py-0.5 mt-0.5">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 rounded px-1.5 py-0.5 mt-1">
                               ⚠ DAM em atraso
                             </span>
                           )}
                           {s.dam_issued && !s.dam_paid && !isDamOverdue(s) && (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-warning bg-warning/10 rounded px-1.5 py-0.5 mt-0.5">
+                            <span className="inline-flex items-center gap-1 text-[10px] text-warning bg-warning/10 rounded px-1.5 py-0.5 mt-1">
                               DAM pendente
                             </span>
                           )}
                           {s.dam_issued && s.dam_paid && (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-success bg-success/10 rounded px-1.5 py-0.5 mt-0.5">
+                            <span className="inline-flex items-center gap-1 text-[10px] text-success bg-success/10 rounded px-1.5 py-0.5 mt-1">
                               DAM paga
                             </span>
                           )}
                         </div>
-                        <StatusBadge status={s.status as 'pending' | 'in_progress' | 'completed'} />
-                      </div>
+                        <div className="flex flex-col items-end gap-1.5 shrink-0">
+                          <StatusBadge status={s.status as 'pending' | 'in_progress' | 'completed'} />
+                          <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                        </div>
+                      </button>
                     );
-                  })}
+                  }
+
+                  // Delivery card
+                  const d = item.raw;
+                  const isCompleted = d.status === 'completed';
+                  const completedAt = d.completed_at
+                    ? format(new Date(d.completed_at.replace(' ', 'T')), 'dd/MM/yyyy', { locale: ptBR })
+                    : null;
+                  const createdAt = d.created_at
+                    ? format(new Date(d.created_at.replace(' ', 'T')), 'dd/MM/yyyy', { locale: ptBR })
+                    : null;
+
+                  return (
+                    <button
+                      key={`del-${d.id}`}
+                      type="button"
+                      onClick={() => handleViewDelivery(d.id)}
+                      className={`w-full text-left flex items-start justify-between gap-2 p-3 rounded-lg border transition-all hover:shadow-sm hover:-translate-y-0.5 ${
+                        isCompleted
+                          ? 'bg-blue-500/5 border-blue-500/20 hover:border-blue-500/40'
+                          : 'bg-muted/30 border-border/50 hover:border-border'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <Package className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                          <p className="text-sm font-medium truncate">
+                            {d.demand_types?.name || 'Entrega'}
+                          </p>
+                        </div>
+                        {isCompleted && completedAt ? (
+                          <p className="text-xs font-semibold text-blue-600 mt-0.5">
+                            ✓ Realizada em {completedAt}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Cadastro: {createdAt}
+                          </p>
+                        )}
+                        <DeliveryMeta d={d} />
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] px-1.5 py-0.5 ${
+                            isCompleted
+                              ? 'border-blue-500/40 text-blue-600 bg-blue-500/10'
+                              : 'border-border text-muted-foreground'
+                          }`}
+                        >
+                          {isCompleted ? 'Realizada' : 'Pendente'}
+                        </Badge>
+                        <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

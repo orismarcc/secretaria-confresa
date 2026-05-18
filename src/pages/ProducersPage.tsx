@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { SearchInput } from '@/components/SearchInput';
@@ -76,6 +76,11 @@ export default function ProducersPage() {
 
   const allSelected = filtered.length > 0 && filtered.every(p => selectedIds.has(p.id));
   const someSelected = filtered.some(p => selectedIds.has(p.id));
+
+  // Clear bulk selection when filters change so hidden rows aren't deleted accidentally
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [search, settlementFilter]);
 
   const toggleAll = () => {
     if (allSelected) {
@@ -183,7 +188,7 @@ export default function ProducersPage() {
       phone: p.phone || '',
       settlementId: p.settlement_id || '',
       locationId: p.location_id || '',
-      locationName: p.location_name || '',
+      locationName: p.location_name || p.locations?.name || '',
       demandTypeIds,
       latitude: p.latitude,
       longitude: p.longitude,

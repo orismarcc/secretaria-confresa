@@ -14,7 +14,7 @@ import {
 import { format, parseISO, startOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  TrendingUp, MapPin, ClipboardList, Tractor, Users2, Package, Layers, FileDown, Truck, Stethoscope,
+  TrendingUp, MapPin, ClipboardList, Tractor, Users2, Package, Layers, FileDown, Truck, Stethoscope, Fuel, Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import jsPDF from 'jspdf';
@@ -258,12 +258,14 @@ export default function AnalyticsPage() {
 
   // ── Operator productivity ───────────────────────────────────────────────────
   const operatorStats = useMemo(() => {
-    const stats: Record<string, { name: string; completed: number; totalArea: number }> = {};
-    (operators as any[]).forEach(op => { stats[op.id] = { name: op.name, completed: 0, totalArea: 0 }; });
+    const stats: Record<string, { name: string; completed: number; totalArea: number; totalFuel: number; totalHours: number }> = {};
+    (operators as any[]).forEach(op => { stats[op.id] = { name: op.name, completed: 0, totalArea: 0, totalFuel: 0, totalHours: 0 }; });
     (services as any[]).forEach(s => {
       if (s.status === 'completed' && s.operator_id && stats[s.operator_id]) {
         stats[s.operator_id].completed++;
-        stats[s.operator_id].totalArea += Number(s.worked_area || 0);
+        stats[s.operator_id].totalArea  += Number(s.worked_area  || 0);
+        stats[s.operator_id].totalFuel  += Number(s.fuel_liters  || 0);
+        stats[s.operator_id].totalHours += Number(s.worked_hours || 0);
       }
     });
     return Object.values(stats).filter(op => op.completed > 0).sort((a, b) => b.completed - a.completed).slice(0, 5);
@@ -275,6 +277,30 @@ export default function AnalyticsPage() {
     return (services as any[])
       .filter(s => s.status === 'completed' && s.demand_type_id === gradeId && s.worked_area)
       .reduce((acc, s) => acc + (Number(s.worked_area) || 0), 0);
+  }, [services, demandTypes]);
+
+  /** Total fuel consumed (L) — all completed patrulha_mecanizada + logistica_insumos */
+  const totalFuelLiters = useMemo(() => {
+    const ids = new Set(
+      (demandTypes as any[])
+        .filter(d => d.category === 'patrulha_mecanizada' || d.category === 'logistica_insumos')
+        .map((d: any) => d.id)
+    );
+    return (services as any[])
+      .filter(s => s.status === 'completed' && ids.has(s.demand_type_id) && s.fuel_liters)
+      .reduce((acc, s) => acc + (Number(s.fuel_liters) || 0), 0);
+  }, [services, demandTypes]);
+
+  /** Total worked hours (h) — all completed patrulha_mecanizada + logistica_insumos */
+  const totalWorkedHours = useMemo(() => {
+    const ids = new Set(
+      (demandTypes as any[])
+        .filter(d => d.category === 'patrulha_mecanizada' || d.category === 'logistica_insumos')
+        .map((d: any) => d.id)
+    );
+    return (services as any[])
+      .filter(s => s.status === 'completed' && ids.has(s.demand_type_id) && s.worked_hours)
+      .reduce((acc, s) => acc + (Number(s.worked_hours) || 0), 0);
   }, [services, demandTypes]);
 
   // ── PDF export grouped by assentamento ─────────────────────────────────────
@@ -495,25 +521,70 @@ export default function AnalyticsPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Total Worked Area */}
-          <Card className="overflow-hidden bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-background">
-            <CardContent className="p-4 sm:p-6">
-              <div className="flex items-center gap-3 sm:gap-4">
-                <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg shadow-amber-500/30 shrink-0">
-                  <Tractor className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
+          {/* Summary stat cards row */}
+          <div className="grid gap-4 sm:grid-cols-3">
+            {/* Total Worked Area */}
+            <Card className="overflow-hidden bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-background">
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg shadow-amber-500/30 shrink-0">
+                    <Tractor className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                      Área Trabalhada com Grade
+                    </p>
+                    <p className="text-2xl sm:text-4xl font-black text-foreground">
+                      {totalWorkedArea.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
+                      <span className="text-base sm:text-xl font-medium text-muted-foreground">ha</span>
+                    </p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">
-                    Total de Área Trabalhada com Grade
-                  </p>
-                  <p className="text-2xl sm:text-4xl font-black text-foreground">
-                    {totalWorkedArea.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
-                    <span className="text-base sm:text-xl font-medium text-muted-foreground">ha</span>
-                  </p>
+              </CardContent>
+            </Card>
+
+            {/* Total Fuel */}
+            <Card className="overflow-hidden bg-gradient-to-br from-red-500/10 via-rose-500/5 to-background">
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-br from-red-500 to-rose-600 shadow-lg shadow-red-500/30 shrink-0">
+                    <Fuel className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                      Combustível Consumido
+                    </p>
+                    <p className="text-2xl sm:text-4xl font-black text-foreground">
+                      {totalFuelLiters.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
+                      <span className="text-base sm:text-xl font-medium text-muted-foreground">L</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Patrulha + Logística finalizadas</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+
+            {/* Total Worked Hours */}
+            <Card className="overflow-hidden bg-gradient-to-br from-blue-500/10 via-indigo-500/5 to-background">
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/30 shrink-0">
+                    <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                      Horas Trabalhadas
+                    </p>
+                    <p className="text-2xl sm:text-4xl font-black text-foreground">
+                      {totalWorkedHours.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
+                      <span className="text-base sm:text-xl font-medium text-muted-foreground">h</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Patrulha + Logística finalizadas</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Charts */}
           <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
@@ -621,9 +692,23 @@ export default function AnalyticsPage() {
                     return (
                       <div key={index} className="space-y-1.5">
                         <div className="flex items-center justify-between text-sm">
-                          <span className="font-medium truncate max-w-[60%]">{op.name}</span>
-                          <div className="flex items-center gap-3 shrink-0">
-                            {op.totalArea > 0 && <span className="text-muted-foreground text-xs">{op.totalArea.toFixed(1)} ha</span>}
+                          <span className="font-medium truncate max-w-[55%]">{op.name}</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {op.totalArea > 0 && (
+                              <span className="text-muted-foreground text-xs">{op.totalArea.toFixed(1)} ha</span>
+                            )}
+                            {op.totalFuel > 0 && (
+                              <span className="inline-flex items-center gap-0.5 text-xs text-red-700 bg-red-500/10 rounded-full px-2 py-0.5 font-medium">
+                                <Fuel className="h-3 w-3" />
+                                {op.totalFuel.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L
+                              </span>
+                            )}
+                            {op.totalHours > 0 && (
+                              <span className="inline-flex items-center gap-0.5 text-xs text-blue-700 bg-blue-500/10 rounded-full px-2 py-0.5 font-medium">
+                                <Clock className="h-3 w-3" />
+                                {op.totalHours.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} h
+                              </span>
+                            )}
                             <span className="font-bold text-primary text-lg tabular-nums">{op.completed}</span>
                           </div>
                         </div>
@@ -632,7 +717,9 @@ export default function AnalyticsPage() {
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {op.completed} {op.completed === 1 ? 'atendimento finalizado' : 'atendimentos finalizados'}
-                          {op.totalArea > 0 && ` · ${op.totalArea.toFixed(1)} ha trabalhado`}
+                          {op.totalArea > 0 && ` · ${op.totalArea.toFixed(1)} ha`}
+                          {op.totalFuel > 0 && ` · ${op.totalFuel.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L combustível`}
+                          {op.totalHours > 0 && ` · ${op.totalHours.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} h trabalhadas`}
                         </p>
                       </div>
                     );

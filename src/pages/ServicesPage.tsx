@@ -122,6 +122,8 @@ interface DbService {
   dam_receipt_url?: string | null;
   limestone_quantity?: number | null;
   input_quantity?: number | null;
+  fuel_liters?: number | null;
+  worked_hours?: number | null;
   responsible_technician_id?: string | null;
   producers?: { name: string; phone?: string | null; location_name?: string | null; latitude?: number | null; longitude?: number | null } | null;
   demand_types?: { name: string } | null;
@@ -172,6 +174,18 @@ export default function ServicesPage() {
 
   const [detailService, setDetailService] = useState<DbService | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+
+  // Auto-open detail sheet when ?detail=ID is in the URL (e.g. navigated from producer history)
+  useEffect(() => {
+    const detailId = searchParams.get('detail');
+    if (detailId && (services as DbService[]).length > 0) {
+      const found = (services as DbService[]).find(s => s.id === detailId);
+      if (found) {
+        setDetailService(found);
+        setDetailOpen(true);
+      }
+    }
+  }, [searchParams, services]);
 
   // Reset to page 1 when any filter changes
   useEffect(() => {
@@ -278,6 +292,8 @@ export default function ServicesPage() {
       ...(receiptUrl ? { dam_receipt_url: receiptUrl } : {}),
       ...(data.limestoneQuantity ? { limestone_quantity: data.limestoneQuantity } : {}),
       ...(data.inputQuantity ? { input_quantity: data.inputQuantity } : {}),
+      fuel_liters: data.fuelLiters || null,
+      worked_hours: data.workedHours || null,
       responsible_technician_id: data.responsibleTechnicianId && data.responsibleTechnicianId !== 'none' ? data.responsibleTechnicianId : null,
     });
     setFormOpen(false);
@@ -326,6 +342,8 @@ export default function ServicesPage() {
       dam_receipt_url: receiptUrl,
       limestone_quantity: data.limestoneQuantity || null,
       input_quantity: data.inputQuantity || null,
+      fuel_liters: data.fuelLiters || null,
+      worked_hours: data.workedHours || null,
       responsible_technician_id: data.responsibleTechnicianId && data.responsibleTechnicianId !== 'none' ? data.responsibleTechnicianId : null,
     });
     setEditingService(null);
@@ -405,6 +423,8 @@ export default function ServicesPage() {
       damIssuedAt: s.dam_issued_at || '',
       limestoneQuantity: s.limestone_quantity || 0,
       inputQuantity: s.input_quantity || 0,
+      fuelLiters: s.fuel_liters || 0,
+      workedHours: s.worked_hours || 0,
       damPaidAt: s.dam_paid_at || '',
       responsibleTechnicianId: s.responsible_technician_id || '',
     };

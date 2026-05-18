@@ -433,10 +433,11 @@ export function useUpdateProducer() {
       // Update producer demands if provided
       if (demandTypeIds !== undefined) {
         // Delete existing demands
-        await supabase
+        const { error: delDemandErr } = await supabase
           .from('producer_demands')
           .delete()
           .eq('producer_id', id);
+        if (delDemandErr) throw delDemandErr;
 
         // Insert new demands
         if (demandTypeIds.length > 0) {
@@ -581,6 +582,8 @@ export function useCreateService() {
       dam_issued_at?: string | null;
       limestone_quantity?: number | null;
       input_quantity?: number | null;
+      fuel_liters?: number | null;
+      worked_hours?: number | null;
       dam_paid_at?: string | null;
       dam_receipt_url?: string | null;
     }) => {
@@ -674,11 +677,36 @@ export function useServicesByProducer(producerId: string | undefined) {
       if (!producerId) return [];
       const { data, error } = await supabase
         .from('services')
-        .select('*, demand_types(name), settlements(name), profiles!operator_id(name)')
+        .select('*, demand_types(name, category), settlements(name), profiles!operator_id(name)')
         .eq('producer_id', producerId)
         .order('scheduled_date', { ascending: false });
       if (error) throw error;
       return data;
+    },
+    enabled: !!producerId,
+  });
+}
+
+export function useDeliveriesByProducer(producerId: string | undefined) {
+  return useQuery({
+    queryKey: ['deliveries', 'producer', producerId],
+    queryFn: async () => {
+      if (!producerId) return [];
+      const { data, error } = await supabase
+        .from('deliveries')
+        .select(`
+          *,
+          demand_types(name, category),
+          settlements(name),
+          delivery_items:delivery_items(
+            quantity,
+            delivery_lots(name, unit)
+          )
+        `)
+        .eq('producer_id', producerId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as any[];
     },
     enabled: !!producerId,
   });
@@ -894,6 +922,9 @@ export function useDeleteDelivery() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deliveries'] });
+      // delivery_items are cascade-deleted; invalidate their cache + lot summaries
+      queryClient.invalidateQueries({ queryKey: ['delivery_items'] });
+      queryClient.invalidateQueries({ queryKey: ['delivery_lots'] });
       toast({ title: 'Entrega removida!' });
     },
     onError: (error: Error) => {

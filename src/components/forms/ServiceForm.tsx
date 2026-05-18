@@ -57,6 +57,8 @@ const serviceSchema = z.object({
   damPaidAt: z.string().optional(),
   limestoneQuantity: z.coerce.number().min(0).optional(),
   inputQuantity: z.coerce.number().min(0).optional(),
+  fuelLiters: z.coerce.number().min(0).optional(),
+  workedHours: z.coerce.number().min(0).optional(),
   responsibleTechnicianId: z.string().optional(),
 });
 
@@ -101,6 +103,8 @@ interface ServiceFormProps {
     damPaid?: boolean;
     limestoneQuantity?: number;
     inputQuantity?: number;
+    fuelLiters?: number;
+    workedHours?: number;
     damPaidAt?: string;
     responsibleTechnicianId?: string;
   } | null;
@@ -311,6 +315,8 @@ export function ServiceForm({
       damPaidAt: '',
       limestoneQuantity: 0,
       inputQuantity: 0,
+      fuelLiters: 0,
+      workedHours: 0,
       responsibleTechnicianId: '',
     },
   });
@@ -324,6 +330,9 @@ export function ServiceForm({
   const isCalcario = selectedDemandType?.category === 'calcario';
   const isAssistenciaTecnica = selectedDemandType?.category === 'assistencia_tecnica';
   const isLogisticaInsumos = selectedDemandType?.category === 'logistica_insumos';
+  const isPatrulhaOrLogistica =
+    selectedDemandType?.category === 'patrulha_mecanizada' ||
+    selectedDemandType?.category === 'logistica_insumos';
   const selectedProducer = producers.find((p) => p.id === selectedProducerId);
 
   useEffect(() => {
@@ -349,6 +358,8 @@ export function ServiceForm({
         damPaidAt: service.damPaidAt || '',
         limestoneQuantity: service.limestoneQuantity || 0,
         inputQuantity: service.inputQuantity || 0,
+        fuelLiters: service.fuelLiters || 0,
+        workedHours: service.workedHours || 0,
         responsibleTechnicianId: service.responsibleTechnicianId || '',
       });
       setDamReceiptFile(null);
@@ -373,6 +384,8 @@ export function ServiceForm({
         damPaidAt: '',
         limestoneQuantity: 0,
         inputQuantity: 0,
+        fuelLiters: 0,
+        workedHours: 0,
         responsibleTechnicianId: '',
       });
       setDamReceiptFile(null);
@@ -749,6 +762,46 @@ export function ServiceForm({
                     </FormItem>
                   )}
                 />
+              )}
+
+              {/* Fuel & Hours — Patrulha Mecanizada and Logística de Insumos */}
+              {isPatrulhaOrLogistica && (
+                <>
+                  <FormField
+                    control={form.control}
+                    name="fuelLiters"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Combustível consumido (L)</FormLabel>
+                        <FormControl>
+                          <DecimalInput
+                            value={field.value ?? 0}
+                            onChange={field.onChange}
+                            placeholder="0,00"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="workedHours"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Horas trabalhadas (h)</FormLabel>
+                        <FormControl>
+                          <DecimalInput
+                            value={field.value ?? 0}
+                            onChange={field.onChange}
+                            placeholder="0,00"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
               )}
 
               {/* Purpose */}

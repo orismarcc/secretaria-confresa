@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { SearchInput } from '@/components/SearchInput';
@@ -1138,6 +1139,7 @@ function DeliveryStats({
 type TabType = 'pending' | 'completed' | 'stats' | 'lots';
 
 export default function DeliveriesPage() {
+  const [searchParams] = useSearchParams();
   const { data: deliveries = [], isLoading } = useDeliveries();
   const { data: producers = [] } = useProducers();
   const { data: demandTypes = [] } = useDemandTypes();
@@ -1183,6 +1185,22 @@ export default function DeliveriesPage() {
     setSelectedLots([]);
     setFormData((f) => ({ ...f, quantity: '' }));
   }, [formData.demand_type_id]);
+
+  // Auto-open edit form when ?detail=ID is in the URL (navigated from producer history)
+  useEffect(() => {
+    const detailId = searchParams.get('detail');
+    if (detailId && (deliveries as any[]).length > 0) {
+      const found = (deliveries as any[]).find((d) => d.id === detailId);
+      if (found) {
+        openEdit(found);
+        // Switch to the right tab so the delivery is visible in the background
+        setTab(found.status === 'completed' ? 'completed' : 'pending');
+      }
+    }
+    // Only run when deliveries first load or URL changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, (deliveries as any[]).length]);
+
 
   // ── Derived data ─────────────────────────────────────────────────────────────
 
