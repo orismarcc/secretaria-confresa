@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { isDamOverdue as checkDamOverdue } from '@/lib/damUtils';
 import {
   Plus, Pencil, Trash2, Archive, CheckCircle, Eye,
   FileDown, FileSpreadsheet, ChevronLeft, ChevronRight, X,
@@ -175,7 +176,8 @@ export default function ServicesPage() {
   const [detailService, setDetailService] = useState<DbService | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
-  // Auto-open detail sheet when ?detail=ID is in the URL (e.g. navigated from producer history)
+  // Auto-open detail sheet when ?detail=ID is in the URL (e.g. navigated from producer history).
+  // M-07: também ajusta a tab para que a tabela por trás mostre o grupo correto do serviço.
   useEffect(() => {
     const detailId = searchParams.get('detail');
     if (detailId && (services as DbService[]).length > 0) {
@@ -183,6 +185,8 @@ export default function ServicesPage() {
       if (found) {
         setDetailService(found);
         setDetailOpen(true);
+        // Switch tab so the background list matches the service's status group
+        setStatusFilter(found.status === 'completed' ? 'archived' : 'active');
       }
     }
   }, [searchParams, services]);
@@ -466,14 +470,9 @@ export default function ServicesPage() {
 
   // ── columns ───────────────────────────────────────────────────────────────
 
-  // Helper: check if DAM is overdue (issued but not paid, more than 30 days ago)
-  const isDamOverdue = (s: DbService): boolean => {
-    if (!s.dam_issued || s.dam_paid) return false;
-    if (!s.dam_issued_at) return false;
-    const issued = new Date(s.dam_issued_at + 'T12:00:00');
-    const diffDays = (Date.now() - issued.getTime()) / (1000 * 60 * 60 * 24);
-    return diffDays > 30;
-  };
+  // M-02: usar isDamOverdue centralizado em damUtils (regra de 30 dias — fonte única)
+  const isDamOverdue = (s: DbService): boolean =>
+    !!s.dam_issued && checkDamOverdue(s.dam_issued_at, s.dam_paid);
 
   const columns = [
     {

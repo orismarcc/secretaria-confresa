@@ -30,6 +30,7 @@ import { ServiceDetailView } from '@/components/ServiceDetailView';
 import { StatusBadge } from '@/components/StatusBadge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { isDamOverdue } from '@/lib/damUtils';
 import {
   useDashboardStats,
   useServices,
@@ -159,14 +160,11 @@ export default function DashboardPage() {
     ? Math.round(((stats.completedServices || 0) / stats.totalServices) * 100)
     : 0;
 
-  // Count services with overdue DAM (issued, not paid, > 30 days)
+  // M-02: usar isDamOverdue centralizado em damUtils (mesma regra de 30 dias)
   const damOverdueCount = useMemo(() => {
-    return services.filter((s: any) => {
-      if (!s.dam_issued || s.dam_paid) return false;
-      if (!s.dam_issued_at) return false;
-      const issued = new Date(s.dam_issued_at + 'T12:00:00');
-      return (Date.now() - issued.getTime()) / (1000 * 60 * 60 * 24) > 30;
-    }).length;
+    return services.filter((s: any) =>
+      s.dam_issued && isDamOverdue(s.dam_issued_at, s.dam_paid)
+    ).length;
   }, [services]);
 
   return (

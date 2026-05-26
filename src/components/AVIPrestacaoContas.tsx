@@ -54,12 +54,23 @@ export function AVIPrestacaoContas() {
       const purpose: string = (s.purpose || '').toUpperCase().trim();
       const demandType = demandTypes.find((d: any) => d.id === s.demand_type_id);
       const demandName: string = (demandType?.name || s.demand_types?.name || '').toUpperCase();
+      const demandCategory: string = (demandType as any)?.category || '';
 
-      // Format: ASSISTÊNCIA TÉCNICA PARA {finalidade} A {produtor} EM {assentamento}
-      // Falls back to demand type name when no purpose is recorded
+      // Mapa de categoria → prefixo correto para o documento AVI
+      const CATEGORY_LABEL: Record<string, string> = {
+        patrulha_mecanizada: 'PATRULHA MECANIZADA',
+        calcario: 'CALCÁRIO',
+        logistica_insumos: 'LOGÍSTICA DE INSUMOS',
+        assistencia_tecnica: 'ASSISTÊNCIA TÉCNICA',
+        entregas: 'ENTREGA',
+      };
+      const descriptionPrefix = CATEGORY_LABEL[demandCategory] || 'ASSISTÊNCIA TÉCNICA';
+
+      // Formato: {PREFIX} PARA {finalidade} A {produtor} EM {assentamento}
+      // Usa o nome do tipo de demanda quando a finalidade não está preenchida
       const purposePart = purpose || demandName;
       const description = [
-        'ASSISTÊNCIA TÉCNICA',
+        descriptionPrefix,
         purposePart ? `PARA ${purposePart}` : '',
         `A ${producerName}`,
         settlementName ? `EM ${settlementName}` : '',

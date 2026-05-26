@@ -223,6 +223,11 @@ export function useDeleteSettlement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settlements'] });
+      // M-08: invalidar caches que fazem join com settlements
+      queryClient.invalidateQueries({ queryKey: ['locations'] });
+      queryClient.invalidateQueries({ queryKey: ['producers'] });
+      queryClient.invalidateQueries({ queryKey: ['services'] });
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] });
       toast({ title: 'Assentamento removido!' });
     },
     onError: (error: Error) => {
@@ -323,6 +328,9 @@ export function useDeleteLocation() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['locations'] });
+      // M-08: invalidar caches que fazem join com locations
+      queryClient.invalidateQueries({ queryKey: ['producers'] });
+      queryClient.invalidateQueries({ queryKey: ['services'] });
       toast({ title: 'Localidade removida!' });
     },
     onError: (error: Error) => {
@@ -380,6 +388,7 @@ export function useCreateProducer() {
       dap_cap?: string;
       latitude?: number | null;
       longitude?: number | null;
+      caf?: string | null;
       demandTypeIds?: string[];
     }) => {
       const { demandTypeIds, ...producerData } = producer;
@@ -408,6 +417,7 @@ export function useCreateProducer() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['producers'] });
       queryClient.invalidateQueries({ queryKey: ['producer_demands'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard_stats'] });
       toast({ title: 'Produtor cadastrado!' });
     },
     onError: (error: Error) => {
@@ -457,6 +467,7 @@ export function useUpdateProducer() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['producers'] });
       queryClient.invalidateQueries({ queryKey: ['producer_demands'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard_stats'] });
       toast({ title: 'Produtor atualizado!' });
     },
     onError: (error: Error) => {
@@ -471,14 +482,17 @@ export function useDeleteProducer() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      // Delete producer demands first
-      await supabase.from('producer_demands').delete().eq('producer_id', id);
+      // A-02: checar erro do delete de demands antes de deletar o produtor
+      // — evita produtor deletado com demands órfãs
+      const { error: demandErr } = await supabase.from('producer_demands').delete().eq('producer_id', id);
+      if (demandErr) throw new Error(`Erro ao remover vínculos do produtor: ${demandErr.message}`);
       const { error } = await supabase.from('producers').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['producers'] });
       queryClient.invalidateQueries({ queryKey: ['producer_demands'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard_stats'] });
       toast({ title: 'Produtor removido!' });
     },
     onError: (error: Error) => {
@@ -493,13 +507,15 @@ export function useDeleteProducers() {
 
   return useMutation({
     mutationFn: async (ids: string[]) => {
-      await supabase.from('producer_demands').delete().in('producer_id', ids);
+      const { error: demandErr } = await supabase.from('producer_demands').delete().in('producer_id', ids);
+      if (demandErr) throw new Error(`Erro ao remover vínculos dos produtores: ${demandErr.message}`);
       const { error } = await supabase.from('producers').delete().in('id', ids);
       if (error) throw error;
     },
     onSuccess: (_data, ids) => {
       queryClient.invalidateQueries({ queryKey: ['producers'] });
       queryClient.invalidateQueries({ queryKey: ['producer_demands'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard_stats'] });
       toast({ title: `${ids.length} produtor(es) removido(s)!` });
     },
     onError: (error: Error) => {
@@ -553,6 +569,10 @@ export function useUpdateServicePositions() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
       queryClient.invalidateQueries({ queryKey: ['services', 'pending'] });
+    },
+    onError: (error: Error) => {
+      // A-05: falha no RPC de drag-drop — logar para diagnóstico; próximo refresh restaura ordem do DB
+      console.error('[useUpdateServicePositions] Falha ao salvar posições:', error.message);
     },
   });
 }
@@ -609,6 +629,7 @@ export function useCreateService() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard_stats'] });
       toast({ title: 'Atendimento agendado!' });
     },
     onError: (error: Error) => {
@@ -643,6 +664,7 @@ export function useUpdateService() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard_stats'] });
       toast({ title: 'Atendimento atualizado!' });
     },
     onError: (error: Error) => {
@@ -662,6 +684,7 @@ export function useDeleteService() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard_stats'] });
       toast({ title: 'Atendimento removido!' });
     },
     onError: (error: Error) => {
@@ -787,6 +810,7 @@ export function useDeleteMachinery() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['machinery'] });
+      queryClient.invalidateQueries({ queryKey: ['services'] }); // M-08: services join machinery
       toast({ title: 'Maquinário removido!' });
     },
     onError: (error: Error) => {
@@ -1022,6 +1046,26 @@ export function useDeletePatrimony() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: async (id: string) => {
+      // A-08: buscar image_url antes de deletar para limpar o Storage
+      const { data: item } = await supabase
+        .from('patrimony')
+        .select('image_url')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (item?.image_url) {
+        try {
+          // Extrair o caminho relativo dentro do bucket (após "patrimony-images/")
+          const match = (item.image_url as string).match(/patrimony-images\/(.+)$/);
+          if (match) {
+            await supabase.storage.from('patrimony-images').remove([match[1]]);
+          }
+        } catch (storageErr) {
+          // Não abortar a exclusão do registro por falha de storage
+          console.warn('[useDeletePatrimony] Falha ao remover imagem do storage:', storageErr);
+        }
+      }
+
       const { error } = await supabase.from('patrimony').delete().eq('id', id);
       if (error) throw error;
     },
@@ -1107,6 +1151,9 @@ export function useDeleteResponsibleTechnician() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['responsible_technicians'] });
+      // M-08: services e delivery_lots têm FK para responsible_technicians
+      queryClient.invalidateQueries({ queryKey: ['services'] });
+      queryClient.invalidateQueries({ queryKey: ['delivery_lots'] });
       toast({ title: 'Responsável Técnico removido!' });
     },
     onError: (error: Error) => {
@@ -1198,6 +1245,9 @@ export function useDeleteDeliveryLot() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['delivery_lots'] });
+      // M-08: delivery_items e deliveries ficam stale após remoção de um lote
+      queryClient.invalidateQueries({ queryKey: ['delivery_items'] });
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] });
       toast({ title: 'Lote removido!' });
     },
     onError: (error: Error) => {
@@ -1255,6 +1305,7 @@ export function useSaveDeliveryItems() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['delivery_items'] });
       queryClient.invalidateQueries({ queryKey: ['delivery_lots'] });
+      queryClient.invalidateQueries({ queryKey: ['deliveries'] }); // M-08: delivery sub-items changed
     },
     onError: (error: Error) => {
       toast({
@@ -1336,6 +1387,7 @@ export function useDeleteSefazProducer() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sefaz_producers'] });
+      queryClient.invalidateQueries({ queryKey: ['sefaz_services'] }); // M-08: cascade-delete no DB
       toast({ title: 'Produtor removido!' });
     },
     onError: (error: Error) => {

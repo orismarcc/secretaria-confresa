@@ -87,8 +87,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRole('admin');
         }
       }
-    } catch {
-      // silent
+    } catch (err: unknown) {
+      // A-04: nunca silenciar erro de carregamento de role/perfil — deixa o usuário
+      // sem role e bloqueia toda a UI sem feedback. Logar para diagnóstico.
+      console.error('[AuthContext] Falha ao carregar dados do usuário:', err);
     } finally {
       setIsLoading(false);
     }

@@ -401,7 +401,7 @@ export default function OperatorPage() {
       notes: s.notes || undefined,
       priority: s.priority,
       purpose: '',
-      workedArea: 0,
+      workedArea: (s as any).worked_area ?? 0,
       machinery: '',
       operatorName: '',
       chassisCode: '',

@@ -30,7 +30,8 @@ import {
   TrendingUp,
   Paperclip,
 } from 'lucide-react';
-import { format, differenceInDays, parseISO } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
+import { isDamOverdue } from '@/lib/damUtils';
 import { supabase } from '@/integrations/supabase/client';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -53,8 +54,7 @@ type DamStatus = 'overdue' | 'pending' | 'paid';
 
 function getDamStatus(s: any): DamStatus {
   if (s.dam_paid) return 'paid';
-  const issued = parseDamDate(s.dam_issued_at);
-  if (issued && differenceInDays(new Date(), issued) > 30) return 'overdue';
+  if (isDamOverdue(s.dam_issued_at, s.dam_paid)) return 'overdue';
   return 'pending';
 }
 
@@ -122,8 +122,9 @@ export default function DAMPage() {
         const order: Record<DamStatus, number> = { overdue: 0, pending: 1, paid: 2 };
         const sa = getDamStatus(a), sb = getDamStatus(b);
         if (order[sa] !== order[sb]) return order[sa] - order[sb];
-        const da = parseDamDate(a.dam_issued_at)?.getTime() ?? 0;
-        const db = parseDamDate(b.dam_issued_at)?.getTime() ?? 0;
+        // Items without issue date sort to the end of their group (MAX_SAFE_INTEGER avoids NaN)
+        const da = parseDamDate(a.dam_issued_at)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+        const db = parseDamDate(b.dam_issued_at)?.getTime() ?? Number.MAX_SAFE_INTEGER;
         return da - db;
       });
   }, [damServices, tab, search, producers, demandTypes]);
@@ -171,7 +172,8 @@ export default function DAMPage() {
   };
 
   const handleMarkUnpaid = (s: any) => {
-    updateService.mutate({ id: s.id, dam_paid: false });
+    // C-02: limpar data e recibo ao reverter pagamento — evita dados inconsistentes no banco
+    updateService.mutate({ id: s.id, dam_paid: false, dam_paid_at: null, dam_receipt_url: null });
   };
 
   if (servicesLoading) {
