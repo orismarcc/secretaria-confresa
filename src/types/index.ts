@@ -1,9 +1,31 @@
-// Enums
+// =============================================================================
+// types/index.ts — canonical domain types
+// Updated 2026-05-26 to match current DB schema (audit M-05).
+// =============================================================================
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
 export type UserRole = 'admin' | 'operator';
 
-export type ServiceStatus = 'pending' | 'in_progress' | 'completed' | 'proximo';
+/** Values stored in services.status */
+export type ServiceStatus = 'pending' | 'in_progress' | 'completed';
 
-// User types
+/** Demand-type categories stored in demand_types.category */
+export type DemandCategory =
+  | 'patrulha_mecanizada'
+  | 'calcario'
+  | 'logistica_insumos'
+  | 'assistencia_tecnica'
+  | 'entregas';
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+export interface AuthState {
+  user: User | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -12,23 +34,25 @@ export interface User {
   createdAt: Date;
 }
 
-// Demand types (categories)
+// ─── Demand Types ─────────────────────────────────────────────────────────────
+
 export interface DemandType {
   id: string;
   name: string;
-  description?: string;
+  description?: string | null;
+  category?: DemandCategory | null;
   isActive: boolean;
   createdAt: Date;
 }
 
-// Settlement (Assentamento)
+// ─── Settlements / Locations ──────────────────────────────────────────────────
+
 export interface Settlement {
   id: string;
   name: string;
   createdAt: Date;
 }
 
-// Location (Localidade)
 export interface Location {
   id: string;
   name: string;
@@ -36,87 +60,102 @@ export interface Location {
   createdAt: Date;
 }
 
-// Producer (Produtor)
+// ─── Producer ─────────────────────────────────────────────────────────────────
+
 export interface Producer {
   id: string;
   name: string;
+  /** CPF stored encrypted in DB; displayed via mask_cpf() */
   cpf: string;
   phone: string;
   settlementId: string;
-  locationId?: string;
-  locationName?: string;
-  demandTypeIds: string[]; // Categories the producer is linked to
-  propertyName?: string;
-  propertySize?: number;
-  dapCap?: string;
+  locationId?: string | null;
+  locationName?: string | null;
+  /** IDs of demand types this producer is linked to */
+  demandTypeIds: string[];
+  propertyName?: string | null;
+  propertySize?: number | null;
+  /** DAP/CAF identifier */
+  dapCap?: string | null;
+  caf?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  isActive?: boolean;
   createdAt: Date;
 }
 
-// Photo captured during service
+// ─── Service (Atendimento) ────────────────────────────────────────────────────
+
+export interface Service {
+  id: string;
+  producerId: string;
+  demandTypeId: string;
+  settlementId?: string | null;
+  locationId?: string | null;
+  operatorId?: string | null;
+  machineryId?: string | null;
+  responsibleTechnicianId?: string | null;
+
+  // Scheduling
+  scheduledDate: string; // ISO date string
+  appointmentDate?: string | null; // data de agendamento
+  completedAt?: string | null;
+  createdAt?: string | null;
+
+  // Details
+  purpose?: string | null;
+  notes?: string | null;
+  completionNotes?: string | null;
+  priority: 'low' | 'medium' | 'high';
+
+  // Operational metrics (filled on finalisation)
+  workedArea?: number | null; // hectares
+  fuelLiters?: number | null; // combustível (L)
+  workedHours?: number | null; // horas trabalhadas
+  limestoneQuantity?: number | null; // calcário (ton)
+  inputQuantity?: number | null; // insumos (ton)
+
+  // DAM
+  damIssued?: boolean | null;
+  damIssuedAt?: string | null;
+  damPaid?: boolean | null;
+  damPaidAt?: string | null;
+  damReceiptUrl?: string | null;
+
+  // GPS
+  latitude?: number | null;
+  longitude?: number | null;
+
+  status: ServiceStatus;
+  position?: number | null;
+}
+
+/** Service with embedded join data from PostgREST `*` select */
+export interface ServiceWithRelations extends Service {
+  producer?: Pick<Producer, 'name' | 'cpf' | 'phone' | 'locationName' | 'latitude' | 'longitude'> | null;
+  demandType?: Pick<DemandType, 'name'> | null;
+  settlement?: Pick<Settlement, 'name'> | null;
+  location?: Pick<Location, 'name'> | null;
+  machineryInfo?: { name: string; patrimony_number: string } | null;
+  responsibleTechnician?: { name: string } | null;
+  createdByProfile?: { name: string } | null;
+}
+
+// ─── Photos ───────────────────────────────────────────────────────────────────
+
 export interface ServicePhoto {
   id: string;
   serviceId: string;
   producerId: string;
   demandTypeId: string;
-  localBlobKey: string; // Key in IndexedDB
-  remoteUrl?: string; // URL after sync to cloud storage
+  localBlobKey: string;
+  remoteUrl?: string | null;
   capturedAt: Date;
   syncStatus: 'pending' | 'synced' | 'error';
 }
 
-// Service (Atendimento)
-export interface Service {
-  id: string;
-  producerId: string;
-  demandTypeId: string;
-  settlementId: string;
-  locationId: string;
-  
-  // Service details
-  purpose: string; // Finalidade
-  workedArea: number; // Área trabalhada (ha)
-  machinery: string; // Maquinário
-  operatorName: string; // Nome do operador
-  chassisCode: string; // Chassi/Código do patrimônio
-  termSigned: boolean; // Termo assinado
-  
-  // GPS
-  latitude?: number;
-  longitude?: number;
-  
-  // Status
-  status: ServiceStatus;
-  scheduledDate: Date;
-  completedDate?: Date;
-  
-  // Metadata
-  notes?: string;
-  createdAt: Date;
-  updatedAt: Date;
-  
-  // For offline sync
-  syncStatus?: 'synced' | 'pending' | 'error';
-  localId?: string;
-}
+// ─── Dashboard ────────────────────────────────────────────────────────────────
 
-// Extended service with relations (for display)
-export interface ServiceWithRelations extends Service {
-  producer?: Producer;
-  demandType?: DemandType;
-  settlement?: Settlement;
-  location?: Location;
-}
-
-// Auth context types
-export interface AuthState {
-  user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-}
-
-// Dashboard stats
 export interface DashboardStats {
   totalServices: number;
   pendingServices: number;
@@ -126,7 +165,19 @@ export interface DashboardStats {
   servicesByDemandType: { demandTypeId: string; count: number }[];
 }
 
-// Form types
+// ─── Offline sync ─────────────────────────────────────────────────────────────
+
+export interface SyncQueueItem {
+  id: string;
+  type: 'create' | 'update' | 'delete';
+  entity: 'service' | 'producer' | 'settlement' | 'location' | 'demandType';
+  data: unknown;
+  timestamp: Date;
+  retries: number;
+}
+
+// ─── Form helpers ─────────────────────────────────────────────────────────────
+
 export interface LoginFormData {
   email: string;
   password: string;
@@ -142,22 +193,11 @@ export interface RegisterFormData {
 export interface ServiceFormData {
   producerId: string;
   demandTypeId: string;
-  purpose: string;
-  workedArea: number;
-  machinery: string;
-  operatorName: string;
-  chassisCode: string;
-  termSigned: boolean;
-  scheduledDate: Date;
-  notes?: string;
-}
-
-// Offline sync
-export interface SyncQueueItem {
-  id: string;
-  type: 'create' | 'update' | 'delete';
-  entity: 'service' | 'producer' | 'settlement' | 'location' | 'demandType';
-  data: unknown;
-  timestamp: Date;
-  retries: number;
+  purpose?: string;
+  workedArea?: number | null;
+  operatorId?: string | null;
+  machineryId?: string | null;
+  scheduledDate: string;
+  notes?: string | null;
+  priority?: 'low' | 'medium' | 'high';
 }
