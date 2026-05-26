@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { DataTable } from '@/components/DataTable';
@@ -145,6 +145,28 @@ export default function OperatorsPage() {
   const updateTech = useUpdateResponsibleTechnician();
   const deleteTech = useDeleteResponsibleTechnician();
 
+  // ── M-10: Memoized operator metrics — O(services + operators) instead of
+  //         O(services × operators) per render ────────────────────────────────
+  const operatorMetricsMap = useMemo(() => {
+    const map: Record<string, { total: number; byDemandType: { name: string; count: number }[] }> = {};
+    (services as any[])
+      .filter(s => s.status === 'completed' && s.operator_id)
+      .forEach(s => {
+        if (!map[s.operator_id]) map[s.operator_id] = { total: 0, byDemandType: [] };
+        map[s.operator_id].total++;
+        const dt = (demandTypes as any[]).find(d => d.id === s.demand_type_id);
+        const name = dt?.name || s.demand_types?.name || 'Desconhecido';
+        const entry = map[s.operator_id].byDemandType.find(e => e.name === name);
+        if (entry) entry.count++;
+        else map[s.operator_id].byDemandType.push({ name, count: 1 });
+      });
+    Object.values(map).forEach(m => m.byDemandType.sort((a, b) => b.count - a.count));
+    return map;
+  }, [services, demandTypes]);
+
+  const getOperatorMetrics = (operatorId: string) =>
+    operatorMetricsMap[operatorId] ?? { total: 0, byDemandType: [] };
+
   // ── Operator helpers ───────────────────────────────────────────────────────
   const handleCreate = async (data: { name: string; email: string; password: string }) => {
     await createOperator.mutateAsync(data);
@@ -166,23 +188,6 @@ export default function OperatorsPage() {
 
   const handleToggleStatus = (operator: Operator) => {
     toggleStatus.mutate({ userId: operator.id, is_active: !operator.is_active });
-  };
-
-  const getOperatorMetrics = (operatorId: string) => {
-    const operatorServices = services.filter(
-      (s: any) => s.operator_id === operatorId && s.status === 'completed'
-    );
-    const byDemandType: Record<string, { name: string; count: number }> = {};
-    operatorServices.forEach((s: any) => {
-      const dt = demandTypes.find(d => d.id === s.demand_type_id);
-      const name = dt?.name || s.demand_types?.name || 'Desconhecido';
-      if (!byDemandType[s.demand_type_id]) byDemandType[s.demand_type_id] = { name, count: 0 };
-      byDemandType[s.demand_type_id].count++;
-    });
-    return {
-      total: operatorServices.length,
-      byDemandType: Object.values(byDemandType).sort((a, b) => b.count - a.count),
-    };
   };
 
   // ── Technician helpers ─────────────────────────────────────────────────────

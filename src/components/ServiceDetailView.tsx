@@ -10,11 +10,20 @@ import {
   Trash2,
   CheckCircle,
   Calendar,
+  CalendarClock,
   Navigation,
   Image,
   ExternalLink,
   MessageCircle,
+  HardHat,
+  Fuel,
+  Clock,
+  Layers,
+  Package,
+  Banknote,
+  Receipt,
 } from 'lucide-react';
+import { isDamOverdue } from '@/lib/damUtils';
 
 function buildWhatsAppUrl(phone: string): string {
   const digits = phone.replace(/\D/g, '');
@@ -42,6 +51,7 @@ interface ServiceDetailViewProps {
     location_id?: string | null;
     status: string;
     scheduled_date: string;
+    appointment_date?: string | null;
     created_at?: string | null;
     completed_at?: string | null;
     notes?: string | null;
@@ -49,7 +59,17 @@ interface ServiceDetailViewProps {
     priority: string;
     operator_id?: string | null;
     machinery_id?: string | null;
+    responsible_technician_id?: string | null;
     worked_area?: number | null;
+    fuel_liters?: number | null;
+    worked_hours?: number | null;
+    limestone_quantity?: number | null;
+    input_quantity?: number | null;
+    dam_issued?: boolean | null;
+    dam_issued_at?: string | null;
+    dam_paid?: boolean | null;
+    dam_paid_at?: string | null;
+    dam_receipt_url?: string | null;
     latitude?: number | null;
     longitude?: number | null;
     producers?: { name: string; cpf?: string; phone?: string | null } | null;
@@ -58,6 +78,7 @@ interface ServiceDetailViewProps {
     locations?: { name: string } | null;
     machinery?: { name: string; patrimony_number: string } | null;
     profiles?: { name: string } | null;
+    responsible_technicians?: { name: string } | null;
   };
   producer?: { name: string; cpf: string; phone?: string; location_name?: string; latitude?: number | null; longitude?: number | null } | null;
   demandType?: { name: string } | null;
@@ -159,6 +180,28 @@ export function ServiceDetailView({
           </div>
         )}
 
+        {service.responsible_technicians?.name && (
+          <div className="flex items-center gap-2">
+            <HardHat className="h-4 w-4 text-muted-foreground shrink-0" />
+            <div>
+              <p className="text-sm text-muted-foreground">Responsável Técnico</p>
+              <p className="font-medium">{service.responsible_technicians.name}</p>
+            </div>
+          </div>
+        )}
+
+        {service.appointment_date && (
+          <div className="flex items-center gap-2">
+            <CalendarClock className="h-4 w-4 text-muted-foreground shrink-0" />
+            <div>
+              <p className="text-sm text-muted-foreground">Data de Agendamento</p>
+              <p className="font-medium">
+                {format(new Date(service.appointment_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
+              </p>
+            </div>
+          </div>
+        )}
+
         <div>
           <p className="text-sm text-muted-foreground">Localização</p>
           <p className="font-medium">{settlement?.name || service.settlements?.name || 'N/A'}</p>
@@ -192,6 +235,64 @@ export function ServiceDetailView({
         )}
       </div>
 
+      {/* DAM Section — shown whenever a DAM has been issued */}
+      {service.dam_issued && (
+        <>
+          <Separator />
+          <div className="space-y-3">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <Banknote className="h-4 w-4" />
+              DAM – Documento de Arrecadação Municipal
+            </h3>
+
+            {service.dam_issued_at && (
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Emitido em</p>
+                  <p className="font-medium">
+                    {format(new Date(service.dam_issued_at + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {service.dam_paid ? (
+              <div className="rounded-lg bg-success/10 border border-success/30 p-3 space-y-1">
+                <p className="text-sm font-semibold text-success flex items-center gap-1.5">
+                  <CheckCircle className="h-4 w-4" /> Pago
+                </p>
+                {service.dam_paid_at && (
+                  <p className="text-sm text-muted-foreground">
+                    Em {format(new Date(service.dam_paid_at + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
+                  </p>
+                )}
+                {service.dam_receipt_url && (
+                  <a
+                    href={service.dam_receipt_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium"
+                  >
+                    <Receipt className="h-3.5 w-3.5" />
+                    Ver comprovante
+                  </a>
+                )}
+              </div>
+            ) : isDamOverdue(service.dam_issued_at, service.dam_paid) ? (
+              <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-3">
+                <p className="text-sm font-semibold text-destructive">⚠ Pagamento em atraso</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Prazo de 30 dias expirado</p>
+              </div>
+            ) : (
+              <div className="rounded-lg bg-warning/10 border border-warning/30 p-3">
+                <p className="text-sm font-semibold text-warning-foreground">Aguardando pagamento</p>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
       {/* Completion Info - Only for archived services */}
       {isCompleted && (
         <>
@@ -216,6 +317,57 @@ export function ServiceDetailView({
               <div>
                 <p className="text-sm text-muted-foreground">Notas de Finalização</p>
                 <p className="font-medium">{service.completion_notes}</p>
+              </div>
+            )}
+
+            {/* Operational metrics — shown only when present */}
+            {((service.fuel_liters ?? 0) > 0 || (service.worked_hours ?? 0) > 0 ||
+              (service.limestone_quantity ?? 0) > 0 || (service.input_quantity ?? 0) > 0) && (
+              <div className="grid grid-cols-2 gap-3">
+                {(service.fuel_liters ?? 0) > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Fuel className="h-4 w-4 text-red-500 shrink-0" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Combustível</p>
+                      <p className="font-medium text-sm">
+                        {Number(service.fuel_liters).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {(service.worked_hours ?? 0) > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-blue-500 shrink-0" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Horas Trabalhadas</p>
+                      <p className="font-medium text-sm">
+                        {Number(service.worked_hours).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {(service.limestone_quantity ?? 0) > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Layers className="h-4 w-4 text-stone-500 shrink-0" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Calcário</p>
+                      <p className="font-medium text-sm">
+                        {Number(service.limestone_quantity).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} t
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {(service.input_quantity ?? 0) > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4 text-purple-500 shrink-0" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Insumos</p>
+                      <p className="font-medium text-sm">
+                        {Number(service.input_quantity).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} t
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

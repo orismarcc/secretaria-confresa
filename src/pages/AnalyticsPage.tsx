@@ -271,11 +271,15 @@ export default function AnalyticsPage() {
     return Object.values(stats).filter(op => op.completed > 0).sort((a, b) => b.completed - a.completed).slice(0, 5);
   }, [services, operators]);
 
+  // M-11: use .filter (not .find) so multiple demand types with "grade" in the
+  // name (e.g. "Grade Aradora", "Grade Niveladora") are all counted.
   const totalWorkedArea = useMemo(() => {
-    const gradeId = (demandTypes as any[]).find(d => d.name?.toLowerCase().includes('grade'))?.id;
-    if (!gradeId) return 0;
+    const gradeIds = new Set(
+      (demandTypes as any[]).filter(d => d.name?.toLowerCase().includes('grade')).map((d: any) => d.id)
+    );
+    if (gradeIds.size === 0) return 0;
     return (services as any[])
-      .filter(s => s.status === 'completed' && s.demand_type_id === gradeId && s.worked_area)
+      .filter(s => s.status === 'completed' && gradeIds.has(s.demand_type_id) && s.worked_area)
       .reduce((acc, s) => acc + (Number(s.worked_area) || 0), 0);
   }, [services, demandTypes]);
 
