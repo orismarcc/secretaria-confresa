@@ -124,7 +124,7 @@ export function useUpdateDemandType() {
       toast({ title: 'Tipo de demanda atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar tipo de demanda', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -143,7 +143,7 @@ export function useDeleteDemandType() {
       toast({ title: 'Tipo de demanda removido!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover tipo de demanda', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -207,7 +207,7 @@ export function useUpdateSettlement() {
       toast({ title: 'Assentamento atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar assentamento', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -231,7 +231,7 @@ export function useDeleteSettlement() {
       toast({ title: 'Assentamento removido!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover assentamento', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -312,7 +312,7 @@ export function useUpdateLocation() {
       toast({ title: 'Localidade atualizada!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar localidade', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -334,7 +334,7 @@ export function useDeleteLocation() {
       toast({ title: 'Localidade removida!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover localidade', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -409,7 +409,12 @@ export function useCreateProducer() {
         const { error: demandError } = await supabase
           .from('producer_demands')
           .insert(demands);
-        if (demandError) throw demandError;
+        if (demandError) {
+          // A-01: compensate — roll back the producer row so we don't leave
+          // an orphan producer with no demands.
+          await supabase.from('producers').delete().eq('id', data.id);
+          throw new Error(`Erro ao salvar tipos de demanda: ${demandError.message}`);
+        }
       }
 
       return data;
@@ -471,7 +476,7 @@ export function useUpdateProducer() {
       toast({ title: 'Produtor atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar produtor', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -496,7 +501,7 @@ export function useDeleteProducer() {
       toast({ title: 'Produtor removido!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover produtor', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -519,7 +524,7 @@ export function useDeleteProducers() {
       toast({ title: `${ids.length} produtor(es) removido(s)!` });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover produtores', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -547,7 +552,7 @@ export function usePendingServices() {
         .from('services')
         .select('*, producers(name, phone, location_name, latitude, longitude), demand_types(name), settlements(name), locations(name), profiles!operator_id(name)')
         .neq('status', 'completed')
-        .order('position', { ascending: true })
+        .order('position', { ascending: true, nullsFirst: false }) // B-05: explicit NULLS LAST
         .order('scheduled_date', { ascending: true });
       if (error) throw error;
       return data;
@@ -668,7 +673,7 @@ export function useUpdateService() {
       toast({ title: 'Atendimento atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar atendimento', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -688,7 +693,7 @@ export function useDeleteService() {
       toast({ title: 'Atendimento removido!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover atendimento', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -794,7 +799,7 @@ export function useUpdateMachinery() {
       toast({ title: 'Maquinário atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar maquinário', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -814,7 +819,7 @@ export function useDeleteMachinery() {
       toast({ title: 'Maquinário removido!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover maquinário', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -1036,7 +1041,7 @@ export function useUpdatePatrimony() {
       toast({ title: 'Bem atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar bem do patrimônio', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -1074,7 +1079,7 @@ export function useDeletePatrimony() {
       toast({ title: 'Bem removido!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover bem do patrimônio', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -1112,7 +1117,7 @@ export function useCreateResponsibleTechnician() {
       toast({ title: 'Responsável Técnico cadastrado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao cadastrar', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao cadastrar responsável técnico', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -1136,7 +1141,7 @@ export function useUpdateResponsibleTechnician() {
       toast({ title: 'Responsável Técnico atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar responsável técnico', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -1372,7 +1377,7 @@ export function useUpdateSefazProducer() {
       toast({ title: 'Produtor SEFAZ atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar produtor SEFAZ', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -1391,7 +1396,7 @@ export function useDeleteSefazProducer() {
       toast({ title: 'Produtor removido!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover produtor SEFAZ', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -1452,7 +1457,7 @@ export function useUpdateSefazService() {
       toast({ title: 'Atendimento atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar atendimento SEFAZ', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -1471,7 +1476,7 @@ export function useDeleteSefazService() {
       toast({ title: 'Atendimento removido!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover atendimento SEFAZ', description: error.message, variant: 'destructive' });
     },
   });
 }

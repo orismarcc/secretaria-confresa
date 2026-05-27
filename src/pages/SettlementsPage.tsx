@@ -23,6 +23,7 @@ import {
   useProducers,
   useDemandTypes,
 } from '@/hooks/useSupabaseData';
+import { getPatrulhaIds, computeSettlementStats } from '@/lib/analyticsUtils';
 
 interface Settlement {
   id: string;
@@ -52,37 +53,12 @@ export default function SettlementsPage() {
 
   // ── Computed stats ──────────────────────────────────────────────────────────
 
-  const patrulhaIds = useMemo(() =>
-    new Set(
-      (demandTypes as any[])
-        .filter(d => d.category === 'patrulha_mecanizada')
-        .map((d: any) => d.id)
-    ),
-    [demandTypes]
+  // M-03: use shared helpers from analyticsUtils
+  const patrulhaIds = useMemo(() => getPatrulhaIds(demandTypes as any[]), [demandTypes]);
+  const settlementStats = useMemo(
+    () => computeSettlementStats(services as any[], producers as any[], patrulhaIds),
+    [services, producers, patrulhaIds],
   );
-
-  /** PM finalised count + total producers registered per settlement */
-  const settlementStats = useMemo(() => {
-    const stats: Record<string, { pmCount: number; producersCount: number }> = {};
-
-    // Count finalised PM services per settlement
-    (services as any[])
-      .filter(s => s.status === 'completed' && patrulhaIds.has(s.demand_type_id))
-      .forEach(s => {
-        if (!s.settlement_id) return;
-        if (!stats[s.settlement_id]) stats[s.settlement_id] = { pmCount: 0, producersCount: 0 };
-        stats[s.settlement_id].pmCount++;
-      });
-
-    // Count producers registered per settlement
-    (producers as any[]).forEach(p => {
-      if (!p.settlement_id) return;
-      if (!stats[p.settlement_id]) stats[p.settlement_id] = { pmCount: 0, producersCount: 0 };
-      stats[p.settlement_id].producersCount++;
-    });
-
-    return stats;
-  }, [services, producers, patrulhaIds]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 

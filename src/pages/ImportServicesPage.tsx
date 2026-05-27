@@ -86,10 +86,11 @@ export default function ImportServicesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: demandTypesRaw = [] } = useDemandTypes();
-  const { data: settlementsRaw = [] } = useSettlements();
-  const { data: machineryRaw = [] } = useMachinery();
-  const { data: techniciansRaw = [] } = useResponsibleTechnicians();
+  const { data: demandTypesRaw = [], isLoading: loadingDemandTypes } = useDemandTypes();
+  const { data: settlementsRaw = [], isLoading: loadingSettlements } = useSettlements();
+  const { data: machineryRaw = [], isLoading: loadingMachinery } = useMachinery();
+  const { data: techniciansRaw = [], isLoading: loadingTechnicians } = useResponsibleTechnicians();
+  const refDataLoading = loadingDemandTypes || loadingSettlements || loadingMachinery || loadingTechnicians;
 
   const [operators, setOperators] = useState<NamedRecord[]>([]);
   const operatorsFetched = useRef(false);
@@ -479,29 +480,42 @@ export default function ImportServicesPage() {
 
           {/* File drop zone */}
           <div
-            onDrop={handleDrop}
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            onClick={() => document.getElementById('xlsx-input')?.click()}
-            className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors select-none ${
-              isDragging
-                ? 'border-primary bg-primary/5'
-                : 'border-border hover:border-primary/50 hover:bg-muted/20'
+            onDrop={refDataLoading ? undefined : handleDrop}
+            onDragOver={refDataLoading ? undefined : (e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={refDataLoading ? undefined : () => setIsDragging(false)}
+            onClick={refDataLoading ? undefined : () => document.getElementById('xlsx-input')?.click()}
+            className={`border-2 border-dashed rounded-xl p-10 text-center transition-colors select-none ${
+              refDataLoading
+                ? 'border-border bg-muted/30 cursor-not-allowed opacity-70'
+                : isDragging
+                ? 'border-primary bg-primary/5 cursor-pointer'
+                : 'border-border hover:border-primary/50 hover:bg-muted/20 cursor-pointer'
             }`}
           >
-            <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-            <p className="font-semibold mb-1">Arraste o arquivo .xlsx aqui</p>
-            <p className="text-sm text-muted-foreground mb-4">ou clique para selecionar</p>
-            <Button variant="outline" type="button" size="sm" onClick={(e) => e.stopPropagation()}>
-              <FileSpreadsheet className="h-4 w-4 mr-2" />
-              Selecionar arquivo
-            </Button>
+            {refDataLoading ? (
+              <>
+                <Loader2 className="h-10 w-10 mx-auto mb-3 text-muted-foreground animate-spin" />
+                <p className="font-semibold mb-1 text-muted-foreground">Carregando dados de referência…</p>
+                <p className="text-sm text-muted-foreground">Aguarde enquanto os dados são carregados</p>
+              </>
+            ) : (
+              <>
+                <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+                <p className="font-semibold mb-1">Arraste o arquivo .xlsx aqui</p>
+                <p className="text-sm text-muted-foreground mb-4">ou clique para selecionar</p>
+                <Button variant="outline" type="button" size="sm" onClick={(e) => e.stopPropagation()}>
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Selecionar arquivo
+                </Button>
+              </>
+            )}
             <input
               id="xlsx-input"
               type="file"
               accept=".xlsx,.xls"
               className="hidden"
               onChange={handleFileInput}
+              disabled={refDataLoading}
             />
           </div>
 

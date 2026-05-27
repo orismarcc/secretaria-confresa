@@ -27,9 +27,30 @@ import {
 } from '@/components/ui/select';
 import { Producer, Settlement, Location } from '@/types';
 
+// B-01: validate CPF using the standard modulo-11 digit-check algorithm.
+function validateCpf(cpf: string): boolean {
+  const digits = cpf.replace(/\D/g, '');
+  if (digits.length !== 11) return false;
+  // Reject all-same-digit CPFs (e.g. 111.111.111-11)
+  if (/^(\d)\1{10}$/.test(digits)) return false;
+  const sum = (end: number) =>
+    digits
+      .slice(0, end)
+      .split('')
+      .reduce((acc, d, i) => acc + Number(d) * (end + 1 - i), 0);
+  const rem1 = (sum(9) * 10) % 11;
+  if ((rem1 === 10 ? 0 : rem1) !== Number(digits[9])) return false;
+  const rem2 = (sum(10) * 10) % 11;
+  return (rem2 === 10 ? 0 : rem2) === Number(digits[10]);
+}
+
 const producerSchema = z.object({
   name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres').max(100, 'Nome muito longo'),
-  cpf: z.string().min(11, 'CPF inválido').max(14, 'CPF inválido'),
+  cpf: z
+    .string()
+    .min(11, 'CPF inválido')
+    .max(14, 'CPF inválido')
+    .refine(validateCpf, 'CPF inválido (dígitos verificadores incorretos)'),
   phone: z.string().min(10, 'Telefone inválido').max(15, 'Telefone inválido'),
   settlementId: z.string().min(1, 'Selecione um assentamento'),
   locationName: z.string().optional(),

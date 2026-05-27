@@ -17,6 +17,7 @@ import {
   TrendingUp, MapPin, ClipboardList, Tractor, Users2, Package, Layers, FileDown, Truck, Stethoscope, Fuel, Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getPatrulhaIds, getDemandIdsByCategory, getDemandIdsByNameSubstring } from '@/lib/analyticsUtils';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import logoTransparent from '@/assets/logo-transparent.png';
@@ -108,8 +109,9 @@ export default function AnalyticsPage() {
   const isLoading = servicesLoading || settlementsLoading || demandTypesLoading;
 
   // ── Category quick stats — COMPLETED ONLY ──────────────────────────────────
+  // M-03: use shared helper
   const patrulhaCount = useMemo(() => {
-    const ids = new Set((demandTypes as any[]).filter(d => d.category === 'patrulha_mecanizada').map((d: any) => d.id));
+    const ids = getPatrulhaIds(demandTypes as any[]);
     return (services as any[]).filter(s => s.status === 'completed' && ids.has(s.demand_type_id)).length;
   }, [services, demandTypes]);
 
@@ -126,10 +128,7 @@ export default function AnalyticsPage() {
     [deliveries]
   );
 
-  const calcarioIds = useMemo(() =>
-    new Set((demandTypes as any[]).filter(d => d.category === 'calcario').map((d: any) => d.id)),
-    [demandTypes]
-  );
+  const calcarioIds = useMemo(() => getDemandIdsByCategory(demandTypes as any[], ['calcario']), [demandTypes]);
 
   const calcarioCount = useMemo(() =>
     (services as any[]).filter(s => s.status === 'completed' && calcarioIds.has(s.demand_type_id)).length,
@@ -143,10 +142,7 @@ export default function AnalyticsPage() {
     [services, calcarioIds]
   );
 
-  const insumosIds = useMemo(() =>
-    new Set((demandTypes as any[]).filter(d => d.category === 'logistica_insumos').map((d: any) => d.id)),
-    [demandTypes]
-  );
+  const insumosIds = useMemo(() => getDemandIdsByCategory(demandTypes as any[], ['logistica_insumos']), [demandTypes]);
 
   const insumosCount = useMemo(() =>
     (services as any[]).filter(s => s.status === 'completed' && insumosIds.has(s.demand_type_id)).length,
@@ -161,7 +157,7 @@ export default function AnalyticsPage() {
   );
 
   const assistenciaTecnicaCount = useMemo(() => {
-    const ids = new Set((demandTypes as any[]).filter(d => d.category === 'assistencia_tecnica').map((d: any) => d.id));
+    const ids = getDemandIdsByCategory(demandTypes as any[], ['assistencia_tecnica']);
     return (services as any[]).filter(s => s.status === 'completed' && ids.has(s.demand_type_id)).length;
   }, [services, demandTypes]);
 
@@ -190,7 +186,7 @@ export default function AnalyticsPage() {
   }, [services]);
 
   const monthlyGradeVsPcData = useMemo(() => {
-    const gradeIds = new Set((demandTypes as any[]).filter(d => d.name?.toLowerCase().includes('grade')).map((d: any) => d.id));
+    const gradeIds = getDemandIdsByNameSubstring(demandTypes as any[], 'grade');
     const pcIds = new Set((demandTypes as any[]).filter(d => d.name?.toLowerCase().includes(' pc') || d.name?.toLowerCase() === 'pc').map((d: any) => d.id));
     const now = new Date();
     return Array.from({ length: 6 }, (_, i) => {
@@ -213,9 +209,7 @@ export default function AnalyticsPage() {
 
   // ── Top 3 rankings — COMPLETED ONLY ───────────────────────────────────────
   const topSettlements = useMemo(() => {
-    const patrulhaIds = new Set(
-      (demandTypes as any[]).filter(d => d.category === 'patrulha_mecanizada').map((d: any) => d.id)
-    );
+    const patrulhaIds = getPatrulhaIds(demandTypes as any[]);
     // Only completed services count toward the ranking
     const completedServices = (services as any[]).filter(s => s.status === 'completed');
     const stats: Record<string, { name: string; count: number; patrulha: number }> = {};
@@ -271,41 +265,35 @@ export default function AnalyticsPage() {
     return Object.values(stats).filter(op => op.completed > 0).sort((a, b) => b.completed - a.completed).slice(0, 5);
   }, [services, operators]);
 
-  // M-11: use .filter (not .find) so multiple demand types with "grade" in the
-  // name (e.g. "Grade Aradora", "Grade Niveladora") are all counted.
+  // M-11+M-03: use shared helper; .filter covers all grade types
   const totalWorkedArea = useMemo(() => {
-    const gradeIds = new Set(
-      (demandTypes as any[]).filter(d => d.name?.toLowerCase().includes('grade')).map((d: any) => d.id)
-    );
+    const gradeIds = getDemandIdsByNameSubstring(demandTypes as any[], 'grade');
     if (gradeIds.size === 0) return 0;
     return (services as any[])
       .filter(s => s.status === 'completed' && gradeIds.has(s.demand_type_id) && s.worked_area)
       .reduce((acc, s) => acc + (Number(s.worked_area) || 0), 0);
   }, [services, demandTypes]);
 
+  const patrulhaInsumosIds = useMemo(
+    () => getDemandIdsByCategory(demandTypes as any[], ['patrulha_mecanizada', 'logistica_insumos']),
+    [demandTypes],
+  );
+
   /** Total fuel consumed (L) — all completed patrulha_mecanizada + logistica_insumos */
-  const totalFuelLiters = useMemo(() => {
-    const ids = new Set(
-      (demandTypes as any[])
-        .filter(d => d.category === 'patrulha_mecanizada' || d.category === 'logistica_insumos')
-        .map((d: any) => d.id)
-    );
-    return (services as any[])
-      .filter(s => s.status === 'completed' && ids.has(s.demand_type_id) && s.fuel_liters)
-      .reduce((acc, s) => acc + (Number(s.fuel_liters) || 0), 0);
-  }, [services, demandTypes]);
+  const totalFuelLiters = useMemo(() =>
+    (services as any[])
+      .filter(s => s.status === 'completed' && patrulhaInsumosIds.has(s.demand_type_id) && s.fuel_liters)
+      .reduce((acc, s) => acc + (Number(s.fuel_liters) || 0), 0),
+    [services, patrulhaInsumosIds],
+  );
 
   /** Total worked hours (h) — all completed patrulha_mecanizada + logistica_insumos */
-  const totalWorkedHours = useMemo(() => {
-    const ids = new Set(
-      (demandTypes as any[])
-        .filter(d => d.category === 'patrulha_mecanizada' || d.category === 'logistica_insumos')
-        .map((d: any) => d.id)
-    );
-    return (services as any[])
-      .filter(s => s.status === 'completed' && ids.has(s.demand_type_id) && s.worked_hours)
-      .reduce((acc, s) => acc + (Number(s.worked_hours) || 0), 0);
-  }, [services, demandTypes]);
+  const totalWorkedHours = useMemo(() =>
+    (services as any[])
+      .filter(s => s.status === 'completed' && patrulhaInsumosIds.has(s.demand_type_id) && s.worked_hours)
+      .reduce((acc, s) => acc + (Number(s.worked_hours) || 0), 0),
+    [services, patrulhaInsumosIds],
+  );
 
   // ── PDF export grouped by assentamento ─────────────────────────────────────
   const handleExportBySettlement = () => {
