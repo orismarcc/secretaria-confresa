@@ -447,6 +447,12 @@ export function useUpdateProducer() {
 
       // Update producer demands if provided
       if (demandTypeIds !== undefined) {
+        // Snapshot current demands for compensating restore
+        const { data: existingDemands } = await supabase
+          .from('producer_demands')
+          .select('demand_type_id')
+          .eq('producer_id', id);
+
         // Delete existing demands
         const { error: delDemandErr } = await supabase
           .from('producer_demands')
@@ -463,7 +469,15 @@ export function useUpdateProducer() {
           const { error: demandError } = await supabase
             .from('producer_demands')
             .insert(demands);
-          if (demandError) throw demandError;
+          if (demandError) {
+            // Compensate: restore previous demands
+            if (existingDemands && existingDemands.length > 0) {
+              await supabase.from('producer_demands').insert(
+                existingDemands.map((d) => ({ producer_id: id, demand_type_id: d.demand_type_id })),
+              );
+            }
+            throw demandError;
+          }
         }
       }
 
@@ -563,6 +577,7 @@ export function usePendingServices() {
 // Bulk update service positions via single RPC call
 export function useUpdateServicePositions() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   return useMutation({
     mutationFn: async (updates: { id: string; position: number }[]) => {
@@ -576,8 +591,8 @@ export function useUpdateServicePositions() {
       queryClient.invalidateQueries({ queryKey: ['services', 'pending'] });
     },
     onError: (error: Error) => {
-      // A-05: falha no RPC de drag-drop — logar para diagnóstico; próximo refresh restaura ordem do DB
       console.error('[useUpdateServicePositions] Falha ao salvar posições:', error.message);
+      toast({ title: 'Erro ao salvar ordem dos atendimentos', description: error.message, variant: 'destructive' });
     },
   });
 }
@@ -1015,6 +1030,8 @@ export function useCreatePatrimony() {
       image_url?: string | null;
       image_url_2?: string | null;
       image_url_3?: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
     }) => {
       const { data, error } = await supabase.from('patrimony').insert(item).select().single();
       if (error) throw error;

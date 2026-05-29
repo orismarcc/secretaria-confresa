@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   MapPin, User, Calendar, Hash, DollarSign, AlertTriangle,
   Pencil, ArrowRightLeft, MessageCircle, Clock, ChevronRight,
-  Building2, X,
+  Building2, X, Navigation, ExternalLink,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -42,6 +42,8 @@ export interface PatrimonyDetailItem {
   image_url: string | null;
   image_url_2?: string | null;
   image_url_3?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   created_at: string | null;
 }
 
@@ -62,6 +64,19 @@ interface PatrimonyDetailSheetProps {
   item: PatrimonyDetailItem | null;
   onEdit: (item: PatrimonyDetailItem) => void;
   onTransfer: (item: PatrimonyDetailItem) => void;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function openInMaps(lat: number, lng: number) {
+  const googleUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+  const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+  if (isMobile) {
+    window.location.href = `geo:${lat},${lng}?q=${lat},${lng}`;
+    setTimeout(() => window.open(googleUrl, '_blank', 'noopener,noreferrer'), 500);
+  } else {
+    window.open(googleUrl, '_blank', 'noopener,noreferrer');
+  }
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -323,6 +338,24 @@ export function PatrimonyDetailSheet({
                 </div>
               )}
             </div>
+
+            {/* GPS */}
+            {item.latitude != null && item.longitude != null && (
+              <div className="flex items-start gap-2">
+                <Navigation className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs text-muted-foreground mb-0.5">Coordenadas GPS</p>
+                  <button
+                    type="button"
+                    onClick={() => openInMaps(item.latitude!, item.longitude!)}
+                    className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-500 font-mono"
+                  >
+                    {Number(item.latitude).toFixed(6)}, {Number(item.longitude).toFixed(6)}
+                    <ExternalLink className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Description */}
             {item.description && (

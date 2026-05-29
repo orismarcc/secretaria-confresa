@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { AlertTriangle, ImageIcon, X, Plus } from 'lucide-react';
+import { AlertTriangle, ImageIcon, X, Plus, Navigation } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -31,6 +31,8 @@ export interface PatrimonyFormItem {
   image_url: string | null;
   image_url_2?: string | null;
   image_url_3?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   // Operational (shown only on create)
   location?: string | null;
   responsible_name?: string | null;
@@ -50,6 +52,8 @@ export interface PatrimonyFormPayload {
   image_url: string | null;
   image_url_2: string | null;
   image_url_3: string | null;
+  latitude: number | null;
+  longitude: number | null;
   // Only present for create
   location?: string | null;
   responsible_name?: string | null;
@@ -156,6 +160,10 @@ export function PatrimonyForm({ open, onOpenChange, item, onSubmit }: PatrimonyF
   const [writtenOff, setWrittenOff]               = useState(false);
   const [condition, setCondition]                 = useState<Condition | ''>('');
 
+  // GPS
+  const [latitude, setLatitude]                   = useState('');
+  const [longitude, setLongitude]                 = useState('');
+
   // Create-only: initial operational state (seeds first transfer)
   const [location, setLocation]                   = useState('');
   const [responsibleName, setResponsibleName]     = useState('');
@@ -193,6 +201,8 @@ export function PatrimonyForm({ open, onOpenChange, item, onSubmit }: PatrimonyF
           { file: null, preview: null, existingUrl: item.image_url_2 ?? null },
           { file: null, preview: null, existingUrl: item.image_url_3 ?? null },
         ]);
+        setLatitude(item.latitude != null ? String(item.latitude) : '');
+        setLongitude(item.longitude != null ? String(item.longitude) : '');
         // Edit mode: operational fields not shown
         setLocation('');
         setResponsibleName('');
@@ -201,6 +211,7 @@ export function PatrimonyForm({ open, onOpenChange, item, onSubmit }: PatrimonyF
         setName(''); setPatrimonyNumber(''); setPatrimonyNumberState('');
         setDescription(''); setValue(''); setCategory('');
         setAcquisitionDate(''); setWrittenOff(false); setCondition('');
+        setLatitude(''); setLongitude('');
         setLocation(''); setResponsibleName(''); setResponsiblePhone('');
         setImgSlots([
           { file: null, preview: null, existingUrl: null },
@@ -249,6 +260,9 @@ export function PatrimonyForm({ open, onOpenChange, item, onSubmit }: PatrimonyF
         }
       }
 
+      const parsedLat  = parseFloat(latitude.replace(',', '.'));
+      const parsedLng  = parseFloat(longitude.replace(',', '.'));
+
       const payload: PatrimonyFormPayload = {
         name,
         patrimony_number: patrimonyNumber,
@@ -262,6 +276,8 @@ export function PatrimonyForm({ open, onOpenChange, item, onSubmit }: PatrimonyF
         image_url: resolvedUrls[0],
         image_url_2: resolvedUrls[1],
         image_url_3: resolvedUrls[2],
+        latitude: isNaN(parsedLat) ? null : parsedLat,
+        longitude: isNaN(parsedLng) ? null : parsedLng,
       };
 
       // CREATE-only: include initial operational state
@@ -475,6 +491,41 @@ export function PatrimonyForm({ open, onOpenChange, item, onSubmit }: PatrimonyF
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Descrição do bem"
             />
+          </div>
+
+          {/* ── GPS Coordinates ── */}
+          <div className="border rounded-lg p-4 bg-muted/30">
+            <div className="flex items-center gap-2 mb-3">
+              <Navigation className="h-4 w-4 text-muted-foreground" />
+              <p className="text-sm font-medium">Coordenadas GPS (opcional)</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="pat-lat">Latitude</Label>
+                <Input
+                  id="pat-lat"
+                  type="text"
+                  inputMode="decimal"
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value)}
+                  placeholder="-12.345678"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pat-lng">Longitude</Label>
+                <Input
+                  id="pat-lng"
+                  type="text"
+                  inputMode="decimal"
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value)}
+                  placeholder="-51.678901"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Ex: Lat -12.345678, Lng -51.678901. Clique nas coordenadas no detalhe do bem para abrir o mapa.
+            </p>
           </div>
 
           {/* ── CREATE-ONLY: initial location & responsible ── */}
