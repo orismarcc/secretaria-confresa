@@ -1002,6 +1002,7 @@ export function useCreatePatrimony() {
     mutationFn: async (item: {
       name: string;
       patrimony_number: string;
+      patrimony_number_state?: string | null;
       description?: string | null;
       value?: number | null;
       category?: string | null;
@@ -1012,6 +1013,8 @@ export function useCreatePatrimony() {
       condition?: string | null;
       written_off?: boolean;
       image_url?: string | null;
+      image_url_2?: string | null;
+      image_url_3?: string | null;
     }) => {
       const { data, error } = await supabase.from('patrimony').insert(item).select().single();
       if (error) throw error;
@@ -1051,23 +1054,22 @@ export function useDeletePatrimony() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: async (id: string) => {
-      // A-08: buscar image_url antes de deletar para limpar o Storage
+      // A-08: fetch all 3 image URLs before deleting to clean up Storage
       const { data: item } = await supabase
         .from('patrimony')
-        .select('image_url')
+        .select('image_url, image_url_2, image_url_3')
         .eq('id', id)
         .maybeSingle();
 
-      if (item?.image_url) {
-        try {
-          // Extrair o caminho relativo dentro do bucket (após "patrimony-images/")
-          const match = (item.image_url as string).match(/patrimony-images\/(.+)$/);
-          if (match) {
-            await supabase.storage.from('patrimony-images').remove([match[1]]);
+      if (item) {
+        const urls = [item.image_url, item.image_url_2, item.image_url_3].filter(Boolean) as string[];
+        for (const url of urls) {
+          try {
+            const match = url.match(/patrimony-images\/(.+)$/);
+            if (match) await supabase.storage.from('patrimony-images').remove([match[1]]);
+          } catch (storageErr) {
+            console.warn('[useDeletePatrimony] Falha ao remover imagem do storage:', storageErr);
           }
-        } catch (storageErr) {
-          // Não abortar a exclusão do registro por falha de storage
-          console.warn('[useDeletePatrimony] Falha ao remover imagem do storage:', storageErr);
         }
       }
 
@@ -1080,6 +1082,82 @@ export function useDeletePatrimony() {
     },
     onError: (error: Error) => {
       toast({ title: 'Erro ao remover bem do patrimônio', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function usePatrimonyTransfers(patrimonyId: string | null) {
+  return useQuery({
+    queryKey: ['patrimony_transfers', patrimonyId],
+    queryFn: async () => {
+      if (!patrimonyId) return [];
+      const { data, error } = await supabase
+        .from('patrimony_transfers')
+        .select('*')
+        .eq('patrimony_id', patrimonyId)
+        .order('transferred_at', { ascending: false })
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!patrimonyId,
+  });
+}
+
+export function useCreatePatrimonyTransfer() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({
+      transfer,
+      patrimonyId,
+    }: {
+      transfer: {
+        patrimony_id: string;
+        transferred_at: string;
+        location?: string | null;
+        responsible_name?: string | null;
+        responsible_phone?: string | null;
+        condition?: string | null;
+        notes?: string | null;
+        created_by?: string | null;
+      };
+      patrimonyId: string;
+    }) => {
+      // 1. Insert the transfer record
+      const { data: transferData, error: transferError } = await supabase
+        .from('patrimony_transfers')
+        .insert(transfer)
+        .select()
+        .single();
+      if (transferError) throw transferError;
+
+      // 2. Update patrimony with the new operational state
+      const { error: updateError } = await supabase
+        .from('patrimony')
+        .update({
+          location: transfer.location ?? null,
+          responsible_name: transfer.responsible_name ?? null,
+          responsible_phone: transfer.responsible_phone ?? null,
+          condition: transfer.condition ?? null,
+        })
+        .eq('id', patrimonyId);
+
+      if (updateError) {
+        // Compensate: remove the transfer we just inserted
+        await supabase.from('patrimony_transfers').delete().eq('id', transferData.id);
+        throw updateError;
+      }
+
+      return transferData;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['patrimony'] });
+      queryClient.invalidateQueries({ queryKey: ['patrimony_transfers', variables.patrimonyId] });
+      toast({ title: 'Movimentação registrada!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao registrar movimentação', description: error.message, variant: 'destructive' });
     },
   });
 }

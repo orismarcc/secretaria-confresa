@@ -1,34 +1,31 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Plus, Pencil, Trash2, Building2, MessageCircle,
   MapPin, User, DollarSign, Calendar, Hash,
-  ImageIcon, X, AlertTriangle, ShieldCheck, Filter,
+  AlertTriangle, Filter, ArrowRightLeft, Eye,
 } from 'lucide-react';
 import { openWhatsApp } from '@/lib/phone';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, parseISO } from 'date-fns';
-import { supabase } from '@/integrations/supabase/client';
 import {
   usePatrimony,
   useCreatePatrimony,
   useUpdatePatrimony,
   useDeletePatrimony,
+  useCreatePatrimonyTransfer,
 } from '@/hooks/useSupabaseData';
+import { PatrimonyForm, type PatrimonyFormPayload, type PatrimonyFormItem } from '@/components/forms/PatrimonyForm';
+import { PatrimonyTransferDialog, type PatrimonyTransferItem } from '@/components/PatrimonyTransferDialog';
+import { PatrimonyDetailSheet, type PatrimonyDetailItem } from '@/components/PatrimonyDetailSheet';
+import { supabase } from '@/integrations/supabase/client';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type Condition = 'otimo' | 'bom' | 'ruim' | 'pessimo';
 
@@ -36,6 +33,7 @@ interface PatrimonyItem {
   id: string;
   name: string;
   patrimony_number: string;
+  patrimony_number_state?: string | null;
   description: string | null;
   value: number | null;
   category: string | null;
@@ -48,11 +46,11 @@ interface PatrimonyItem {
   condition: Condition | null;
   written_off: boolean;
   image_url: string | null;
+  image_url_2?: string | null;
+  image_url_3?: string | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const CATEGORIES = ['Veículo', 'Equipamento', 'Imóvel', 'Móvel', 'Implemento', 'Outro'] as const;
 
 const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   Veículo:     { bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200' },
@@ -83,62 +81,30 @@ function formatDate(dateStr: string | null): string {
   catch { return '—'; }
 }
 
-function parseCurrencyInput(raw: string): number | null {
-  const cleaned = raw.replace(/[^\d,\.]/g, '').replace(',', '.');
-  const n = parseFloat(cleaned);
-  return isNaN(n) ? null : n;
-}
-
-async function uploadPatrimonyImage(file: File, itemId: string): Promise<string | null> {
-  const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
-  const path = `${itemId}/${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from('patrimony-images').upload(path, file, { upsert: true });
-  if (error) {
-    console.error('Image upload error:', error);
-    return null;
-  }
-  const { data } = supabase.storage.from('patrimony-images').getPublicUrl(path);
-  return data?.publicUrl ?? null;
-}
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function PatrimonyPage() {
   const { data: patrimony = [], isLoading } = usePatrimony();
-  const createPatrimony = useCreatePatrimony();
-  const updatePatrimony = useUpdatePatrimony();
-  const deletePatrimony = useDeletePatrimony();
+  const createPatrimony      = useCreatePatrimony();
+  const updatePatrimony      = useUpdatePatrimony();
+  const deletePatrimony      = useDeletePatrimony();
+  const createTransfer       = useCreatePatrimonyTransfer();
 
   // Filters
-  const [search, setSearch]       = useState('');
-  const [dateFrom, setDateFrom]   = useState('');
-  const [dateTo, setDateTo]       = useState('');
+  const [search, setSearch]         = useState('');
+  const [dateFrom, setDateFrom]     = useState('');
+  const [dateTo, setDateTo]         = useState('');
   const [filterCond, setFilterCond] = useState<string>('all');
 
-  // Dialog state
-  const [formOpen, setFormOpen]               = useState(false);
-  const [editing, setEditing]                 = useState<PatrimonyItem | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [toDelete, setToDelete]               = useState<PatrimonyItem | null>(null);
-
-  // Form fields
-  const [formName, setFormName]                     = useState('');
-  const [formPatrimonyNumber, setFormPatrimonyNumber] = useState('');
-  const [formDescription, setFormDescription]       = useState('');
-  const [formValue, setFormValue]                   = useState('');
-  const [formCategory, setFormCategory]             = useState('');
-  const [formAcquisitionDate, setFormAcquisitionDate] = useState('');
-  const [formLocation, setFormLocation]             = useState('');
-  const [formResponsibleName, setFormResponsibleName] = useState('');
-  const [formResponsiblePhone, setFormResponsiblePhone] = useState('');
-  const [formCondition, setFormCondition]           = useState<Condition | ''>('');
-  const [formWrittenOff, setFormWrittenOff]         = useState(false);
-  const [formImageFile, setFormImageFile]           = useState<File | null>(null);
-  const [formImagePreview, setFormImagePreview]     = useState<string | null>(null);
-  const [formExistingImageUrl, setFormExistingImageUrl] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting]             = useState(false);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Dialog / sheet state
+  const [formOpen, setFormOpen]                   = useState(false);
+  const [editingItem, setEditingItem]             = useState<PatrimonyItem | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen]   = useState(false);
+  const [toDelete, setToDelete]                   = useState<PatrimonyItem | null>(null);
+  const [transferOpen, setTransferOpen]           = useState(false);
+  const [transferItem, setTransferItem]           = useState<PatrimonyItem | null>(null);
+  const [detailOpen, setDetailOpen]               = useState(false);
+  const [detailItem, setDetailItem]               = useState<PatrimonyItem | null>(null);
 
   // ─── Filtered list ──────────────────────────────────────────────────────────
 
@@ -146,12 +112,12 @@ export default function PatrimonyPage() {
     const matchesSearch =
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.patrimony_number.toLowerCase().includes(search.toLowerCase()) ||
+      (p.patrimony_number_state ?? '').toLowerCase().includes(search.toLowerCase()) ||
       (p.category ?? '').toLowerCase().includes(search.toLowerCase());
 
     const dateStr = p.acquisition_date?.substring(0, 10) ?? '';
     const matchesFrom = !dateFrom || dateStr >= dateFrom;
     const matchesTo   = !dateTo   || dateStr <= dateTo;
-
     const matchesCond = filterCond === 'all' || p.condition === filterCond;
 
     return matchesSearch && matchesFrom && matchesTo && matchesCond;
@@ -159,106 +125,98 @@ export default function PatrimonyPage() {
 
   const hasFilters = search || dateFrom || dateTo || filterCond !== 'all';
 
-  // ─── Form helpers ───────────────────────────────────────────────────────────
+  // ─── Handlers ───────────────────────────────────────────────────────────────
 
-  const resetForm = () => {
-    setFormName(''); setFormPatrimonyNumber(''); setFormDescription('');
-    setFormValue(''); setFormCategory(''); setFormAcquisitionDate('');
-    setFormLocation(''); setFormResponsibleName(''); setFormResponsiblePhone('');
-    setFormCondition(''); setFormWrittenOff(false);
-    setFormImageFile(null); setFormImagePreview(null); setFormExistingImageUrl(null);
+  const handleCreate = (data: PatrimonyFormPayload) => {
+    createPatrimony.mutate(
+      {
+        name: data.name,
+        patrimony_number: data.patrimony_number,
+        patrimony_number_state: data.patrimony_number_state,
+        description: data.description,
+        value: data.value,
+        category: data.category,
+        acquisition_date: data.acquisition_date,
+        written_off: data.written_off,
+        condition: data.condition,
+        location: data.location,
+        responsible_name: data.responsible_name,
+        responsible_phone: data.responsible_phone,
+        image_url: data.image_url,
+        image_url_2: data.image_url_2,
+        image_url_3: data.image_url_3,
+      },
+      {
+        onSuccess: async (created: any) => {
+          // Seed initial transfer if operational fields were provided
+          if (
+            created?.id &&
+            (data.location || data.responsible_name || data.condition)
+          ) {
+            const { data: { user } } = await supabase.auth.getUser();
+            createTransfer.mutate({
+              transfer: {
+                patrimony_id: created.id,
+                transferred_at: data.acquisition_date ?? format(new Date(), 'yyyy-MM-dd'),
+                location: data.location ?? null,
+                responsible_name: data.responsible_name ?? null,
+                responsible_phone: data.responsible_phone ?? null,
+                condition: data.condition,
+                notes: 'Registro inicial do bem',
+                created_by: user?.id ?? null,
+              },
+              patrimonyId: created.id,
+            });
+          }
+        },
+      },
+    );
   };
 
-  const openCreateForm = () => {
-    setEditing(null);
-    resetForm();
-    setFormOpen(true);
-  };
-
-  const openEditForm = (item: PatrimonyItem) => {
-    setEditing(item);
-    setFormName(item.name);
-    setFormPatrimonyNumber(item.patrimony_number);
-    setFormDescription(item.description ?? '');
-    setFormValue(item.value != null
-      ? item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      : '');
-    setFormCategory(item.category ?? '');
-    setFormAcquisitionDate(item.acquisition_date ?? '');
-    setFormLocation(item.location ?? '');
-    setFormResponsibleName(item.responsible_name ?? '');
-    setFormResponsiblePhone(item.responsible_phone ?? '');
-    setFormCondition((item.condition ?? '') as Condition | '');
-    setFormWrittenOff(item.written_off ?? false);
-    setFormImageFile(null);
-    setFormImagePreview(null);
-    setFormExistingImageUrl(item.image_url ?? null);
-    setFormOpen(true);
-  };
-
-  const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setFormImageFile(file);
-    const reader = new FileReader();
-    reader.onload = (ev) => setFormImagePreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
-  }, []);
-
-  const clearImage = () => {
-    setFormImageFile(null);
-    setFormImagePreview(null);
-    setFormExistingImageUrl(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
-    try {
-      let imageUrl = formExistingImageUrl;
-
-      // If there's a new file to upload, we need an ID first
-      if (formImageFile) {
-        // For new items, use a temp UUID; for edits, use the existing ID
-        const uploadId = editing?.id ?? crypto.randomUUID();
-        imageUrl = await uploadPatrimonyImage(formImageFile, uploadId);
-      }
-
-      const payload = {
-        name: formName,
-        patrimony_number: formPatrimonyNumber,
-        description: formDescription || null,
-        value: parseCurrencyInput(formValue),
-        category: formCategory || null,
-        acquisition_date: formAcquisitionDate || null,
-        location: formLocation || null,
-        responsible_name: formResponsibleName || null,
-        responsible_phone: formResponsiblePhone || null,
-        condition: (formCondition || null) as Condition | null,
-        written_off: formWrittenOff,
-        image_url: imageUrl,
-      };
-
-      if (editing) {
-        updatePatrimony.mutate({ id: editing.id, ...payload });
-      } else {
-        createPatrimony.mutate(payload);
-      }
-
-      setFormOpen(false);
-    } finally {
-      setIsSubmitting(false);
+  const handleEdit = (data: PatrimonyFormPayload) => {
+    if (!editingItem) return;
+    updatePatrimony.mutate({
+      id: editingItem.id,
+      name: data.name,
+      patrimony_number: data.patrimony_number,
+      patrimony_number_state: data.patrimony_number_state,
+      description: data.description,
+      value: data.value,
+      category: data.category,
+      acquisition_date: data.acquisition_date,
+      written_off: data.written_off,
+      image_url: data.image_url,
+      image_url_2: data.image_url_2,
+      image_url_3: data.image_url_3,
+    });
+    // Sync detail sheet if open on the same item
+    if (detailItem?.id === editingItem.id) {
+      setDetailItem((prev) => prev ? { ...prev, ...data } : prev);
     }
   };
 
   const handleDelete = () => {
     if (toDelete) {
       deletePatrimony.mutate(toDelete.id);
+      if (detailItem?.id === toDelete.id) setDetailOpen(false);
       setToDelete(null);
       setDeleteDialogOpen(false);
     }
+  };
+
+  const openEditForm = (item: PatrimonyItem) => {
+    setEditingItem(item);
+    setFormOpen(true);
+  };
+
+  const openTransfer = (item: PatrimonyItem) => {
+    setTransferItem(item);
+    setTransferOpen(true);
+  };
+
+  const openDetail = (item: PatrimonyItem) => {
+    setDetailItem(item);
+    setDetailOpen(true);
   };
 
   // ─── Loading skeleton ───────────────────────────────────────────────────────
@@ -281,13 +239,22 @@ export default function PatrimonyPage() {
       <PageHeader
         title="Patrimônio"
         description="Gerenciar bens e patrimônio municipal"
-        action={{ label: 'Novo Bem', onClick: openCreateForm, icon: <Plus className="h-4 w-4 mr-2" /> }}
+        action={{
+          label: 'Novo Bem',
+          onClick: () => { setEditingItem(null); setFormOpen(true); },
+          icon: <Plus className="h-4 w-4 mr-2" />,
+        }}
       />
 
       {/* Filters */}
       <div className="mb-5 space-y-3">
         <div className="flex flex-col sm:flex-row gap-3">
-          <SearchInput value={search} onChange={setSearch} placeholder="Buscar bem, nº, categoria..." className="flex-1" />
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Buscar bem, nº municipal, estadual, categoria..."
+            className="flex-1"
+          />
           <select
             value={filterCond}
             onChange={(e) => setFilterCond(e.target.value)}
@@ -309,7 +276,6 @@ export default function PatrimonyPage() {
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
             className="h-9 w-40 text-sm"
-            placeholder="De"
           />
           <span className="text-muted-foreground text-sm">até</span>
           <Input
@@ -317,7 +283,6 @@ export default function PatrimonyPage() {
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
             className="h-9 w-40 text-sm"
-            placeholder="Até"
           />
           {hasFilters && (
             <Button
@@ -326,7 +291,6 @@ export default function PatrimonyPage() {
               className="h-9 text-muted-foreground hover:text-foreground"
               onClick={() => { setSearch(''); setDateFrom(''); setDateTo(''); setFilterCond('all'); }}
             >
-              <X className="h-3.5 w-3.5 mr-1" />
               Limpar
             </Button>
           )}
@@ -348,29 +312,44 @@ export default function PatrimonyPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((p) => {
-            const colors    = CATEGORY_COLORS[p.category ?? ''] ?? CATEGORY_COLORS['Outro'];
-            const condCfg   = p.condition ? CONDITION_CONFIG[p.condition] : null;
+            const colors  = CATEGORY_COLORS[p.category ?? ''] ?? CATEGORY_COLORS['Outro'];
+            const condCfg = p.condition ? CONDITION_CONFIG[p.condition] : null;
 
             return (
               <div
                 key={p.id}
                 className="rounded-xl border bg-card shadow-sm hover:shadow-md transition-shadow flex flex-col overflow-hidden"
               >
-                {/* Photo strip */}
-                {p.image_url ? (
-                  <div className="w-full h-40 overflow-hidden bg-muted">
-                    <img
-                      src={p.image_url}
-                      alt={p.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
-                  </div>
-                ) : null}
+                {/* Photo strip — clickable to open detail */}
+                <button
+                  type="button"
+                  className="w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                  onClick={() => openDetail(p)}
+                  aria-label={`Ver detalhes de ${p.name}`}
+                >
+                  {p.image_url ? (
+                    <div className="w-full h-40 overflow-hidden bg-muted">
+                      <img
+                        src={p.image_url}
+                        alt={p.name}
+                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-full h-20 bg-muted/40 flex items-center justify-center">
+                      <Building2 className="h-8 w-8 text-muted-foreground/20" />
+                    </div>
+                  )}
+                </button>
 
                 {/* Card header */}
                 <div className={`px-4 py-3 flex items-start justify-between gap-2 border-b ${colors.bg}`}>
-                  <div className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left focus-visible:outline-none"
+                    onClick={() => openDetail(p)}
+                  >
                     <h3 className="font-semibold text-sm leading-snug">{p.name}</h3>
                     <div className="flex flex-wrap gap-1.5 mt-1.5">
                       {p.category && (
@@ -389,15 +368,40 @@ export default function PatrimonyPage() {
                         </span>
                       )}
                     </div>
-                  </div>
+                  </button>
                   <div className="flex gap-1 shrink-0">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditForm(p)}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      title="Ver detalhes"
+                      onClick={() => openDetail(p)}
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-primary hover:text-primary"
+                      title="Registrar movimentação"
+                      onClick={() => openTransfer(p)}
+                    >
+                      <ArrowRightLeft className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      title="Editar"
+                      onClick={() => openEditForm(p)}
+                    >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 text-destructive hover:text-destructive"
+                      title="Excluir"
                       onClick={() => { setToDelete(p); setDeleteDialogOpen(true); }}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -406,11 +410,23 @@ export default function PatrimonyPage() {
                 </div>
 
                 {/* Card body */}
-                <div className="px-4 py-3 space-y-2 flex-1">
+                <button
+                  type="button"
+                  className="px-4 py-3 space-y-2 flex-1 text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                  onClick={() => openDetail(p)}
+                >
+                  {/* Numbers */}
                   <div className="flex items-center gap-2 text-sm">
                     <Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <span className="text-muted-foreground text-xs">Nº</span>
+                    <span className="text-muted-foreground text-xs">Mun.</span>
                     <span className="font-medium text-sm">{p.patrimony_number}</span>
+                    {p.patrimony_number_state && (
+                      <>
+                        <span className="text-muted-foreground/40 mx-0.5">·</span>
+                        <span className="text-muted-foreground text-xs">Est.</span>
+                        <span className="font-medium text-sm">{p.patrimony_number_state}</span>
+                      </>
+                    )}
                   </div>
 
                   {p.value != null && (
@@ -437,7 +453,7 @@ export default function PatrimonyPage() {
                   {p.description && (
                     <p className="text-xs text-muted-foreground line-clamp-2">{p.description}</p>
                   )}
-                </div>
+                </button>
 
                 {/* Responsible footer */}
                 {(p.responsible_name || p.responsible_phone) && (
@@ -448,7 +464,7 @@ export default function PatrimonyPage() {
                     )}
                     {p.responsible_phone && (
                       <button
-                        onClick={() => openWhatsApp(p.responsible_phone!)}
+                        onClick={(e) => { e.stopPropagation(); openWhatsApp(p.responsible_phone!); }}
                         className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 font-medium shrink-0"
                       >
                         <MessageCircle className="h-3.5 w-3.5" />
@@ -463,198 +479,31 @@ export default function PatrimonyPage() {
         </div>
       )}
 
-      {/* ── Form Dialog ─────────────────────────────────────────────────────── */}
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[92vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Editar Bem' : 'Novo Bem'}</DialogTitle>
-          </DialogHeader>
+      {/* ── Patrimony Form (create / edit) ─── */}
+      <PatrimonyForm
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        item={editingItem as PatrimonyFormItem | null}
+        onSubmit={editingItem ? handleEdit : handleCreate}
+      />
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+      {/* ── Transfer dialog ─── */}
+      <PatrimonyTransferDialog
+        open={transferOpen}
+        onOpenChange={setTransferOpen}
+        item={transferItem as PatrimonyTransferItem | null}
+      />
 
-            {/* ── Image upload ── */}
-            <div className="space-y-2">
-              <Label>Foto do Bem</Label>
-              {(formImagePreview || formExistingImageUrl) ? (
-                <div className="relative w-full h-44 rounded-lg overflow-hidden border bg-muted">
-                  <img
-                    src={formImagePreview ?? formExistingImageUrl!}
-                    alt="Preview"
-                    className="w-full h-full object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={clearImage}
-                    className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full h-28 rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-primary transition-colors"
-                >
-                  <ImageIcon className="h-8 w-8" />
-                  <span className="text-sm">Clique para adicionar foto</span>
-                  <span className="text-xs">JPG, PNG, WebP — max 5 MB</span>
-                </button>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                className="hidden"
-                onChange={handleImageSelect}
-              />
-            </div>
+      {/* ── Detail sheet ─── */}
+      <PatrimonyDetailSheet
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        item={detailItem as PatrimonyDetailItem | null}
+        onEdit={(it) => { setDetailOpen(false); openEditForm(it as PatrimonyItem); }}
+        onTransfer={(it) => { openTransfer(it as PatrimonyItem); }}
+      />
 
-            {/* ── Name & Number ── */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2 col-span-2 sm:col-span-1">
-                <Label htmlFor="pat-name">Nome do Bem *</Label>
-                <Input id="pat-name" value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="Ex: Veículo Hilux" required />
-              </div>
-              <div className="space-y-2 col-span-2 sm:col-span-1">
-                <Label htmlFor="pat-number">Nº do Patrimônio *</Label>
-                <Input id="pat-number" value={formPatrimonyNumber} onChange={(e) => setFormPatrimonyNumber(e.target.value)} placeholder="PAT-001" required />
-              </div>
-            </div>
-
-            {/* ── Category & Condition ── */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="pat-category">Categoria</Label>
-                <select
-                  id="pat-category"
-                  value={formCategory}
-                  onChange={(e) => setFormCategory(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <option value="">Selecionar</option>
-                  {CATEGORIES.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="pat-condition">Estado de Conservação</Label>
-                <select
-                  id="pat-condition"
-                  value={formCondition}
-                  onChange={(e) => {
-                    const val = e.target.value as Condition | '';
-                    setFormCondition(val);
-                    if (val !== 'pessimo') setFormWrittenOff(false);
-                  }}
-                  className={`flex h-10 w-full rounded-md border px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 font-medium
-                    ${formCondition === 'otimo'   ? 'bg-green-50 border-green-300 text-green-800' :
-                      formCondition === 'bom'     ? 'bg-blue-50  border-blue-300  text-blue-800'  :
-                      formCondition === 'ruim'    ? 'bg-yellow-50 border-yellow-300 text-yellow-800' :
-                      formCondition === 'pessimo' ? 'bg-red-50   border-red-300   text-red-800'   :
-                      'bg-background border-input text-foreground'}`}
-                >
-                  <option value="">Selecionar</option>
-                  <option value="otimo">✓ Ótimo</option>
-                  <option value="bom">◎ Bom</option>
-                  <option value="ruim">⚠ Ruim</option>
-                  <option value="pessimo">✕ Péssimo</option>
-                </select>
-              </div>
-            </div>
-
-            {/* ── Conditional: Foi dado baixa? ── */}
-            {formCondition === 'pessimo' && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2">
-                <div className="flex items-center gap-2 text-red-700 text-sm font-medium">
-                  <AlertTriangle className="h-4 w-4" />
-                  Este bem está em estado Péssimo
-                </div>
-                <Label className="text-sm text-red-700">Foi dado baixa neste bem?</Label>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setFormWrittenOff(true)}
-                    className={`flex-1 py-2 px-4 rounded-md border text-sm font-medium transition-colors ${
-                      formWrittenOff
-                        ? 'bg-red-600 border-red-600 text-white'
-                        : 'bg-white border-red-300 text-red-700 hover:bg-red-50'
-                    }`}
-                  >
-                    Sim, baixa dada
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormWrittenOff(false)}
-                    className={`flex-1 py-2 px-4 rounded-md border text-sm font-medium transition-colors ${
-                      !formWrittenOff
-                        ? 'bg-gray-600 border-gray-600 text-white'
-                        : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    Não, ainda em uso
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ── Value & Date ── */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="pat-value">Valor (R$)</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium pointer-events-none">R$</span>
-                  <Input
-                    id="pat-value"
-                    type="text"
-                    inputMode="decimal"
-                    value={formValue}
-                    onChange={(e) => setFormValue(e.target.value)}
-                    placeholder="0,00"
-                    className="pl-10"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="pat-date">Data de Aquisição</Label>
-                <Input id="pat-date" type="date" value={formAcquisitionDate} onChange={(e) => setFormAcquisitionDate(e.target.value)} />
-              </div>
-            </div>
-
-            {/* ── Description ── */}
-            <div className="space-y-2">
-              <Label htmlFor="pat-description">Descrição</Label>
-              <Input id="pat-description" value={formDescription} onChange={(e) => setFormDescription(e.target.value)} placeholder="Descrição do bem" />
-            </div>
-
-            {/* ── Location ── */}
-            <div className="space-y-2">
-              <Label htmlFor="pat-location">Localização</Label>
-              <Input id="pat-location" value={formLocation} onChange={(e) => setFormLocation(e.target.value)} placeholder="Ex: Depósito Municipal" />
-            </div>
-
-            {/* ── Responsible ── */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2 col-span-2 sm:col-span-1">
-                <Label htmlFor="pat-resp-name">Responsável</Label>
-                <Input id="pat-resp-name" value={formResponsibleName} onChange={(e) => setFormResponsibleName(e.target.value)} placeholder="Nome do responsável" />
-              </div>
-              <div className="space-y-2 col-span-2 sm:col-span-1">
-                <Label htmlFor="pat-resp-phone">WhatsApp</Label>
-                <Input id="pat-resp-phone" value={formResponsiblePhone} onChange={(e) => setFormResponsiblePhone(e.target.value)} placeholder="(66) 99999-9999" />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>Cancelar</Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Salvando...' : editing ? 'Salvar' : 'Cadastrar'}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Confirm Delete ── */}
+      {/* ── Confirm Delete ─── */}
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
