@@ -188,22 +188,27 @@ export default function AnalyticsPage() {
   const monthlyGradeVsPcData = useMemo(() => {
     const gradeIds = getDemandIdsByNameSubstring(demandTypes as any[], 'grade');
     const pcIds = new Set((demandTypes as any[]).filter(d => d.name?.toLowerCase().includes(' pc') || d.name?.toLowerCase() === 'pc').map((d: any) => d.id));
+    // "Pá Carregadeira" é um tipo de demanda distinto de "PC"
+    const paCarregadeiraIds = getDemandIdsByNameSubstring(demandTypes as any[], 'carregadeira');
     const now = new Date();
+
+    const countCompletedInMonth = (ids: Set<string>, monthKey: string) =>
+      (services as any[]).filter(s => {
+        if (s.status !== 'completed' || !s.completed_at) return false;
+        const d = parseISO(s.completed_at.replace(' ', 'T'));
+        return format(startOfMonth(d), 'yyyy-MM') === monthKey && ids.has(s.demand_type_id);
+      }).length;
+
     return Array.from({ length: 6 }, (_, i) => {
       const monthDate = subMonths(now, 5 - i);
       const monthKey = format(startOfMonth(monthDate), 'yyyy-MM');
       const monthLabel = format(monthDate, 'MMM/yy', { locale: ptBR });
-      const grade = (services as any[]).filter(s => {
-        if (s.status !== 'completed' || !s.completed_at) return false;
-        const d = parseISO(s.completed_at.replace(' ', 'T'));
-        return format(startOfMonth(d), 'yyyy-MM') === monthKey && gradeIds.has(s.demand_type_id);
-      }).length;
-      const pc = (services as any[]).filter(s => {
-        if (s.status !== 'completed' || !s.completed_at) return false;
-        const d = parseISO(s.completed_at.replace(' ', 'T'));
-        return format(startOfMonth(d), 'yyyy-MM') === monthKey && pcIds.has(s.demand_type_id);
-      }).length;
-      return { month: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1), grade, pc };
+      return {
+        month: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
+        grade: countCompletedInMonth(gradeIds, monthKey),
+        pc: countCompletedInMonth(pcIds, monthKey),
+        paCarregadeira: countCompletedInMonth(paCarregadeiraIds, monthKey),
+      };
     });
   }, [services, demandTypes]);
 
@@ -643,7 +648,7 @@ export default function AnalyticsPage() {
               <CardTitle className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-secondary/20"><Layers className="h-5 w-5 text-secondary" /></div>
                 <div>
-                  <span className="text-lg">Comparativo: Operação com Grade vs PC</span>
+                  <span className="text-lg">Comparativo: Grade vs PC vs Pá Carregadeira</span>
                   <p className="text-sm font-normal text-muted-foreground">Atendimentos finalizados por tipo de operação — últimos 6 meses</p>
                 </div>
               </CardTitle>
@@ -659,6 +664,7 @@ export default function AnalyticsPage() {
                     <Legend wrapperStyle={{ paddingTop: '20px' }} formatter={(v) => <span className="text-foreground">{v}</span>} />
                     <Bar dataKey="grade" name="Grade" fill="hsl(113 38% 26%)" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="pc" name="PC" fill="hsl(280 70% 55%)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="paCarregadeira" name="Pá Carregadeira" fill="hsl(32 95% 44%)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

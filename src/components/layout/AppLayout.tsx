@@ -208,8 +208,11 @@ export function AppLayout({ children }: AppLayoutProps) {
         )}
 
         {/* Main Content */}
+        {/* animate-fade-in só em md+: a animação de opacity promove a subtree
+            inteira a uma camada GPU e causa ghosting/rastros de scroll em
+            WebView Android (mesma classe de bug do card-interactive). */}
         <main className="flex-1 p-3 sm:p-4 md:p-6 safe-area-bottom overflow-x-hidden">
-          <div className="animate-fade-in">
+          <div className="md:animate-fade-in">
             {children}
           </div>
         </main>
