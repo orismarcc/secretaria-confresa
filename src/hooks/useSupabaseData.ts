@@ -89,8 +89,8 @@ export function useCreateDemandType() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ name, description, category }: { name: string; description?: string; category?: string | null }) => {
-      const payload: Record<string, unknown> = { name, description, category };
+    mutationFn: async ({ name, description, category, operation_type }: { name: string; description?: string; category?: string | null; operation_type?: string | null }) => {
+      const payload: Record<string, unknown> = { name, description, category, operation_type };
       const result = await withMissingColumnRetry(
         (p) => supabase.from('demand_types').insert(p).select().single(),
         payload,
@@ -112,7 +112,7 @@ export function useUpdateDemandType() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; name?: string; description?: string; is_active?: boolean; category?: string | null }) => {
+    mutationFn: async ({ id, ...updates }: { id: string; name?: string; description?: string; is_active?: boolean; category?: string | null; operation_type?: string | null }) => {
       const result = await withMissingColumnRetry(
         (p) => supabase.from('demand_types').update(p).eq('id', id).select().single(),
         updates as Record<string, unknown>,
@@ -890,7 +890,8 @@ export function useDeliveries() {
             locations(name)
           ),
           demand_types(name, category),
-          settlements(name)
+          settlements(name),
+          delivery_items(quantity)
         `)
         .order('created_at', { ascending: false });
       if (error) throw error;

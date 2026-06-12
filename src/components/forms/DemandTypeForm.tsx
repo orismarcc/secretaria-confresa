@@ -33,6 +33,7 @@ const demandTypeSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').max(100, 'Nome muito longo'),
   description: z.string().max(500, 'Descrição muito longa').optional(),
   category: z.string().optional().nullable(),
+  operationType: z.string().optional().nullable(),
   isActive: z.boolean(),
 });
 
@@ -41,7 +42,7 @@ type DemandTypeFormData = z.infer<typeof demandTypeSchema>;
 interface DemandTypeFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  demandType?: (DemandType & { category?: string | null }) | null;
+  demandType?: (DemandType & { category?: string | null; operationType?: string | null }) | null;
   onSubmit: (data: DemandTypeFormData) => void;
 }
 
@@ -53,6 +54,12 @@ export const DEMAND_CATEGORIES = [
   { value: 'entregas', label: 'Entregas' },
 ];
 
+export const OPERATION_TYPES = [
+  { value: 'grade', label: 'Grade' },
+  { value: 'pc', label: 'PC' },
+  { value: 'pa_carregadeira', label: 'Pá Carregadeira' },
+];
+
 export function DemandTypeForm({ open, onOpenChange, demandType, onSubmit }: DemandTypeFormProps) {
   const form = useForm<DemandTypeFormData>({
     resolver: zodResolver(demandTypeSchema),
@@ -60,6 +67,7 @@ export function DemandTypeForm({ open, onOpenChange, demandType, onSubmit }: Dem
       name: demandType?.name || '',
       description: demandType?.description || '',
       category: (demandType as any)?.category || null,
+      operationType: (demandType as any)?.operationType || null,
       isActive: demandType?.isActive ?? true,
     },
   });
@@ -113,6 +121,35 @@ export function DemandTypeForm({ open, onOpenChange, demandType, onSubmit }: Dem
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="operationType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tipo de Operação</FormLabel>
+                  <Select
+                    onValueChange={(val) => field.onChange(val === '__none__' ? null : val)}
+                    value={field.value ?? '__none__'}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione (opcional)" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="__none__">Nenhum</SelectItem>
+                      {OPERATION_TYPES.map(op => (
+                        <SelectItem key={op.value} value={op.value}>{op.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Usado nos gráficos comparativos de Análise (Grade vs PC vs Pá Carregadeira)
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

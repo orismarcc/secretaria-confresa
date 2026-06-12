@@ -62,18 +62,24 @@ export default function DemandTypesPage() {
     }
   });
 
-  const handleCreate = (data: { name: string; description?: string; category?: string | null; isActive: boolean }) => {
-    createDemandType.mutate({ name: data.name, description: data.description, category: data.category ?? null });
+  const handleCreate = (data: { name: string; description?: string; category?: string | null; operationType?: string | null; isActive: boolean }) => {
+    createDemandType.mutate({
+      name: data.name,
+      description: data.description,
+      category: data.category ?? null,
+      operation_type: data.operationType ?? null,
+    });
     setFormOpen(false);
   };
 
-  const handleEdit = (data: { name: string; description?: string; category?: string | null; isActive: boolean }) => {
+  const handleEdit = (data: { name: string; description?: string; category?: string | null; operationType?: string | null; isActive: boolean }) => {
     if (editingType) {
       updateDemandType.mutate({
         id: editingType.id,
         name: data.name,
         description: data.description,
         category: data.category ?? null,
+        operation_type: data.operationType ?? null,
         is_active: data.isActive,
       });
       setEditingType(null);
@@ -110,6 +116,7 @@ export default function DemandTypesPage() {
       name: dt.name,
       description: dt.description || undefined,
       category: dt.category || null,
+      operationType: (dt as any).operation_type || null,
       isActive: dt.is_active ?? true,
       createdAt: new Date(dt.created_at || Date.now()),
     };

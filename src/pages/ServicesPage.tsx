@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ServiceForm } from '@/components/forms/ServiceForm';
+import { DEMAND_CATEGORIES } from '@/components/forms/DemandTypeForm';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -158,6 +159,10 @@ export default function ServicesPage() {
     searchParams.get('tab') === 'archived' ? 'archived' : 'active'
   );
   const [demandTypeFilter, setDemandTypeFilter] = useState<string>('all');
+  // Categoria via URL (?category=calcario) — usado pelos cards da página de Análise
+  const [categoryFilter, setCategoryFilter] = useState<string>(
+    searchParams.get('category') || 'all'
+  );
   const [settlementFilter, setSettlementFilter] = useState<string>('all');
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
@@ -194,7 +199,7 @@ export default function ServicesPage() {
   // Reset to page 1 when any filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter, demandTypeFilter, settlementFilter, dateFrom, dateTo]);
+  }, [search, statusFilter, demandTypeFilter, categoryFilter, settlementFilter, dateFrom, dateTo]);
 
   // Realtime subscription
   useEffect(() => {
@@ -216,6 +221,7 @@ export default function ServicesPage() {
       producer?.cpf?.includes(search) ||
       s.producers?.name?.toLowerCase().includes(search.toLowerCase());
     const matchesDemandType = demandTypeFilter === 'all' || s.demand_type_id === demandTypeFilter;
+    const matchesCategory = categoryFilter === 'all' || (dt as any)?.category === categoryFilter;
     const matchesStatus = statusFilter === 'active'
       ? s.status === 'pending' || s.status === 'in_progress' || s.status === 'proximo'
       : s.status === 'completed';
@@ -225,8 +231,8 @@ export default function ServicesPage() {
     const sDate = s.scheduled_date?.substring(0, 10) ?? '';
     const matchesDateFrom = !dateFrom || sDate >= dateFrom;
     const matchesDateTo   = !dateTo   || sDate <= dateTo;
-    return matchesSearch && matchesDemandType && matchesStatus && matchesSettlement && matchesDateFrom && matchesDateTo;
-  }), [services, producers, demandTypes, search, demandTypeFilter, statusFilter, settlementFilter, dateFrom, dateTo]);
+    return matchesSearch && matchesDemandType && matchesCategory && matchesStatus && matchesSettlement && matchesDateFrom && matchesDateTo;
+  }), [services, producers, demandTypes, search, demandTypeFilter, categoryFilter, statusFilter, settlementFilter, dateFrom, dateTo]);
 
   const sortedServices = useMemo(() => [...filteredServices].sort((a: DbService, b: DbService) => {
     if (statusFilter === 'active') {
@@ -745,12 +751,13 @@ export default function ServicesPage() {
           </div>
 
           {/* Clear filters button — only when something is active */}
-          {(demandTypeFilter !== 'all' || settlementFilter !== 'all' || dateFrom || dateTo) && (
+          {(demandTypeFilter !== 'all' || categoryFilter !== 'all' || settlementFilter !== 'all' || dateFrom || dateTo) && (
             <Button
               variant="ghost"
               size="sm"
               onClick={() => {
                 setDemandTypeFilter('all');
+                setCategoryFilter('all');
                 setSettlementFilter('all');
                 setDateFrom('');
                 setDateTo('');
@@ -763,6 +770,23 @@ export default function ServicesPage() {
             </Button>
           )}
         </div>
+
+        {/* Active category chip (navegação vinda da Análise) */}
+        {categoryFilter !== 'all' && (
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-primary/10 text-primary border border-primary/20 rounded-full px-3 py-1">
+              Categoria: {DEMAND_CATEGORIES.find(c => c.value === categoryFilter)?.label ?? categoryFilter}
+              <button
+                type="button"
+                aria-label="Remover filtro de categoria"
+                onClick={() => setCategoryFilter('all')}
+                className="hover:text-primary/70"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          </div>
+        )}
       </div>
 
       <DataTable

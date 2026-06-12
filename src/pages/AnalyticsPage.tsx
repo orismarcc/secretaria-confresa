@@ -1,23 +1,31 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useServices, useSettlements, useDemandTypes, useDeliveries, useProducers } from '@/hooks/useSupabaseData';
 import { useOperators } from '@/hooks/useOperatorData';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, AreaChart, Area, Legend,
 } from 'recharts';
-import { format, parseISO, startOfMonth, subMonths } from 'date-fns';
+import { format, parseISO, startOfMonth, subMonths, differenceInCalendarMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  TrendingUp, MapPin, ClipboardList, Tractor, Users2, Package, Layers, FileDown, Truck, Stethoscope, Fuel, Clock,
+  TrendingUp, TrendingDown, Minus, MapPin, ClipboardList, Tractor, Users2, Package, Layers,
+  FileDown, Truck, Stethoscope, Fuel, Clock, Timer, CalendarRange,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getPatrulhaIds, getDemandIdsByCategory, getDemandIdsByNameSubstring } from '@/lib/analyticsUtils';
+import { ReportsCenter } from '@/components/ReportsCenter';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import logoTransparent from '@/assets/logo-transparent.png';
@@ -55,6 +63,19 @@ const rankConfig = [
   { label: '1°', cardClass: 'bg-warning/5 border-warning/30', badgeClass: 'bg-warning text-warning-foreground', barClass: 'bg-warning', textClass: 'text-warning' },
   { label: '2°', cardClass: 'bg-primary/5 border-primary/20', badgeClass: 'bg-primary text-primary-foreground', barClass: 'bg-primary', textClass: 'text-primary' },
   { label: '3°', cardClass: 'bg-secondary/5 border-secondary/20', badgeClass: 'bg-secondary text-secondary-foreground', barClass: 'bg-secondary', textClass: 'text-secondary' },
+  { label: '4°', cardClass: 'bg-muted/30 border-border', badgeClass: 'bg-muted text-muted-foreground', barClass: 'bg-muted-foreground/50', textClass: 'text-muted-foreground' },
+  { label: '5°', cardClass: 'bg-muted/30 border-border', badgeClass: 'bg-muted text-muted-foreground', barClass: 'bg-muted-foreground/50', textClass: 'text-muted-foreground' },
+];
+
+// ─── Período global dos gráficos ─────────────────────────────────────────────
+type ChartPeriod = '3m' | '6m' | '12m' | 'year' | 'all';
+
+const PERIOD_OPTIONS: { value: ChartPeriod; label: string }[] = [
+  { value: '3m', label: '3m' },
+  { value: '6m', label: '6m' },
+  { value: '12m', label: '12m' },
+  { value: 'year', label: 'Ano' },
+  { value: 'all', label: 'Tudo' },
 ];
 
 function RankingItem({ position, name, count, maxCount, patrulha, producersCount }: RankingItemProps) {
@@ -108,6 +129,36 @@ export default function AnalyticsPage() {
 
   const isLoading = servicesLoading || settlementsLoading || demandTypesLoading;
 
+  // ── Período global dos gráficos ─────────────────────────────────────────────
+  const [period, setPeriod] = useState<ChartPeriod>('6m');
+
+  const monthsCount = useMemo(() => {
+    const now = new Date();
+    switch (period) {
+      case '3m': return 3;
+      case '6m': return 6;
+      case '12m': return 12;
+      case 'year': return now.getMonth() + 1; // Jan até o mês atual
+      case 'all': {
+        const dates = (services as any[])
+          .map(s => parseISO((s.created_at || s.scheduled_date || '').replace(' ', 'T')))
+          .filter(d => !isNaN(d.getTime()));
+        if (dates.length === 0) return 6;
+        const earliest = dates.reduce((a, b) => (a < b ? a : b));
+        // +1 inclui o mês corrente; limitado a 24 p/ legibilidade do gráfico
+        return Math.min(24, Math.max(6, differenceInCalendarMonths(now, earliest) + 1));
+      }
+    }
+  }, [period, services]);
+
+  const periodLabel = useMemo(() => {
+    switch (period) {
+      case 'year': return `Ano de ${new Date().getFullYear()}`;
+      case 'all': return `Todo o período (últimos ${monthsCount} meses)`;
+      default: return `Últimos ${monthsCount} meses`;
+    }
+  }, [period, monthsCount]);
+
   // ── Category quick stats — COMPLETED ONLY ──────────────────────────────────
   // M-03: use shared helper
   const patrulhaCount = useMemo(() => {
@@ -120,11 +171,21 @@ export default function AnalyticsPage() {
     [deliveries]
   );
 
-  /** Sum of `quantity` field across all finalized deliveries */
+  /**
+   * Total de itens entregues (entregas finalizadas).
+   * Entregas por lote guardam quantidades em delivery_items (quantity fica nula);
+   * somamos os itens quando existem, senão o campo direto — sem dupla contagem.
+   */
   const entregasTotalQty = useMemo(() =>
     (deliveries as any[])
       .filter((d: any) => d.status === 'completed')
-      .reduce((sum: number, d: any) => sum + (Number(d.quantity) || 0), 0),
+      .reduce((sum: number, d: any) => {
+        const items = (d.delivery_items ?? []) as any[];
+        if (items.length > 0) {
+          return sum + items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+        }
+        return sum + (Number(d.quantity) || 0);
+      }, 0),
     [deliveries]
   );
 
@@ -161,11 +222,21 @@ export default function AnalyticsPage() {
     return (services as any[]).filter(s => s.status === 'completed' && ids.has(s.demand_type_id)).length;
   }, [services, demandTypes]);
 
+  // ── Operation-type ids (estável; fallback por nome p/ tipos antigos sem o campo) ──
+  const getOperationIds = useMemo(() => {
+    return (op: 'grade' | 'pc' | 'pa_carregadeira', fallback: () => Set<string>): Set<string> => {
+      const ids = new Set(
+        (demandTypes as any[]).filter(d => d.operation_type === op).map((d: any) => d.id as string),
+      );
+      return ids.size > 0 ? ids : fallback();
+    };
+  }, [demandTypes]);
+
   // ── Monthly charts ──────────────────────────────────────────────────────────
   const monthlyData = useMemo(() => {
     const now = new Date();
-    return Array.from({ length: 6 }, (_, i) => {
-      const monthDate = subMonths(now, 5 - i);
+    return Array.from({ length: monthsCount }, (_, i) => {
+      const monthDate = subMonths(now, monthsCount - 1 - i);
       const monthKey = format(startOfMonth(monthDate), 'yyyy-MM');
       const monthLabel = format(monthDate, 'MMM/yy', { locale: ptBR });
       const registered = (services as any[]).filter(s => {
@@ -183,13 +254,12 @@ export default function AnalyticsPage() {
         finalizados: completed,
       };
     });
-  }, [services]);
+  }, [services, monthsCount]);
 
   const monthlyGradeVsPcData = useMemo(() => {
-    const gradeIds = getDemandIdsByNameSubstring(demandTypes as any[], 'grade');
-    const pcIds = new Set((demandTypes as any[]).filter(d => d.name?.toLowerCase().includes(' pc') || d.name?.toLowerCase() === 'pc').map((d: any) => d.id));
-    // "Pá Carregadeira" é um tipo de demanda distinto de "PC"
-    const paCarregadeiraIds = getDemandIdsByNameSubstring(demandTypes as any[], 'carregadeira');
+    const gradeIds = getOperationIds('grade', () => getDemandIdsByNameSubstring(demandTypes as any[], 'grade'));
+    const pcIds = getOperationIds('pc', () => new Set((demandTypes as any[]).filter(d => d.name?.toLowerCase().includes(' pc') || d.name?.toLowerCase() === 'pc').map((d: any) => d.id)));
+    const paCarregadeiraIds = getOperationIds('pa_carregadeira', () => getDemandIdsByNameSubstring(demandTypes as any[], 'carregadeira'));
     const now = new Date();
 
     const countCompletedInMonth = (ids: Set<string>, monthKey: string) =>
@@ -199,8 +269,8 @@ export default function AnalyticsPage() {
         return format(startOfMonth(d), 'yyyy-MM') === monthKey && ids.has(s.demand_type_id);
       }).length;
 
-    return Array.from({ length: 6 }, (_, i) => {
-      const monthDate = subMonths(now, 5 - i);
+    return Array.from({ length: monthsCount }, (_, i) => {
+      const monthDate = subMonths(now, monthsCount - 1 - i);
       const monthKey = format(startOfMonth(monthDate), 'yyyy-MM');
       const monthLabel = format(monthDate, 'MMM/yy', { locale: ptBR });
       return {
@@ -210,10 +280,73 @@ export default function AnalyticsPage() {
         paCarregadeira: countCompletedInMonth(paCarregadeiraIds, monthKey),
       };
     });
-  }, [services, demandTypes]);
+  }, [services, demandTypes, monthsCount, getOperationIds]);
 
-  // ── Top 3 rankings — COMPLETED ONLY ───────────────────────────────────────
-  const topSettlements = useMemo(() => {
+  // ── Tempo médio de atendimento (cadastro → finalização) ────────────────────
+  const avgCompletionData = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: monthsCount }, (_, i) => {
+      const monthDate = subMonths(now, monthsCount - 1 - i);
+      const monthKey = format(startOfMonth(monthDate), 'yyyy-MM');
+      const monthLabel = format(monthDate, 'MMM/yy', { locale: ptBR });
+      const durations = (services as any[])
+        .filter(s => {
+          if (s.status !== 'completed' || !s.completed_at || !s.created_at) return false;
+          const d = parseISO(s.completed_at.replace(' ', 'T'));
+          return format(startOfMonth(d), 'yyyy-MM') === monthKey;
+        })
+        .map(s => {
+          const created = parseISO(s.created_at.replace(' ', 'T'));
+          const completed = parseISO(s.completed_at.replace(' ', 'T'));
+          return (completed.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
+        })
+        .filter(days => days >= 0);
+      const avg = durations.length > 0
+        ? durations.reduce((a, b) => a + b, 0) / durations.length
+        : null;
+      return {
+        month: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
+        dias: avg != null ? Math.round(avg * 10) / 10 : null,
+      };
+    });
+  }, [services, monthsCount]);
+
+  const avgCompletionOverall = useMemo(() => {
+    const valid = avgCompletionData.filter(m => m.dias != null) as { dias: number }[];
+    if (valid.length === 0) return null;
+    return valid.reduce((a, m) => a + m.dias, 0) / valid.length;
+  }, [avgCompletionData]);
+
+  /** Tendência: último mês com dado vs mês anterior com dado (negativo = mais rápido) */
+  const avgCompletionTrend = useMemo(() => {
+    const valid = avgCompletionData.filter(m => m.dias != null);
+    if (valid.length < 2) return null;
+    const last = valid[valid.length - 1].dias as number;
+    const prev = valid[valid.length - 2].dias as number;
+    if (prev === 0) return null;
+    return ((last - prev) / prev) * 100;
+  }, [avgCompletionData]);
+
+  // ── Comparativo ano a ano (mês atual vs mesmo mês do ano passado) ───────────
+  const yoy = useMemo(() => {
+    const now = new Date();
+    const thisMonthKey = format(now, 'yyyy-MM');
+    const lastYearKey = format(subMonths(now, 12), 'yyyy-MM');
+    const countIn = (key: string) =>
+      (services as any[]).filter(s => {
+        if (s.status !== 'completed' || !s.completed_at) return false;
+        const d = parseISO(s.completed_at.replace(' ', 'T'));
+        return format(d, 'yyyy-MM') === key;
+      }).length;
+    const current = countIn(thisMonthKey);
+    const previous = countIn(lastYearKey);
+    const deltaPct = previous > 0 ? ((current - previous) / previous) * 100 : null;
+    return { current, previous, deltaPct, monthLabel: format(now, 'MMMM', { locale: ptBR }) };
+  }, [services]);
+
+  // ── Rankings — COMPLETED ONLY ─────────────────────────────────────────────
+  /** Ranking completo de assentamentos (ordenado); top 5 exibido, lista cheia no modal */
+  const rankedSettlements = useMemo(() => {
     const patrulhaIds = getPatrulhaIds(demandTypes as any[]);
     // Only completed services count toward the ranking
     const completedServices = (services as any[]).filter(s => s.status === 'completed');
@@ -236,9 +369,11 @@ export default function AnalyticsPage() {
         // All producers registered to this settlement (not just ones with services)
         producersCount: (producers as any[]).filter((p: any) => p.settlement_id === id).length,
       }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 3);
+      .sort((a, b) => b.count - a.count);
   }, [services, settlements, demandTypes, producers]);
+
+  const topSettlements = useMemo(() => rankedSettlements.slice(0, 5), [rankedSettlements]);
+  const [allSettlementsOpen, setAllSettlementsOpen] = useState(false);
 
   const topDemandTypes = useMemo(() => {
     const counts: Record<string, { name: string; count: number }> = {};
@@ -270,14 +405,14 @@ export default function AnalyticsPage() {
     return Object.values(stats).filter(op => op.completed > 0).sort((a, b) => b.completed - a.completed).slice(0, 5);
   }, [services, operators]);
 
-  // M-11+M-03: use shared helper; .filter covers all grade types
+  // M-11+M-03: operation_type estável com fallback por nome
   const totalWorkedArea = useMemo(() => {
-    const gradeIds = getDemandIdsByNameSubstring(demandTypes as any[], 'grade');
+    const gradeIds = getOperationIds('grade', () => getDemandIdsByNameSubstring(demandTypes as any[], 'grade'));
     if (gradeIds.size === 0) return 0;
     return (services as any[])
       .filter(s => s.status === 'completed' && gradeIds.has(s.demand_type_id) && s.worked_area)
       .reduce((acc, s) => acc + (Number(s.worked_area) || 0), 0);
-  }, [services, demandTypes]);
+  }, [services, demandTypes, getOperationIds]);
 
   const patrulhaInsumosIds = useMemo(
     () => getDemandIdsByCategory(demandTypes as any[], ['patrulha_mecanizada', 'logistica_insumos']),
@@ -416,7 +551,7 @@ export default function AnalyticsPage() {
       <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 mb-6">
         {/* Patrulha Mecanizada */}
         <button
-          onClick={() => navigate('/services')}
+          onClick={() => navigate('/services?category=patrulha_mecanizada')}
           className="rounded-xl border bg-card p-4 flex items-center gap-4 hover:shadow-md transition-all hover:-translate-y-0.5 text-left"
         >
           <div className="p-3 rounded-xl bg-amber-500/10 shrink-0">
@@ -431,7 +566,7 @@ export default function AnalyticsPage() {
 
         {/* Assistência Técnica */}
         <button
-          onClick={() => navigate('/services')}
+          onClick={() => navigate('/services?category=assistencia_tecnica')}
           className="rounded-xl border bg-card p-4 flex items-center gap-4 hover:shadow-md transition-all hover:-translate-y-0.5 text-left"
         >
           <div className="p-3 rounded-xl bg-emerald-500/10 shrink-0">
@@ -466,7 +601,7 @@ export default function AnalyticsPage() {
 
         {/* Calcário */}
         <button
-          onClick={() => navigate('/services')}
+          onClick={() => navigate('/services?category=calcario')}
           className="rounded-xl border bg-card p-4 flex items-center gap-4 hover:shadow-md transition-all hover:-translate-y-0.5 text-left"
         >
           <div className="p-3 rounded-xl bg-stone-500/10 shrink-0">
@@ -486,7 +621,7 @@ export default function AnalyticsPage() {
 
         {/* Logística de Insumos */}
         <button
-          onClick={() => navigate('/services')}
+          onClick={() => navigate('/services?category=logistica_insumos')}
           className="rounded-xl border bg-card p-4 flex items-center gap-4 hover:shadow-md transition-all hover:-translate-y-0.5 text-left"
         >
           <div className="p-3 rounded-xl bg-purple-500/10 shrink-0">
@@ -583,6 +718,140 @@ export default function AnalyticsPage() {
             </Card>
           </div>
 
+          {/* ── Seletor de período global ───────────────────────────────── */}
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <CalendarRange className="h-4 w-4" />
+              Período dos gráficos
+            </div>
+            <div className="inline-flex rounded-lg border bg-card p-0.5 shadow-sm">
+              {PERIOD_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setPeriod(opt.value)}
+                  className={cn(
+                    'px-3 py-1.5 text-xs font-semibold rounded-md transition-colors',
+                    period === opt.value
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/60',
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Tempo médio + Comparativo anual ─────────────────────────── */}
+          <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
+            {/* Tempo médio de atendimento */}
+            <Card className="overflow-hidden">
+              <CardHeader className="border-b bg-gradient-to-r from-teal-500/10 to-cyan-500/5 pb-3">
+                <CardTitle className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-teal-500/20"><Timer className="h-5 w-5 text-teal-600" /></div>
+                  <div className="flex-1">
+                    <span className="text-lg">Tempo Médio de Atendimento</span>
+                    <p className="text-sm font-normal text-muted-foreground">Do cadastro à finalização · {periodLabel}</p>
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <div className="flex items-baseline gap-3 mb-3 flex-wrap">
+                  <p className="text-3xl font-black text-foreground">
+                    {avgCompletionOverall != null
+                      ? avgCompletionOverall.toLocaleString('pt-BR', { maximumFractionDigits: 1 })
+                      : '—'}{' '}
+                    <span className="text-base font-medium text-muted-foreground">dias</span>
+                  </p>
+                  {avgCompletionTrend != null && (
+                    <span className={cn(
+                      'inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2.5 py-1',
+                      avgCompletionTrend < -1 ? 'bg-success/10 text-success'
+                        : avgCompletionTrend > 1 ? 'bg-destructive/10 text-destructive'
+                        : 'bg-muted text-muted-foreground',
+                    )}>
+                      {avgCompletionTrend < -1 ? <TrendingDown className="h-3.5 w-3.5" />
+                        : avgCompletionTrend > 1 ? <TrendingUp className="h-3.5 w-3.5" />
+                        : <Minus className="h-3.5 w-3.5" />}
+                      {Math.abs(avgCompletionTrend).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%
+                      {avgCompletionTrend < -1 ? ' mais rápidos' : avgCompletionTrend > 1 ? ' mais lentos' : ' estável'}
+                    </span>
+                  )}
+                </div>
+                <div className="h-[140px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={avgCompletionData}>
+                      <defs>
+                        <linearGradient id="gradientTempoMedio" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(173 80% 36%)" stopOpacity={0.35} />
+                          <stop offset="95%" stopColor="hsl(173 80% 36%)" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+                      <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} axisLine={{ stroke: 'hsl(var(--border))' }} />
+                      <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} axisLine={{ stroke: 'hsl(var(--border))' }} width={32} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Area type="monotone" dataKey="dias" name="Dias (média)" stroke="hsl(173 80% 36%)" strokeWidth={2.5} fill="url(#gradientTempoMedio)" connectNulls />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Comparativo ano a ano */}
+            <Card className="overflow-hidden">
+              <CardHeader className="border-b bg-gradient-to-r from-indigo-500/10 to-violet-500/5 pb-3">
+                <CardTitle className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-indigo-500/20"><TrendingUp className="h-5 w-5 text-indigo-600" /></div>
+                  <div>
+                    <span className="text-lg">Comparativo Anual</span>
+                    <p className="text-sm font-normal text-muted-foreground">
+                      Finalizados em {yoy.monthLabel} — este ano vs ano passado
+                    </p>
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-5">
+                <div className="grid grid-cols-2 gap-4 items-center">
+                  <div className="text-center p-4 rounded-xl bg-muted/40 border">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-1">
+                      {yoy.monthLabel} {new Date().getFullYear() - 1}
+                    </p>
+                    <p className="text-4xl font-black text-muted-foreground">{yoy.previous}</p>
+                    <p className="text-xs text-muted-foreground mt-1">finalizados</p>
+                  </div>
+                  <div className="text-center p-4 rounded-xl bg-primary/5 border border-primary/20">
+                    <p className="text-xs text-primary uppercase tracking-wide font-medium mb-1">
+                      {yoy.monthLabel} {new Date().getFullYear()}
+                    </p>
+                    <p className="text-4xl font-black text-primary">{yoy.current}</p>
+                    <p className="text-xs text-muted-foreground mt-1">finalizados</p>
+                  </div>
+                </div>
+                <div className="mt-4 flex justify-center">
+                  {yoy.deltaPct != null ? (
+                    <span className={cn(
+                      'inline-flex items-center gap-1.5 text-sm font-bold rounded-full px-4 py-1.5',
+                      yoy.deltaPct > 0 ? 'bg-success/10 text-success'
+                        : yoy.deltaPct < 0 ? 'bg-destructive/10 text-destructive'
+                        : 'bg-muted text-muted-foreground',
+                    )}>
+                      {yoy.deltaPct > 0 ? <TrendingUp className="h-4 w-4" />
+                        : yoy.deltaPct < 0 ? <TrendingDown className="h-4 w-4" />
+                        : <Minus className="h-4 w-4" />}
+                      {yoy.deltaPct > 0 ? '+' : ''}{yoy.deltaPct.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}% vs ano passado
+                    </span>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">
+                      Sem dados de {yoy.monthLabel} do ano passado para comparar
+                    </span>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Charts */}
           <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
             <Card className="overflow-hidden">
@@ -591,7 +860,7 @@ export default function AnalyticsPage() {
                   <div className="p-2 rounded-lg bg-success/20"><TrendingUp className="h-5 w-5 text-success" /></div>
                   <div>
                     <span className="text-lg">Atendimentos Finalizados</span>
-                    <p className="text-sm font-normal text-muted-foreground">Últimos 6 meses</p>
+                    <p className="text-sm font-normal text-muted-foreground">{periodLabel}</p>
                   </div>
                 </CardTitle>
               </CardHeader>
@@ -622,7 +891,7 @@ export default function AnalyticsPage() {
                   <div className="p-2 rounded-lg bg-primary/20"><ClipboardList className="h-5 w-5 text-primary" /></div>
                   <div>
                     <span className="text-lg">Atendimentos Cadastrados</span>
-                    <p className="text-sm font-normal text-muted-foreground">Últimos 6 meses</p>
+                    <p className="text-sm font-normal text-muted-foreground">{periodLabel}</p>
                   </div>
                 </CardTitle>
               </CardHeader>
@@ -649,7 +918,7 @@ export default function AnalyticsPage() {
                 <div className="p-2 rounded-lg bg-secondary/20"><Layers className="h-5 w-5 text-secondary" /></div>
                 <div>
                   <span className="text-lg">Comparativo: Grade vs PC vs Pá Carregadeira</span>
-                  <p className="text-sm font-normal text-muted-foreground">Atendimentos finalizados por tipo de operação — últimos 6 meses</p>
+                  <p className="text-sm font-normal text-muted-foreground">Atendimentos finalizados por tipo de operação — {periodLabel.toLowerCase()}</p>
                 </div>
               </CardTitle>
             </CardHeader>
@@ -729,14 +998,14 @@ export default function AnalyticsPage() {
 
           {/* Rankings */}
           <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
-            {/* Top 3 Assentamentos + PDF export */}
+            {/* Top 5 Assentamentos + PDF export */}
             <Card className="overflow-hidden">
               <CardHeader className="border-b bg-gradient-to-r from-amber-500/10 to-yellow-500/5">
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-amber-500/20"><MapPin className="h-5 w-5 text-amber-500" /></div>
                     <div>
-                      <span className="text-lg">Top 3 Assentamentos</span>
+                      <span className="text-lg">Top 5 Assentamentos</span>
                       <p className="text-sm font-normal text-muted-foreground">Por atendimentos finalizados</p>
                     </div>
                   </CardTitle>
@@ -768,6 +1037,15 @@ export default function AnalyticsPage() {
                       />
                     ))
                   )}
+                  {rankedSettlements.length > 5 && (
+                    <Button
+                      variant="ghost"
+                      className="w-full text-primary"
+                      onClick={() => setAllSettlementsOpen(true)}
+                    >
+                      Ver todos ({rankedSettlements.length})
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -796,8 +1074,58 @@ export default function AnalyticsPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* ── Central de Relatórios ───────────────────────────────────── */}
+          <ReportsCenter
+            services={services as any[]}
+            producers={producers as any[]}
+            demandTypes={demandTypes as any[]}
+            settlements={settlements as any[]}
+          />
         </div>
       )}
+
+      {/* ── Dialog: ranking completo de assentamentos ─────────────────── */}
+      <Dialog open={allSettlementsOpen} onOpenChange={setAllSettlementsOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-amber-500" />
+              Ranking de Assentamentos
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5 pt-1">
+            {rankedSettlements.map((s, i) => {
+              const pct = rankedSettlements[0].count > 0
+                ? Math.round((s.count / rankedSettlements[0].count) * 100)
+                : 0;
+              return (
+                <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg border bg-card">
+                  <span className={cn(
+                    'flex items-center justify-center w-8 h-8 rounded-full text-xs font-black shrink-0',
+                    i === 0 ? 'bg-warning text-warning-foreground'
+                      : i === 1 ? 'bg-primary text-primary-foreground'
+                      : i === 2 ? 'bg-secondary text-secondary-foreground'
+                      : 'bg-muted text-muted-foreground',
+                  )}>
+                    {i + 1}°
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="font-medium text-sm truncate">{s.name}</p>
+                      <span className="font-bold text-sm tabular-nums shrink-0">{s.count}</span>
+                    </div>
+                    <div className="h-1 rounded-full bg-border overflow-hidden mt-1">
+                      <div className="h-full rounded-full bg-primary/60" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0">{s.producersCount} prod.</span>
+                </div>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
