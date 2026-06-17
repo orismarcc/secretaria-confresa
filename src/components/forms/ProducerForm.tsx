@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -44,13 +44,33 @@ function validateCpf(cpf: string): boolean {
   return (rem2 === 10 ? 0 : rem2) === Number(digits[10]);
 }
 
+// validate CNPJ using the standard modulo-11 digit-check algorithm.
+function validateCnpj(cnpj: string): boolean {
+  const digits = cnpj.replace(/\D/g, '');
+  if (digits.length !== 14) return false;
+  if (/^(\d)\1{13}$/.test(digits)) return false;
+  const calc = (len: number) => {
+    const weights = len === 12
+      ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+      : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const sum = digits.slice(0, len).split('').reduce((acc, d, i) => acc + Number(d) * weights[i], 0);
+    const rem = sum % 11;
+    return rem < 2 ? 0 : 11 - rem;
+  };
+  if (calc(12) !== Number(digits[12])) return false;
+  return calc(13) === Number(digits[13]);
+}
+
 const producerSchema = z.object({
   name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres').max(100, 'Nome muito longo'),
   cpf: z
     .string()
-    .min(11, 'CPF inválido')
-    .max(14, 'CPF inválido')
-    .refine(validateCpf, 'CPF inválido (dígitos verificadores incorretos)'),
+    .min(11, 'Documento inválido')
+    .max(18, 'Documento inválido')
+    .refine(
+      (v) => validateCpf(v) || validateCnpj(v),
+      'CPF ou CNPJ inválido (dígitos verificadores incorretos)',
+    ),
   phone: z.string().min(10, 'Telefone inválido').max(15, 'Telefone inválido'),
   settlementId: z.string().min(1, 'Selecione um assentamento'),
   locationName: z.string().optional(),
@@ -78,6 +98,9 @@ export function ProducerForm({
   locations, 
   onSubmit 
 }: ProducerFormProps) {
+  // Tipo de documento: detectado pelo nº de dígitos (14 = CNPJ, senão CPF)
+  const [docType, setDocType] = useState<'cpf' | 'cnpj'>('cpf');
+
   const form = useForm<ProducerFormData>({
     resolver: zodResolver(producerSchema),
     defaultValues: {
@@ -94,6 +117,8 @@ export function ProducerForm({
 
   useEffect(() => {
     if (producer) {
+      const docDigits = (producer.cpf ?? '').replace(/\D/g, '');
+      setDocType(docDigits.length === 14 ? 'cnpj' : 'cpf');
       form.reset({
         name: producer.name?.toUpperCase() || '',
         cpf: producer.cpf,
@@ -105,6 +130,7 @@ export function ProducerForm({
         caf: (producer as any)?.caf || '',
       });
     } else {
+      setDocType('cpf');
       form.reset({
         name: '',
         cpf: '',
@@ -125,12 +151,31 @@ export function ProducerForm({
   };
 
   const formatCPF = (value: string) => {
-    const numbers = value.replace(/\D/g, '');
+    const numbers = value.replace(/\D/g, '').slice(0, 11);
     return numbers
       .replace(/(\d{3})(\d)/, '$1.$2')
       .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d{1,2})/, '$1-$2')
-      .slice(0, 14);
+      .replace(/(\d{3})(\d{1,2})/, '$1-$2');
+  };
+
+  const formatCNPJ = (value: string) => {
+    const numbers = value.replace(/\D/g, '').slice(0, 14);
+    return numbers
+      .replace(/(\d{2})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1/$2')
+      .replace(/(\d{4})(\d{1,2})/, '$1-$2');
+  };
+
+  const formatDoc = (value: string) =>
+    docType === 'cnpj' ? formatCNPJ(value) : formatCPF(value);
+
+  // Alterna o tipo e re-aplica a máscara aos dígitos já digitados
+  const handleDocTypeChange = (type: 'cpf' | 'cnpj') => {
+    if (type === docType) return;
+    setDocType(type);
+    const digits = (form.getValues('cpf') ?? '').replace(/\D/g, '');
+    form.setValue('cpf', type === 'cnpj' ? formatCNPJ(digits) : formatCPF(digits));
   };
 
   const formatPhone = (value: string) => {
@@ -172,12 +217,31 @@ export function ProducerForm({
                 name="cpf"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>CPF *</FormLabel>
+                    <div className="flex items-center justify-between gap-2">
+                      <FormLabel>{docType === 'cnpj' ? 'CNPJ' : 'CPF'} *</FormLabel>
+                      <div className="inline-flex rounded-md border bg-muted/40 p-0.5">
+                        {(['cpf', 'cnpj'] as const).map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => handleDocTypeChange(t)}
+                            className={`px-2 py-0.5 text-[11px] font-semibold rounded transition-colors ${
+                              docType === t
+                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            {t.toUpperCase()}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <FormControl>
-                      <Input 
-                        placeholder="000.000.000-00" 
-                        {...field} 
-                        onChange={(e) => field.onChange(formatCPF(e.target.value))}
+                      <Input
+                        placeholder={docType === 'cnpj' ? '00.000.000/0000-00' : '000.000.000-00'}
+                        inputMode="numeric"
+                        {...field}
+                        onChange={(e) => field.onChange(formatDoc(e.target.value))}
                       />
                     </FormControl>
                     <FormMessage />
