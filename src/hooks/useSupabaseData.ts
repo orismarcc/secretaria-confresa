@@ -840,37 +840,22 @@ export function useDeleteMachinery() {
 }
 
 // ============= DASHBOARD STATS =============
+/**
+ * Contagem de produtores para o Dashboard.
+ * As estatísticas de atendimentos são derivadas do cache de `useServices`
+ * no próprio DashboardPage — evita um segundo fetch de `services`.
+ * Mantém a queryKey ['dashboard_stats'] para preservar as invalidações
+ * já espalhadas pelas mutations de produtor.
+ */
 export function useDashboardStats() {
   return useQuery({
     queryKey: ['dashboard_stats'],
     queryFn: async () => {
-      const [servicesRes, producersRes] = await Promise.all([
-        supabase.from('services').select('status, demand_type_id'),
-        supabase.from('producers').select('id', { count: 'exact', head: true }),
-      ]);
-
-      if (servicesRes.error) throw servicesRes.error;
-      if (producersRes.error) throw producersRes.error;
-
-      const services = servicesRes.data || [];
-      const totalProducers = producersRes.count || 0;
-
-      const stats = {
-        totalServices: services.length,
-        pendingServices: services.filter(s => s.status === 'pending').length,
-        inProgressServices: services.filter(s => s.status === 'in_progress').length,
-        completedServices: services.filter(s => s.status === 'completed').length,
-        proximoServices: services.filter(s => s.status === 'proximo').length,
-        totalProducers,
-        servicesByDemandType: Object.entries(
-          services.reduce((acc, s) => {
-            acc[s.demand_type_id] = (acc[s.demand_type_id] || 0) + 1;
-            return acc;
-          }, {} as Record<string, number>)
-        ).map(([demandTypeId, count]) => ({ demandTypeId, count: count as number })),
-      };
-
-      return stats;
+      const { count, error } = await supabase
+        .from('producers')
+        .select('id', { count: 'exact', head: true });
+      if (error) throw error;
+      return { totalProducers: count || 0 };
     },
   });
 }

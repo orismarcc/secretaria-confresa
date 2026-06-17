@@ -35,14 +35,15 @@ import {
   Plus, Pencil, Trash2, UserCog, BarChart3, CheckCircle,
   ClipboardList, HardHat, User, Briefcase, FileText,
 } from 'lucide-react';
-
-function cpfMask(v: string) {
-  return v.replace(/\D/g, '')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
-    .slice(0, 14);
-}
+import {
+  formatDocument,
+  formatCpf,
+  formatCnpj,
+  detectDocType,
+  documentPlaceholder,
+  onlyDigits,
+  type DocType,
+} from '@/lib/documents';
 
 interface ResponsibleTechnician {
   id: string;
@@ -68,7 +69,15 @@ function TechnicianForm({
 }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [cpf, setCpf] = useState(initial?.cpf ?? '');
+  const [docType, setDocType] = useState<DocType>(detectDocType(initial?.cpf));
   const [cargo, setCargo] = useState(initial?.cargo ?? '');
+
+  const handleDocTypeChange = (type: DocType) => {
+    if (type === docType) return;
+    setDocType(type);
+    const digits = onlyDigits(cpf);
+    setCpf(type === 'cnpj' ? formatCnpj(digits) : formatCpf(digits));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,12 +97,30 @@ function TechnicianForm({
         />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="tech-cpf">CPF</Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor="tech-cpf">{docType === 'cnpj' ? 'CNPJ' : 'CPF'}</Label>
+          <div className="inline-flex rounded-md border bg-muted/40 p-0.5">
+            {(['cpf', 'cnpj'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => handleDocTypeChange(t)}
+                className={`px-2 py-0.5 text-[11px] font-semibold rounded transition-colors ${
+                  docType === t
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {t.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
         <Input
           id="tech-cpf"
           value={cpf}
-          onChange={(e) => setCpf(cpfMask(e.target.value))}
-          placeholder="000.000.000-00"
+          onChange={(e) => setCpf(formatDocument(e.target.value, docType))}
+          placeholder={documentPlaceholder(docType)}
           inputMode="numeric"
         />
       </div>
@@ -295,7 +322,7 @@ export default function OperatorsPage() {
     },
     {
       key: 'cpf',
-      header: 'CPF',
+      header: 'CPF / CNPJ',
       className: 'hidden sm:table-cell',
       render: (row: ResponsibleTechnician) => <span>{row.cpf || '—'}</span>,
     },

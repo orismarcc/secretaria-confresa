@@ -26,6 +26,15 @@ import {
 import { format, startOfMonth, subMonths, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
+  formatDocument,
+  formatCpf,
+  formatCnpj,
+  detectDocType,
+  documentPlaceholder,
+  onlyDigits,
+  type DocType,
+} from '@/lib/documents';
+import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from 'recharts';
@@ -42,14 +51,6 @@ const SERVICE_TYPES = [
 ] as const;
 
 type ServiceType = typeof SERVICE_TYPES[number];
-
-function cpfMask(v: string) {
-  return v.replace(/\D/g, '')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
-    .slice(0, 14);
-}
 
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
   const d = subMonths(new Date(), i);
@@ -101,6 +102,7 @@ export default function SEFAZPage() {
   // Producer form fields
   const [fName, setFName] = useState('');
   const [fCpf, setFCpf] = useState('');
+  const [fDocType, setFDocType] = useState<DocType>('cpf');
   const [fPhone, setFPhone] = useState('');
   const [fSettlementId, setFSettlementId] = useState('');
   const [fLocation, setFLocation] = useState('');
@@ -169,14 +171,22 @@ export default function SEFAZPage() {
   // Open producer form
   const openCreateProducer = () => {
     setEditingProducer(null);
-    setFName(''); setFCpf(''); setFPhone(''); setFSettlementId(''); setFLocation('');
+    setFName(''); setFCpf(''); setFDocType('cpf'); setFPhone(''); setFSettlementId(''); setFLocation('');
     setProducerFormOpen(true);
   };
   const openEditProducer = (p: any) => {
     setEditingProducer(p);
-    setFName(p.name || ''); setFCpf(p.cpf || ''); setFPhone(p.phone || '');
+    setFName(p.name || ''); setFCpf(p.cpf || ''); setFDocType(detectDocType(p.cpf)); setFPhone(p.phone || '');
     setFSettlementId(p.settlement_id || ''); setFLocation(p.location || '');
     setProducerFormOpen(true);
+  };
+
+  // Alterna CPF/CNPJ re-mascarando os dígitos já digitados
+  const handleDocTypeChange = (type: DocType) => {
+    if (type === fDocType) return;
+    setFDocType(type);
+    const digits = onlyDigits(fCpf);
+    setFCpf(type === 'cnpj' ? formatCnpj(digits) : formatCpf(digits));
   };
 
   const handleSubmitProducer = (e: React.FormEvent) => {
@@ -577,8 +587,33 @@ export default function SEFAZPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="p-cpf">CPF *</Label>
-                <Input id="p-cpf" value={fCpf} onChange={e => setFCpf(cpfMask(e.target.value))} placeholder="000.000.000-00" required />
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="p-cpf">{fDocType === 'cnpj' ? 'CNPJ' : 'CPF'} *</Label>
+                  <div className="inline-flex rounded-md border bg-muted/40 p-0.5">
+                    {(['cpf', 'cnpj'] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => handleDocTypeChange(t)}
+                        className={`px-2 py-0.5 text-[11px] font-semibold rounded transition-colors ${
+                          fDocType === t
+                            ? 'bg-primary text-primary-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {t.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Input
+                  id="p-cpf"
+                  value={fCpf}
+                  onChange={e => setFCpf(formatDocument(e.target.value, fDocType))}
+                  placeholder={documentPlaceholder(fDocType)}
+                  inputMode="numeric"
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="p-phone">Telefone</Label>

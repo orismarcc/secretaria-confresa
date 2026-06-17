@@ -256,6 +256,27 @@ export default function AnalyticsPage() {
     });
   }, [services, monthsCount]);
 
+  // ── Hectares trabalhados por mês (todos os atendimentos finalizados c/ área) ──
+  const monthlyAreaData = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: monthsCount }, (_, i) => {
+      const monthDate = subMonths(now, monthsCount - 1 - i);
+      const monthKey = format(startOfMonth(monthDate), 'yyyy-MM');
+      const monthLabel = format(monthDate, 'MMM/yy', { locale: ptBR });
+      const hectares = (services as any[])
+        .filter(s => {
+          if (s.status !== 'completed' || !s.completed_at || !s.worked_area) return false;
+          const d = parseISO(s.completed_at.replace(' ', 'T'));
+          return format(startOfMonth(d), 'yyyy-MM') === monthKey;
+        })
+        .reduce((acc, s) => acc + (Number(s.worked_area) || 0), 0);
+      return {
+        month: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
+        hectares: Math.round(hectares * 100) / 100,
+      };
+    });
+  }, [services, monthsCount]);
+
   const monthlyGradeVsPcData = useMemo(() => {
     const gradeIds = getOperationIds('grade', () => getDemandIdsByNameSubstring(demandTypes as any[], 'grade'));
     const pcIds = getOperationIds('pc', () => new Set((demandTypes as any[]).filter(d => d.name?.toLowerCase().includes(' pc') || d.name?.toLowerCase() === 'pc').map((d: any) => d.id)));
@@ -910,6 +931,38 @@ export default function AnalyticsPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Hectares trabalhados por mês */}
+          <Card className="overflow-hidden">
+            <CardHeader className="border-b bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-amber-500/10">
+              <CardTitle className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-amber-500/20"><Tractor className="h-5 w-5 text-amber-600" /></div>
+                <div>
+                  <span className="text-lg">Hectares Trabalhados por Mês</span>
+                  <p className="text-sm font-normal text-muted-foreground">Área de atendimentos finalizados — {periodLabel.toLowerCase()}</p>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 sm:pt-6 px-2 sm:px-6">
+              <div className="h-[220px] sm:h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={monthlyAreaData}>
+                    <defs>
+                      <linearGradient id="gradientHectares" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(32 95% 44%)" stopOpacity={0.4} />
+                        <stop offset="95%" stopColor="hsl(32 95% 44%)" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} axisLine={{ stroke: 'hsl(var(--border))' }} />
+                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} axisLine={{ stroke: 'hsl(var(--border))' }} width={42} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Area type="monotone" dataKey="hectares" name="Hectares" stroke="hsl(32 95% 44%)" strokeWidth={3} fill="url(#gradientHectares)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Grade vs PC */}
           <Card className="overflow-hidden">

@@ -60,8 +60,18 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: stats, isLoading: statsLoading } = useDashboardStats();
+  const { data: producerStats, isLoading: statsLoading } = useDashboardStats();
   const { data: services = [], isLoading: servicesLoading } = useServices();
+
+  // Estatísticas de atendimentos derivadas do cache de useServices (sem refetch)
+  const stats = useMemo(() => ({
+    totalServices: services.length,
+    pendingServices: services.filter((s: any) => s.status === 'pending').length,
+    inProgressServices: services.filter((s: any) => s.status === 'in_progress').length,
+    completedServices: services.filter((s: any) => s.status === 'completed').length,
+    proximoServices: services.filter((s: any) => s.status === 'proximo').length,
+    totalProducers: producerStats?.totalProducers ?? 0,
+  }), [services, producerStats]);
   const updatePositions = useUpdateServicePositions();
   const updateService = useUpdateService();
 

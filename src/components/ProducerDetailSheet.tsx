@@ -1,4 +1,5 @@
 import { Producer, Settlement, Location, DemandType } from '@/types';
+import { documentLabel } from '@/lib/documents';
 import {
   Sheet,
   SheetContent,
@@ -233,9 +234,7 @@ export function ProducerDetailSheet({
             <div className="flex items-start gap-3">
               <FileText className="h-5 w-5 text-muted-foreground mt-0.5" />
               <div>
-                <p className="text-sm text-muted-foreground">
-                  {(producer.cpf ?? '').replace(/\D/g, '').length === 14 ? 'CNPJ' : 'CPF'}
-                </p>
+                <p className="text-sm text-muted-foreground">{documentLabel(producer.cpf)}</p>
                 <p className="font-medium">{producer.cpf}</p>
               </div>
             </div>
