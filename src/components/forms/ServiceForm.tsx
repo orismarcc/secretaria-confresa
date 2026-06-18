@@ -44,7 +44,7 @@ const serviceSchema = z.object({
   scheduledDate: z.string().min(1, 'Selecione a data'),
   appointmentDate: z.string().optional(),
   completedAt: z.string().optional(),
-  status: z.enum(['pending', 'in_progress', 'completed', 'proximo']),
+  status: z.enum(['pending', 'in_progress', 'completed', 'proximo', 'cancelled']),
   purpose: z.string().max(500, 'Finalidade muito longa').optional(),
   notes: z.string().max(1000, 'Observações muito longas').optional(),
   priority: z.enum(['low', 'medium', 'high']).optional(),
@@ -508,6 +508,7 @@ export function ServiceForm({
                         <SelectItem value="pending">Pendente</SelectItem>
                         <SelectItem value="in_progress">Em Execução</SelectItem>
                         <SelectItem value="completed">Finalizado</SelectItem>
+                        <SelectItem value="cancelled">Cancelado</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

@@ -9,6 +9,7 @@ import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { ServiceForm } from '@/components/forms/ServiceForm';
 import { DEMAND_CATEGORIES } from '@/components/forms/DemandTypeForm';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -32,7 +33,7 @@ import { ptBR } from 'date-fns/locale';
 import { isDamOverdue as checkDamOverdue } from '@/lib/damUtils';
 import {
   Plus, Pencil, Trash2, Archive, CheckCircle, Eye,
-  FileDown, FileSpreadsheet, ChevronLeft, ChevronRight, X,
+  FileDown, FileSpreadsheet, ChevronLeft, ChevronRight, X, XCircle,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -104,6 +105,7 @@ interface DbService {
   scheduled_date: string;
   appointment_date?: string | null;
   completed_at?: string | null;
+  cancellation_reason?: string | null;
   purpose?: string | null;
   notes?: string | null;
   completion_notes?: string | null;
@@ -178,6 +180,11 @@ export default function ServicesPage() {
   const [serviceToFinalize, setServiceToFinalize] = useState<DbService | null>(null);
   const [finalizeDate, setFinalizeDate] = useState('');
 
+  // Cancellation dialog
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [serviceToCancel, setServiceToCancel] = useState<DbService | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+
   const [detailService, setDetailService] = useState<DbService | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
@@ -191,7 +198,9 @@ export default function ServicesPage() {
         setDetailService(found);
         setDetailOpen(true);
         // Switch tab so the background list matches the service's status group
-        setStatusFilter(found.status === 'completed' ? 'archived' : 'active');
+        setStatusFilter(
+          found.status === 'completed' || found.status === 'cancelled' ? 'archived' : 'active'
+        );
       }
     }
   }, [searchParams, services]);
@@ -224,7 +233,7 @@ export default function ServicesPage() {
     const matchesCategory = categoryFilter === 'all' || (dt as any)?.category === categoryFilter;
     const matchesStatus = statusFilter === 'active'
       ? s.status === 'pending' || s.status === 'in_progress' || s.status === 'proximo'
-      : s.status === 'completed';
+      : s.status === 'completed' || s.status === 'cancelled';
     const matchesSettlement =
       settlementFilter === 'all' || s.settlement_id === settlementFilter;
     // Date range uses scheduled_date (YYYY-MM-DD string — direct comparison works)
@@ -392,6 +401,24 @@ export default function ServicesPage() {
     setFinalizeDialogOpen(false);
   };
 
+  const openCancelDialog = (service: DbService) => {
+    setDetailOpen(false);
+    setServiceToCancel(service);
+    setCancelReason('');
+    setCancelDialogOpen(true);
+  };
+
+  const handleCancel = () => {
+    if (!serviceToCancel) return;
+    updateService.mutate({
+      id: serviceToCancel.id,
+      status: 'cancelled',
+      cancellation_reason: cancelReason.trim() || null,
+    });
+    setServiceToCancel(null);
+    setCancelDialogOpen(false);
+  };
+
   const openEditForm = (service: DbService) => {
     setDetailOpen(false);
     setEditingService(service);
@@ -419,7 +446,7 @@ export default function ServicesPage() {
       demandTypeId: s.demand_type_id,
       settlementId: s.settlement_id || '',
       locationId: s.location_id || '',
-      status: s.status as 'pending' | 'in_progress' | 'completed' | 'proximo',
+      status: s.status as 'pending' | 'in_progress' | 'completed' | 'proximo' | 'cancelled',
       scheduledDate: new Date(s.scheduled_date + 'T12:00:00'),
       appointmentDate: isoToDateInput(s.appointment_date),
       completedAt: isoToDateInput(s.completed_at),
@@ -572,8 +599,12 @@ export default function ServicesPage() {
 
   // ── counts ────────────────────────────────────────────────────────────────
 
-  const activeCount = services.filter((s: DbService) => s.status !== 'completed').length;
-  const archivedCount = services.filter((s: DbService) => s.status === 'completed').length;
+  const activeCount = services.filter((s: DbService) =>
+    s.status === 'pending' || s.status === 'in_progress' || s.status === 'proximo'
+  ).length;
+  const archivedCount = services.filter((s: DbService) =>
+    s.status === 'completed' || s.status === 'cancelled'
+  ).length;
 
   // ── detail view data ──────────────────────────────────────────────────────
 
@@ -878,6 +909,7 @@ export default function ServicesPage() {
               onEdit={() => openEditForm(detailService)}
               onDelete={() => openDeleteDialog(detailService)}
               onFinalize={detailService.status !== 'completed' ? () => openFinalizeDialog(detailService) : undefined}
+              onCancel={() => openCancelDialog(detailService)}
             />
           )}
         </SheetContent>
@@ -918,6 +950,44 @@ export default function ServicesPage() {
             >
               <CheckCircle className="h-4 w-4 mr-2" />
               Finalizar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Dialog — motivo obrigatório */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Cancelar Atendimento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              Informe o motivo do cancelamento. Ele ficará registrado no histórico do produtor.
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="cancel-reason">Motivo *</Label>
+              <Textarea
+                id="cancel-reason"
+                value={cancelReason}
+                onChange={e => setCancelReason(e.target.value)}
+                placeholder="Ex: produtor desistiu, duplicidade, erro de cadastro..."
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
+              Voltar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleCancel}
+              disabled={!cancelReason.trim() || updateService.isPending}
+            >
+              <XCircle className="h-4 w-4 mr-2" />
+              Confirmar Cancelamento
             </Button>
           </DialogFooter>
         </DialogContent>

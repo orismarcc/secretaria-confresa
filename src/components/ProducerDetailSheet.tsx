@@ -357,6 +357,7 @@ export function ProducerDetailSheet({
                   if (item.type === 'service') {
                     const s = item.raw;
                     const isCompleted = s.status === 'completed';
+                    const isCancelled = s.status === 'cancelled';
                     const completedAt = s.completed_at
                       ? format(new Date(s.completed_at.replace(' ', 'T')), 'dd/MM/yyyy', { locale: ptBR })
                       : null;
@@ -372,23 +373,31 @@ export function ProducerDetailSheet({
                         className={`w-full text-left flex items-start justify-between gap-2 p-3 rounded-lg border transition-all hover:shadow-sm hover:-translate-y-0.5 ${
                           isCompleted
                             ? 'bg-success/5 border-success/20 hover:border-success/40'
+                            : isCancelled
+                            ? 'bg-destructive/5 border-destructive/20 hover:border-destructive/40'
                             : 'bg-muted/30 border-border/50 hover:border-border'
                         }`}
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
-                            <p className="text-sm font-medium truncate">{s.demand_types?.name || 'N/A'}</p>
+                            <p className={`text-sm font-medium truncate ${isCancelled ? 'line-through text-muted-foreground' : ''}`}>
+                              {s.demand_types?.name || 'N/A'}
+                            </p>
                           </div>
                           {isCompleted && completedAt ? (
                             <p className="text-xs font-semibold text-success mt-0.5">
                               ✓ Finalizado em {completedAt}
+                            </p>
+                          ) : isCancelled ? (
+                            <p className="text-xs font-semibold text-destructive mt-0.5">
+                              ✕ Cancelado{s.cancellation_reason ? `: ${s.cancellation_reason}` : ''}
                             </p>
                           ) : (
                             <p className="text-xs text-muted-foreground mt-0.5">
                               Cadastro: {scheduledDate}
                             </p>
                           )}
-                          <ServiceMeta s={s} />
+                          {!isCancelled && <ServiceMeta s={s} />}
                           {isDamOverdue(s) && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 rounded px-1.5 py-0.5 mt-1">
                               ⚠ DAM em atraso

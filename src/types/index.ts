@@ -8,7 +8,7 @@
 export type UserRole = 'admin' | 'operator';
 
 /** Values stored in services.status */
-export type ServiceStatus = 'pending' | 'in_progress' | 'completed';
+export type ServiceStatus = 'pending' | 'in_progress' | 'completed' | 'proximo' | 'cancelled';
 
 /** Demand-type categories stored in demand_types.category */
 export type DemandCategory =

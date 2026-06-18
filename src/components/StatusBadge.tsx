@@ -1,6 +1,6 @@
 import { ServiceStatus } from '@/types';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Loader2, CheckCircle2, CalendarCheck } from 'lucide-react';
+import { Clock, Loader2, CheckCircle2, CalendarCheck, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface StatusBadgeProps {
@@ -28,6 +28,11 @@ const statusConfig: Record<string, { label: string; icon: any; className: string
     label: 'Próximo',
     icon: CalendarCheck,
     className: 'border-violet-400 bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
+  },
+  cancelled: {
+    label: 'Cancelado',
+    icon: XCircle,
+    className: 'border-destructive/40 bg-destructive/10 text-destructive',
   },
 };
 

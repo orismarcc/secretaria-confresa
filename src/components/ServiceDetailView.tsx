@@ -8,6 +8,7 @@ import { useCombinedServicePhotos } from '@/hooks/useServicePhotos';
 import {
   Pencil,
   Trash2,
+  XCircle,
   CheckCircle,
   Calendar,
   CalendarClock,
@@ -54,6 +55,7 @@ interface ServiceDetailViewProps {
     appointment_date?: string | null;
     created_at?: string | null;
     completed_at?: string | null;
+    cancellation_reason?: string | null;
     notes?: string | null;
     completion_notes?: string | null;
     priority: string;
@@ -87,6 +89,7 @@ interface ServiceDetailViewProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onFinalize?: () => void;
+  onCancel?: () => void;
 }
 
 export function ServiceDetailView({
@@ -98,17 +101,89 @@ export function ServiceDetailView({
   onEdit,
   onDelete,
   onFinalize,
+  onCancel,
 }: ServiceDetailViewProps) {
   const { photos, isLoading: photosLoading } = useCombinedServicePhotos(service.id);
   const isCompleted = service.status === 'completed';
+  const isCancelled = service.status === 'cancelled';
+
+  // Métricas operacionais (planejadas no cadastro ou efetivadas na finalização)
+  const hasMetrics =
+    (service.fuel_liters ?? 0) > 0 || (service.worked_hours ?? 0) > 0 ||
+    (service.limestone_quantity ?? 0) > 0 || (service.input_quantity ?? 0) > 0;
+
+  const metricsGrid = (
+    <div className="grid grid-cols-2 gap-3">
+      {(service.fuel_liters ?? 0) > 0 && (
+        <div className="flex items-center gap-2">
+          <Fuel className="h-4 w-4 text-red-500 shrink-0" />
+          <div>
+            <p className="text-xs text-muted-foreground">Combustível</p>
+            <p className="font-medium text-sm">
+              {Number(service.fuel_liters).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L
+            </p>
+          </div>
+        </div>
+      )}
+      {(service.worked_hours ?? 0) > 0 && (
+        <div className="flex items-center gap-2">
+          <Clock className="h-4 w-4 text-blue-500 shrink-0" />
+          <div>
+            <p className="text-xs text-muted-foreground">Horas Trabalhadas</p>
+            <p className="font-medium text-sm">
+              {Number(service.worked_hours).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h
+            </p>
+          </div>
+        </div>
+      )}
+      {(service.limestone_quantity ?? 0) > 0 && (
+        <div className="flex items-center gap-2">
+          <Layers className="h-4 w-4 text-stone-500 shrink-0" />
+          <div>
+            <p className="text-xs text-muted-foreground">Calcário</p>
+            <p className="font-medium text-sm">
+              {Number(service.limestone_quantity).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} t
+            </p>
+          </div>
+        </div>
+      )}
+      {(service.input_quantity ?? 0) > 0 && (
+        <div className="flex items-center gap-2">
+          <Package className="h-4 w-4 text-purple-500 shrink-0" />
+          <div>
+            <p className="text-xs text-muted-foreground">Insumos</p>
+            <p className="font-medium text-sm">
+              {Number(service.input_quantity).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} t
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
 
   return (
     <div className="mt-6 space-y-4">
       <div className="flex items-center justify-between">
         <span className="text-sm text-muted-foreground">Status</span>
-        <StatusBadge status={service.status as 'pending' | 'in_progress' | 'completed'} />
+        <StatusBadge status={service.status} />
       </div>
+
+      {/* Motivo do cancelamento — destacado */}
+      {isCancelled && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3">
+          <p className="text-sm font-semibold text-destructive flex items-center gap-1.5">
+            <Trash2 className="h-4 w-4" /> Atendimento cancelado
+          </p>
+          {service.cancellation_reason ? (
+            <p className="text-sm text-muted-foreground mt-1">
+              <span className="font-medium text-foreground">Motivo:</span> {service.cancellation_reason}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground mt-1">Sem motivo informado.</p>
+          )}
+        </div>
+      )}
 
       <Separator />
 
@@ -233,6 +308,15 @@ export function ServiceDetailView({
             <p className="font-medium">{service.notes}</p>
           </div>
         )}
+
+        {/* Dados operacionais planejados — exibidos quando ainda não finalizado
+            (no completed os valores efetivados aparecem no bloco de finalização) */}
+        {hasMetrics && !isCompleted && (
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">Dados do Atendimento</p>
+            {metricsGrid}
+          </div>
+        )}
       </div>
 
       {/* DAM Section — shown whenever a DAM has been issued */}
@@ -321,55 +405,7 @@ export function ServiceDetailView({
             )}
 
             {/* Operational metrics — shown only when present */}
-            {((service.fuel_liters ?? 0) > 0 || (service.worked_hours ?? 0) > 0 ||
-              (service.limestone_quantity ?? 0) > 0 || (service.input_quantity ?? 0) > 0) && (
-              <div className="grid grid-cols-2 gap-3">
-                {(service.fuel_liters ?? 0) > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Fuel className="h-4 w-4 text-red-500 shrink-0" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Combustível</p>
-                      <p className="font-medium text-sm">
-                        {Number(service.fuel_liters).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {(service.worked_hours ?? 0) > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-blue-500 shrink-0" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Horas Trabalhadas</p>
-                      <p className="font-medium text-sm">
-                        {Number(service.worked_hours).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {(service.limestone_quantity ?? 0) > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Layers className="h-4 w-4 text-stone-500 shrink-0" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Calcário</p>
-                      <p className="font-medium text-sm">
-                        {Number(service.limestone_quantity).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} t
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {(service.input_quantity ?? 0) > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Package className="h-4 w-4 text-purple-500 shrink-0" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Insumos</p>
-                      <p className="font-medium text-sm">
-                        {Number(service.input_quantity).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} t
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+            {hasMetrics && metricsGrid}
 
             {service.latitude && service.longitude ? (
               <div className="flex items-center gap-2">
@@ -426,7 +462,7 @@ export function ServiceDetailView({
       <Separator />
 
       <div className="flex flex-col gap-2">
-        {service.status !== 'completed' && onFinalize && (
+        {!isCompleted && !isCancelled && onFinalize && (
           <Button
             onClick={onFinalize}
             className="w-full bg-success hover:bg-success/90"
@@ -439,6 +475,16 @@ export function ServiceDetailView({
           <Button variant="outline" onClick={onEdit} className="w-full">
             <Pencil className="h-4 w-4 mr-2" />
             Editar
+          </Button>
+        )}
+        {!isCompleted && !isCancelled && onCancel && (
+          <Button
+            variant="outline"
+            onClick={onCancel}
+            className="w-full border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            <XCircle className="h-4 w-4 mr-2" />
+            Cancelar Atendimento
           </Button>
         )}
         {onDelete && (
