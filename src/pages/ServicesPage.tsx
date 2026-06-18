@@ -313,13 +313,16 @@ export default function ServicesPage() {
     if (!editingService) return;
     const producer = producers.find(p => p.id === data.producerId);
 
-    let completedAt: string | null = editingService.completed_at ?? null;
-    if (isAdmin && data.completedAt) {
-      completedAt = dateInputToIso(data.completedAt);
-    } else if (data.status === 'completed' && editingService.status !== 'completed') {
-      completedAt = new Date().toISOString();
-    } else if (data.status !== 'completed' && data.status !== 'proximo') {
-      completedAt = null;
+    // Invariante: completed_at só existe quando status === 'completed'.
+    // Em qualquer outro status (pendente, em execução, próximo) é limpo,
+    // evitando que a data de finalização persista ao reabrir o atendimento.
+    let completedAt: string | null = null;
+    if (data.status === 'completed') {
+      if (isAdmin && data.completedAt) {
+        completedAt = dateInputToIso(data.completedAt);          // admin define data custom
+      } else {
+        completedAt = editingService.completed_at ?? new Date().toISOString(); // mantém ou marca agora
+      }
     }
 
     // Upload DAM receipt if provided
