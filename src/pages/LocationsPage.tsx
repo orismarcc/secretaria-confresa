@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
+import { textIncludes } from '@/lib/text';
 import { DataTable } from '@/components/DataTable';
 import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
@@ -45,7 +46,7 @@ export default function LocationsPage() {
   const [locationToDelete, setLocationToDelete] = useState<Location | null>(null);
 
   const filtered = locations.filter(l => {
-    const matchesSearch = l.name.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = textIncludes(l.name, search);
     const matchesSettlement = settlementFilter === 'all' || l.settlement_id === settlementFilter;
     return matchesSearch && matchesSettlement;
   });

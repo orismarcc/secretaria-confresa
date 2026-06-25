@@ -24,6 +24,7 @@ import {
   useDemandTypes,
 } from '@/hooks/useSupabaseData';
 import { getPatrulhaIds, computeSettlementStats } from '@/lib/analyticsUtils';
+import { textIncludes } from '@/lib/text';
 
 interface Settlement {
   id: string;
@@ -63,7 +64,7 @@ export default function SettlementsPage() {
   // ── Handlers ────────────────────────────────────────────────────────────────
 
   const filtered = settlements.filter(s =>
-    s.name.toLowerCase().includes(search.toLowerCase())
+    textIncludes(s.name, search)
   );
 
   const handleCreate = (data: { name: string }) => {

@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ServiceForm } from '@/components/forms/ServiceForm';
 import { DEMAND_CATEGORIES } from '@/components/forms/DemandTypeForm';
+import { textIncludes } from '@/lib/text';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -226,9 +227,9 @@ export default function ServicesPage() {
     if ((dt as any)?.category === 'entregas') return false;
     const producer = producers.find(p => p.id === s.producer_id);
     const matchesSearch =
-      producer?.name?.toLowerCase().includes(search.toLowerCase()) ||
+      textIncludes(producer?.name, search) ||
       producer?.cpf?.includes(search) ||
-      s.producers?.name?.toLowerCase().includes(search.toLowerCase());
+      textIncludes(s.producers?.name, search);
     const matchesDemandType = demandTypeFilter === 'all' || s.demand_type_id === demandTypeFilter;
     const matchesCategory = categoryFilter === 'all' || (dt as any)?.category === categoryFilter;
     const matchesStatus = statusFilter === 'active'

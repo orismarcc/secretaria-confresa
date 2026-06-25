@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
+import { normalizeText } from '@/lib/text';
 import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -108,13 +109,13 @@ export default function DAMPage() {
 
   // Filtered + searched
   const filtered = useMemo(() => {
-    const q = search.toLowerCase();
+    const q = normalizeText(search);
     return damServices
       .filter(s => {
         const status = getDamStatus(s);
         if (tab !== 'all' && status !== tab) return false;
-        const producerName = (producers.find(p => p.id === s.producer_id)?.name || s.producers?.name || '').toLowerCase();
-        const demandName   = (demandTypes.find(d => d.id === s.demand_type_id)?.name || s.demand_types?.name || '').toLowerCase();
+        const producerName = normalizeText(producers.find(p => p.id === s.producer_id)?.name || s.producers?.name);
+        const demandName   = normalizeText(demandTypes.find(d => d.id === s.demand_type_id)?.name || s.demand_types?.name);
         return producerName.includes(q) || demandName.includes(q);
       })
       .sort((a: any, b: any) => {

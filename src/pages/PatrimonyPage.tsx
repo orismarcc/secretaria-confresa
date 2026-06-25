@@ -24,6 +24,7 @@ import { PatrimonyForm, type PatrimonyFormPayload, type PatrimonyFormItem } from
 import { PatrimonyTransferDialog, type PatrimonyTransferItem } from '@/components/PatrimonyTransferDialog';
 import { PatrimonyDetailSheet, type PatrimonyDetailItem } from '@/components/PatrimonyDetailSheet';
 import { supabase } from '@/integrations/supabase/client';
+import { textIncludes } from '@/lib/text';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -112,10 +113,10 @@ export default function PatrimonyPage() {
 
   const filtered = (patrimony as PatrimonyItem[]).filter((p) => {
     const matchesSearch =
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.patrimony_number.toLowerCase().includes(search.toLowerCase()) ||
-      (p.patrimony_number_state ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (p.category ?? '').toLowerCase().includes(search.toLowerCase());
+      textIncludes(p.name, search) ||
+      textIncludes(p.patrimony_number, search) ||
+      textIncludes(p.patrimony_number_state, search) ||
+      textIncludes(p.category, search);
 
     const dateStr = p.acquisition_date?.substring(0, 10) ?? '';
     const matchesFrom = !dateFrom || dateStr >= dateFrom;

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
+import { textIncludes } from '@/lib/text';
 import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -46,7 +47,7 @@ export default function DemandTypesPage() {
   const [typeToDelete, setTypeToDelete] = useState<DemandType | null>(null);
 
   const filtered = (demandTypes as DemandType[]).filter(d =>
-    d.name.toLowerCase().includes(search.toLowerCase())
+    textIncludes(d.name, search)
   );
 
   // Group by category

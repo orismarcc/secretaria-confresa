@@ -36,6 +36,7 @@ import { Producer, Settlement, Location } from '@/types';
 import { format } from 'date-fns';
 import { Check, ChevronsUpDown, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { normalizeText } from '@/lib/text';
 
 const serviceSchema = z.object({
   producerId: z.string().min(1, 'Selecione um produtor'),
@@ -139,10 +140,10 @@ function ProducerCombobox({
 
   const filtered = useMemo(() => {
     if (!searchTerm) return producers;
-    const term = searchTerm.toLowerCase();
+    const term = normalizeText(searchTerm);
     return producers.filter(
       (p) =>
-        p.name.toLowerCase().includes(term) ||
+        normalizeText(p.name).includes(term) ||
         p.cpf.includes(term)
     );
   }, [producers, searchTerm]);

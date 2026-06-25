@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
+import { textIncludes } from '@/lib/text';
 import { DataTable } from '@/components/DataTable';
 import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
@@ -51,8 +52,8 @@ export default function MachineryPage() {
   const [formChassis, setFormChassis] = useState('');
 
   const filtered = machinery.filter((m: MachineryItem) =>
-    m.name.toLowerCase().includes(search.toLowerCase()) ||
-    m.patrimony_number.toLowerCase().includes(search.toLowerCase())
+    textIncludes(m.name, search) ||
+    textIncludes(m.patrimony_number, search)
   );
 
   const openCreateForm = () => {

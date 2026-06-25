@@ -69,6 +69,7 @@ import {
 import { format, parseISO, subMonths, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { normalizeText } from '@/lib/text';
 import {
   useDeliveries,
   useCreateDelivery,
@@ -120,10 +121,10 @@ function ProducerCombobox({
 
   const filtered = useMemo(() => {
     if (!searchTerm) return producers;
-    const t = searchTerm.toLowerCase();
+    const t = normalizeText(searchTerm);
     return producers.filter(
       (p) =>
-        p.name?.toLowerCase().includes(t) ||
+        normalizeText(p.name).includes(t) ||
         p.cpf?.includes(t) ||
         p.phone?.includes(t),
     );
@@ -1229,14 +1230,14 @@ export default function DeliveriesPage() {
   );
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase();
+    const q = normalizeText(search);
     return (deliveries as any[])
       .filter((d) => {
         const isPending = !d.status || d.status === 'pending';
         const matchesTab = tab === 'pending' ? isPending : d.status === 'completed';
         const matchesSearch =
-          (d.producers?.name || '').toLowerCase().includes(q) ||
-          (d.demand_types?.name || '').toLowerCase().includes(q);
+          normalizeText(d.producers?.name).includes(q) ||
+          normalizeText(d.demand_types?.name).includes(q);
         return matchesTab && matchesSearch;
       })
       .sort((a: any, b: any) => {

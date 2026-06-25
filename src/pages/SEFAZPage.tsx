@@ -34,6 +34,7 @@ import {
   onlyDigits,
   type DocType,
 } from '@/lib/documents';
+import { normalizeText } from '@/lib/text';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
@@ -126,12 +127,12 @@ export default function SEFAZPage() {
 
   // Filtered producers list
   const filteredProducers = useMemo(() => {
-    const q = search.toLowerCase();
+    const q = normalizeText(search);
     return (producers as any[]).filter(p =>
-      p.name?.toLowerCase().includes(q) ||
+      normalizeText(p.name).includes(q) ||
       p.cpf?.includes(q) ||
-      p.settlement?.toLowerCase().includes(q) ||
-      settlements.find((s: any) => s.id === p.settlement_id)?.name?.toLowerCase().includes(q)
+      normalizeText(p.settlement).includes(q) ||
+      normalizeText(settlements.find((s: any) => s.id === p.settlement_id)?.name).includes(q)
     );
   }, [producers, search, settlements]);
 
