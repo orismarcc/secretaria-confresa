@@ -10,6 +10,7 @@ import {
   Trash2,
   XCircle,
   CheckCircle,
+  FileText,
   Calendar,
   CalendarClock,
   Navigation,
@@ -90,6 +91,7 @@ interface ServiceDetailViewProps {
   onDelete?: () => void;
   onFinalize?: () => void;
   onCancel?: () => void;
+  onComunicado?: () => void;
 }
 
 export function ServiceDetailView({
@@ -102,6 +104,7 @@ export function ServiceDetailView({
   onDelete,
   onFinalize,
   onCancel,
+  onComunicado,
 }: ServiceDetailViewProps) {
   const { photos, isLoading: photosLoading } = useCombinedServicePhotos(service.id);
   const isCompleted = service.status === 'completed';
@@ -469,6 +472,12 @@ export function ServiceDetailView({
           >
             <CheckCircle className="h-4 w-4 mr-2" />
             Finalizar Atendimento
+          </Button>
+        )}
+        {onComunicado && (
+          <Button variant="outline" onClick={onComunicado} className="w-full">
+            <FileText className="h-4 w-4 mr-2" />
+            Emitir Comunicado (DAM)
           </Button>
         )}
         {onEdit && (

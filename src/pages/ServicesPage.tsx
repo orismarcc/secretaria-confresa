@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { ServiceForm } from '@/components/forms/ServiceForm';
 import { DEMAND_CATEGORIES } from '@/components/forms/DemandTypeForm';
+import { ComunicadoDamDialog, type ComunicadoSource } from '@/components/ComunicadoDamDialog';
 import { textIncludes } from '@/lib/text';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -185,6 +186,10 @@ export default function ServicesPage() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [serviceToCancel, setServiceToCancel] = useState<DbService | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+
+  // Comunicado de DAM
+  const [comunicadoOpen, setComunicadoOpen] = useState(false);
+  const [comunicadoSource, setComunicadoSource] = useState<ComunicadoSource | null>(null);
 
   const [detailService, setDetailService] = useState<DbService | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -418,6 +423,19 @@ export default function ServicesPage() {
     });
     setServiceToCancel(null);
     setCancelDialogOpen(false);
+  };
+
+  const openComunicado = (service: DbService) => {
+    const producer = producers.find(p => p.id === service.producer_id);
+    const dt = demandTypes.find(d => d.id === service.demand_type_id);
+    setComunicadoSource({
+      nome: producer?.name || service.producers?.name || '',
+      cpf: producer?.cpf || '',
+      tipo: dt?.name || service.demand_types?.name || '',
+      horas: Number(service.worked_hours) || 0,
+      litros: Number(service.fuel_liters) || 0,
+    });
+    setComunicadoOpen(true);
   };
 
   const openEditForm = (service: DbService) => {
@@ -911,6 +929,7 @@ export default function ServicesPage() {
               onDelete={() => openDeleteDialog(detailService)}
               onFinalize={detailService.status !== 'completed' ? () => openFinalizeDialog(detailService) : undefined}
               onCancel={() => openCancelDialog(detailService)}
+              onComunicado={() => openComunicado(detailService)}
             />
           )}
         </SheetContent>
@@ -993,6 +1012,13 @@ export default function ServicesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Comunicado de DAM */}
+      <ComunicadoDamDialog
+        open={comunicadoOpen}
+        onOpenChange={setComunicadoOpen}
+        source={comunicadoSource}
+      />
 
       {/* Service Form */}
       <ServiceForm
