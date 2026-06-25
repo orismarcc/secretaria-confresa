@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FileText, FileDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useNextComunicadoNumber, useIncrementComunicadoNumber } from '@/hooks/useSupabaseData';
 import {
   gerarComunicadoDam,
   formatHoras,
@@ -39,18 +40,16 @@ function parseNum(v: string): number {
 
 export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDamDialogProps) {
   const { toast } = useToast();
-  const [numero, setNumero] = useState('');
+  const { data: proximoNumero } = useNextComunicadoNumber();
+  const incrementNumero = useIncrementComunicadoNumber();
   const [valorLitro, setValorLitro] = useState('');
-  const [combustivel, setCombustivel] = useState(0);
   const [upfm, setUpfm] = useState('71,15');
   const [gerando, setGerando] = useState(false);
 
   // Reinicia ao abrir
   useEffect(() => {
     if (open) {
-      setNumero('');
       setValorLitro('');
-      setCombustivel(0);
       setUpfm('71,15');
     }
   }, [open]);
@@ -59,23 +58,17 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
 
   const litros = source.litros || 0;
   const upfmNum = parseNum(upfm);
+  // Combustível = valor por litro × litros (não editável)
+  const combustivel = parseNum(valorLitro) * litros;
   const total = combustivel + upfmNum;
 
-  // valor/L × litros → combustível (editável depois)
-  const handleValorLitro = (v: string) => {
-    setValorLitro(v);
-    setCombustivel(parseNum(v) * litros);
-  };
-
   const handleGerar = async () => {
-    if (!numero.trim()) {
-      toast({ title: 'Informe o número do comunicado', variant: 'destructive' });
-      return;
-    }
     setGerando(true);
     try {
+      // Consome o próximo número de forma atômica só ao gerar
+      const numero = await incrementNumero.mutateAsync();
       const dados: ComunicadoData = {
-        numero: numero.trim(),
+        numero: String(numero),
         data: new Date(),
         tipo: source.tipo,
         nome: source.nome,
@@ -86,7 +79,7 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
         valorUpfm: upfmNum,
       };
       await gerarComunicadoDam(dados);
-      toast({ title: 'Comunicado gerado!' });
+      toast({ title: `Comunicado Nº ${numero} gerado!` });
       onOpenChange(false);
     } catch (e: any) {
       toast({ title: 'Erro ao gerar comunicado', description: e.message, variant: 'destructive' });
@@ -132,42 +125,30 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
         </div>
 
         <div className="space-y-3">
+          <div className="flex items-center justify-between rounded-lg bg-muted/40 border px-3 py-2">
+            <span className="text-sm text-muted-foreground">Nº do Comunicado</span>
+            <span className="font-semibold">{proximoNumero ?? '—'} <span className="text-xs font-normal text-muted-foreground">(automático)</span></span>
+          </div>
+
           <div className="space-y-1.5">
-            <Label htmlFor="com-numero">Nº do Comunicado *</Label>
+            <Label htmlFor="com-valor-litro">Valor do combustível por litro (R$/L) *</Label>
             <Input
-              id="com-numero"
-              value={numero}
-              onChange={(e) => setNumero(e.target.value)}
-              placeholder="Ex: 13"
-              inputMode="numeric"
+              id="com-valor-litro"
+              value={valorLitro}
+              onChange={(e) => setValorLitro(e.target.value)}
+              placeholder="7,50"
+              inputMode="decimal"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="com-valor-litro">Valor do combustível (R$/L)</Label>
-              <Input
-                id="com-valor-litro"
-                value={valorLitro}
-                onChange={(e) => handleValorLitro(e.target.value)}
-                placeholder="7,50"
-                inputMode="decimal"
-              />
+          {/* Combustível — calculado (não editável) */}
+          <div className="flex items-center justify-between rounded-lg bg-muted/40 border px-3 py-2">
+            <div>
+              <span className="text-sm font-medium">Combustível</span>
+              <p className="text-[11px] text-muted-foreground">valor/L × {formatLitros(litros)}</p>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="com-combustivel">Combustível (R$)</Label>
-              <Input
-                id="com-combustivel"
-                value={combustivel ? combustivel.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}
-                onChange={(e) => setCombustivel(parseNum(e.target.value))}
-                placeholder="0,00"
-                inputMode="decimal"
-              />
-            </div>
+            <span className="font-semibold">{fmtBRL(combustivel)}</span>
           </div>
-          <p className="text-xs text-muted-foreground -mt-1">
-            Combustível = valor por litro × {formatLitros(litros)} (ajustável)
-          </p>
 
           <div className="space-y-1.5">
             <Label htmlFor="com-upfm">Taxa referente a 1 UPFM (R$)</Label>
@@ -189,7 +170,7 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
 
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleGerar} disabled={gerando}>
+          <Button onClick={handleGerar} disabled={gerando || combustivel <= 0}>
             <FileDown className="h-4 w-4 mr-2" />
             {gerando ? 'Gerando...' : 'Gerar Comunicado'}
           </Button>

@@ -713,6 +713,97 @@ export function useDeleteService() {
   });
 }
 
+// ============= COMUNICADO DAM — CONTADOR =============
+/** Lê o próximo número que será atribuído (valor atual + 1), só para exibição. */
+export function useNextComunicadoNumber() {
+  return useQuery({
+    queryKey: ['comunicado_dam_counter'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('app_counters')
+        .select('value')
+        .eq('key', 'comunicado_dam')
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.value ?? 0) + 1;
+    },
+  });
+}
+
+/** Incrementa atomicamente e retorna o número efetivamente atribuído. */
+export function useIncrementComunicadoNumber() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('next_comunicado_dam');
+      if (error) throw error;
+      return data as number;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['comunicado_dam_counter'] });
+    },
+  });
+}
+
+// ============= OPERATOR DEMAND-TYPE ACCESS =============
+// Restringe quais tipos de serviço um operador enxerga no login.
+// Lista vazia = acesso a todos os tipos (retrocompatível).
+export function useOperatorDemandTypes(operatorId: string | undefined) {
+  return useQuery({
+    queryKey: ['operator_demand_types', operatorId],
+    queryFn: async () => {
+      if (!operatorId) return [] as string[];
+      const { data, error } = await supabase
+        .from('operator_demand_types')
+        .select('demand_type_id')
+        .eq('operator_id', operatorId);
+      if (error) throw error;
+      return (data ?? []).map((r: any) => r.demand_type_id as string);
+    },
+    enabled: !!operatorId,
+  });
+}
+
+export function useSetOperatorDemandTypes() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ operatorId, demandTypeIds }: { operatorId: string; demandTypeIds: string[] }) => {
+      // Snapshot para rollback compensatório
+      const { data: existing } = await supabase
+        .from('operator_demand_types')
+        .select('demand_type_id')
+        .eq('operator_id', operatorId);
+
+      const { error: delErr } = await supabase
+        .from('operator_demand_types')
+        .delete()
+        .eq('operator_id', operatorId);
+      if (delErr) throw delErr;
+
+      if (demandTypeIds.length > 0) {
+        const rows = demandTypeIds.map((id) => ({ operator_id: operatorId, demand_type_id: id }));
+        const { error: insErr } = await supabase.from('operator_demand_types').insert(rows);
+        if (insErr) {
+          // Restaura o estado anterior
+          if (existing && existing.length > 0) {
+            await supabase.from('operator_demand_types').insert(
+              existing.map((e: any) => ({ operator_id: operatorId, demand_type_id: e.demand_type_id })),
+            );
+          }
+          throw insErr;
+        }
+      }
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['operator_demand_types', variables.operatorId] });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao salvar acessos do operador', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
 export function useServicesByProducer(producerId: string | undefined) {
   return useQuery({
     queryKey: ['services', 'producer', producerId],
