@@ -251,16 +251,23 @@ export default function ServicesPage() {
 
   const sortedServices = useMemo(() => [...filteredServices].sort((a: DbService, b: DbService) => {
     if (statusFilter === 'active') {
-      // "proximo" always appear first, sorted by their drag-and-drop position
+      // 1) "proximo" sempre como grupo no topo
       const aIsProximo = a.status === 'proximo';
       const bIsProximo = b.status === 'proximo';
-      if (aIsProximo && !bIsProximo) return -1;
-      if (!aIsProximo && bIsProximo) return 1;
+      if (aIsProximo !== bIsProximo) return aIsProximo ? -1 : 1;
+
+      // 2) Atendimentos com DAM têm preferência dentro de cada grupo de status
+      const aDam = !!a.dam_issued;
+      const bDam = !!b.dam_issued;
+      if (aDam !== bDam) return aDam ? -1 : 1;
+
+      // 3) Dentro do proximo, respeita a ordem manual (posição)
       if (aIsProximo && bIsProximo) {
         const posA = (a as any).position ?? 999999;
         const posB = (b as any).position ?? 999999;
         if (posA !== posB) return posA - posB;
       }
+      // 4) Por fim, por data de agendamento
       return new Date(a.scheduled_date + 'T12:00:00').getTime() - new Date(b.scheduled_date + 'T12:00:00').getTime();
     }
     const aDate = parseSupabaseDate(a.completed_at || a.updated_at);
