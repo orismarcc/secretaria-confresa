@@ -173,7 +173,7 @@ export default function DashboardPage() {
   // M-02: usar isDamOverdue centralizado em damUtils (mesma regra de 30 dias)
   const damOverdueCount = useMemo(() => {
     return services.filter((s: any) =>
-      s.dam_issued && isDamOverdue(s.dam_issued_at, s.dam_paid)
+      s.dam_issued && s.status !== 'cancelled' && isDamOverdue(s.dam_issued_at, s.dam_paid)
     ).length;
   }, [services]);
 

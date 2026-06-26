@@ -527,7 +527,7 @@ export default function ServicesPage() {
 
   // M-02: usar isDamOverdue centralizado em damUtils (regra de 30 dias — fonte única)
   const isDamOverdue = (s: DbService): boolean =>
-    !!s.dam_issued && checkDamOverdue(s.dam_issued_at, s.dam_paid);
+    !!s.dam_issued && s.status !== 'cancelled' && checkDamOverdue(s.dam_issued_at, s.dam_paid);
 
   const columns = [
     {

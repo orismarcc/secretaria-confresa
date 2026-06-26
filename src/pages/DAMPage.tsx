@@ -93,9 +93,9 @@ export default function DAMPage() {
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptUploading, setReceiptUploading] = useState(false);
 
-  // Filter only services with DAM issued
+  // Filter only services with DAM issued (exclui cancelados — não se cobra DAM de atendimento cancelado)
   const damServices = useMemo(() =>
-    (services as any[]).filter(s => s.dam_issued),
+    (services as any[]).filter(s => s.dam_issued && s.status !== 'cancelled'),
     [services]
   );
 

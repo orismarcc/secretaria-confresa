@@ -565,7 +565,8 @@ export function usePendingServices() {
       const { data, error } = await supabase
         .from('services')
         .select('*, producers(name, phone, location_name, latitude, longitude), demand_types(name), settlements(name), locations(name), profiles!operator_id(name)')
-        .neq('status', 'completed')
+        // exclui finalizados E cancelados — só atendimentos em aberto entram na fila
+        .not('status', 'in', '("completed","cancelled")')
         .order('position', { ascending: true, nullsFirst: false }) // B-05: explicit NULLS LAST
         .order('scheduled_date', { ascending: true });
       if (error) throw error;

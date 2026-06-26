@@ -119,7 +119,7 @@ export function generateServicesReport(opts: ServicesReportOptions) {
   // espelhando o comportamento da página de Atendimentos.
   let rows = (services as any[]).filter(s => dtById.get(s.demand_type_id)?.category !== 'entregas');
 
-  if (status === 'active') rows = rows.filter(s => s.status !== 'completed');
+  if (status === 'active') rows = rows.filter(s => s.status !== 'completed' && s.status !== 'cancelled');
   if (status === 'completed') rows = rows.filter(s => s.status === 'completed');
   if (settlementId !== 'all') rows = rows.filter(s => s.settlement_id === settlementId);
   if (category !== 'all') rows = rows.filter(s => dtById.get(s.demand_type_id)?.category === category);

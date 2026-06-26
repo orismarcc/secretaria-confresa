@@ -23,7 +23,7 @@ import { useServicesByProducer, useDeliveriesByProducer } from '@/hooks/useSupab
 import { StatusBadge } from '@/components/StatusBadge';
 
 function isDamOverdue(s: any): boolean {
-  if (!s.dam_issued || s.dam_paid) return false;
+  if (!s.dam_issued || s.dam_paid || s.status === 'cancelled') return false;
   if (!s.dam_issued_at) return false;
   const issued = new Date(s.dam_issued_at + 'T12:00:00');
   return (Date.now() - issued.getTime()) / (1000 * 60 * 60 * 24) > 30;
