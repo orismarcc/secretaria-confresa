@@ -392,13 +392,19 @@ export function useCreateProducer() {
       demandTypeIds?: string[];
     }) => {
       const { demandTypeIds, ...producerData } = producer;
-      
+
       const { data, error } = await supabase
         .from('producers')
         .insert(producerData)
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        // CPF/CNPJ duplicado (UNIQUE producers_cpf_key) → mensagem clara
+        if ((error as any).code === '23505' || /producers_cpf_key|duplicate key/i.test(error.message)) {
+          throw new Error('Já existe um produtor cadastrado com este CPF/CNPJ. Use a busca para localizá-lo.');
+        }
+        throw error;
+      }
 
       // Insert producer demands if provided
       if (demandTypeIds && demandTypeIds.length > 0) {
@@ -443,7 +449,12 @@ export function useUpdateProducer() {
         .eq('id', id)
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        if ((error as any).code === '23505' || /producers_cpf_key|duplicate key/i.test(error.message)) {
+          throw new Error('Já existe outro produtor com este CPF/CNPJ.');
+        }
+        throw error;
+      }
 
       // Update producer demands if provided
       if (demandTypeIds !== undefined) {

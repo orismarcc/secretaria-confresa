@@ -170,6 +170,8 @@ export default function ServicesPage() {
   const [settlementFilter, setSettlementFilter] = useState<string>('all');
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
+  // Ordenação: 'default' (preferência proximo/DAM) ou por data de cadastro
+  const [sortBy, setSortBy] = useState<'default' | 'created_desc' | 'created_asc'>('default');
   const [currentPage, setCurrentPage] = useState(1);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -214,7 +216,7 @@ export default function ServicesPage() {
   // Reset to page 1 when any filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter, demandTypeFilter, categoryFilter, settlementFilter, dateFrom, dateTo]);
+  }, [search, statusFilter, demandTypeFilter, categoryFilter, settlementFilter, dateFrom, dateTo, sortBy]);
 
   // Realtime subscription
   useEffect(() => {
@@ -250,6 +252,12 @@ export default function ServicesPage() {
   }), [services, producers, demandTypes, search, demandTypeFilter, categoryFilter, statusFilter, settlementFilter, dateFrom, dateTo]);
 
   const sortedServices = useMemo(() => [...filteredServices].sort((a: DbService, b: DbService) => {
+    // Ordenação explícita por data de cadastro (sobrepõe a ordem padrão, mantendo os filtros)
+    if (sortBy !== 'default') {
+      const aC = parseSupabaseDate(a.created_at)?.getTime() ?? 0;
+      const bC = parseSupabaseDate(b.created_at)?.getTime() ?? 0;
+      return sortBy === 'created_desc' ? bC - aC : aC - bC;
+    }
     if (statusFilter === 'active') {
       // 1) "proximo" sempre como grupo no topo
       const aIsProximo = a.status === 'proximo';
@@ -273,7 +281,7 @@ export default function ServicesPage() {
     const aDate = parseSupabaseDate(a.completed_at || a.updated_at);
     const bDate = parseSupabaseDate(b.completed_at || b.updated_at);
     return (bDate?.getTime() ?? 0) - (aDate?.getTime() ?? 0);
-  }), [filteredServices, statusFilter]);
+  }), [filteredServices, statusFilter, sortBy]);
 
   // Pagination
   const totalPages = Math.max(1, Math.ceil(sortedServices.length / ITEMS_PER_PAGE));
@@ -785,6 +793,18 @@ export default function ServicesPage() {
               {(settlements as any[]).map((s: any) => (
                 <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+
+          {/* Ordenação */}
+          <Select value={sortBy} onValueChange={(v) => { setSortBy(v as typeof sortBy); setCurrentPage(1); }}>
+            <SelectTrigger className="w-[160px] sm:w-[190px]">
+              <SelectValue placeholder="Ordenar" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="default">Ordem padrão</SelectItem>
+              <SelectItem value="created_desc">Cadastro (mais recente)</SelectItem>
+              <SelectItem value="created_asc">Cadastro (mais antigo)</SelectItem>
             </SelectContent>
           </Select>
 

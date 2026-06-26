@@ -16,6 +16,7 @@ export type DemandCategory =
   | 'calcario'
   | 'logistica_insumos'
   | 'assistencia_tecnica'
+  | 'implementos_equipamentos'
   | 'entregas';
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────

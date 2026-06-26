@@ -331,6 +331,8 @@ export function ServiceForm({
   const isCalcario = selectedDemandType?.category === 'calcario';
   const isAssistenciaTecnica = selectedDemandType?.category === 'assistencia_tecnica';
   const isLogisticaInsumos = selectedDemandType?.category === 'logistica_insumos';
+  // Implementos e Equipamentos: manuseio pelo próprio produtor — sem operador/combustível
+  const isImplementos = selectedDemandType?.category === 'implementos_equipamentos';
   const isPatrulhaOrLogistica =
     selectedDemandType?.category === 'patrulha_mecanizada' ||
     selectedDemandType?.category === 'logistica_insumos';
@@ -612,8 +614,8 @@ export function ServiceForm({
                 />
               )}
 
-              {/* Operator Selection — hidden for Assistência Técnica */}
-              {!isAssistenciaTecnica && (
+              {/* Operator Selection — hidden for Assistência Técnica e Implementos/Equipamentos */}
+              {!isAssistenciaTecnica && !isImplementos && (
                 <FormField
                   control={form.control}
                   name="operatorId"

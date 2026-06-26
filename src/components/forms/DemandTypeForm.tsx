@@ -51,6 +51,7 @@ export const DEMAND_CATEGORIES = [
   { value: 'assistencia_tecnica', label: 'Assistência Técnica' },
   { value: 'calcario', label: 'Logística do Calcário' },
   { value: 'logistica_insumos', label: 'Logística de Insumos' },
+  { value: 'implementos_equipamentos', label: 'Implementos e Equipamentos' },
   { value: 'entregas', label: 'Entregas' },
 ];
 

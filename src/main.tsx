@@ -1,6 +1,10 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { initSentry } from "./lib/sentry";
+
+// Monitoramento de erros (ativa só se VITE_SENTRY_DSN estiver definido)
+initSentry();
 
 // ─── Captura ANTECIPADA do prompt de instalação PWA ────────────────────────
 // O evento beforeinstallprompt dispara muito cedo, antes do React montar.
