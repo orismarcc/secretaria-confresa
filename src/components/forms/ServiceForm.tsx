@@ -395,6 +395,16 @@ export function ServiceForm({
     }
   }, [service, form]);
 
+  // Implementos/Equipamentos: manuseio pelo produtor — garante que operador e
+  // combustível não sejam enviados (mesmo se selecionados antes de trocar o tipo).
+  useEffect(() => {
+    if (isImplementos) {
+      form.setValue('operatorId', '');
+      form.setValue('fuelLiters', 0);
+      form.setValue('workedHours', 0);
+    }
+  }, [isImplementos, form]);
+
   const handleSubmit = (data: ServiceFormData) => {
     onSubmit({ ...data, damReceiptFile: damReceiptFile || null } as any);
     form.reset();
