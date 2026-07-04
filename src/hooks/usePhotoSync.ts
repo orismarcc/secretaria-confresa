@@ -2,6 +2,7 @@
  import { supabase } from '@/integrations/supabase/client';
  import { getPhotoBlob, updatePhotoSyncStatus, getPendingPhotos } from '@/lib/imageStorage';
  import { useToast } from '@/hooks/use-toast';
+ import { friendlyDbError } from '@/lib/dbErrors';
  
  interface UploadPhotoParams {
    photoBlob: Blob;
@@ -64,7 +65,7 @@
      onError: (error: Error) => {
        toast({
          title: 'Erro ao enviar foto',
-         description: error.message,
+         description: friendlyDbError(error),
          variant: 'destructive',
        });
      },

@@ -1297,20 +1297,25 @@ export default function DeliveriesPage() {
   const handleSubmit = async () => {
     if (!formData.producer_id || !formData.demand_type_id) return;
 
-    // Regra: uma entrega por (produtor, tipo). Se já existe, só edição — nunca duplicar.
-    if (!editingId) {
-      const jaExiste = (deliveries as any[]).find(
-        (d) => d.producer_id === formData.producer_id && d.demand_type_id === formData.demand_type_id,
-      );
-      if (jaExiste) {
-        const tipoNome = (demandTypes as any[]).find((t) => t.id === formData.demand_type_id)?.name || 'este tipo';
-        toast({
-          title: 'Entrega já cadastrada',
-          description: `Este produtor já possui uma entrega de "${tipoNome}". Edite a entrega existente para adicionar lotes ou alterar dados.`,
-          variant: 'destructive',
-        });
-        return;
-      }
+    // Regra: um produtor não pode estar cadastrado duas vezes no MESMO lote.
+    // Pode receber o mesmo tipo novamente em OUTRO lote (novo exercício/remessa).
+    const producerLotIds = new Set<string>();
+    (deliveries as any[]).forEach((d) => {
+      if (d.producer_id !== formData.producer_id) return;
+      if (editingId && d.id === editingId) return; // ignora a própria entrega em edição
+      (d.delivery_items ?? []).forEach((it: any) => { if (it.lot_id) producerLotIds.add(it.lot_id); });
+    });
+    const conflitos = selectedLots.filter((l) => l.lot_id && producerLotIds.has(l.lot_id));
+    if (conflitos.length > 0) {
+      const nomes = conflitos
+        .map((c) => (lotsForType as any[]).find((l) => l.id === c.lot_id)?.name || 'lote')
+        .join(', ');
+      toast({
+        title: 'Produtor já cadastrado neste lote',
+        description: `Este produtor já está registrado no(s) lote(s): ${nomes}. Edite a entrega existente desse lote em vez de cadastrar de novo.`,
+        variant: 'destructive',
+      });
+      return;
     }
 
     const settlementId = selectedProducer?.settlement_id || null;

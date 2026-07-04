@@ -104,7 +104,7 @@ export function useCreateDemandType() {
       toast({ title: 'Tipo de demanda criado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao criar tipo de demanda', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao criar tipo de demanda', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -126,7 +126,7 @@ export function useUpdateDemandType() {
       toast({ title: 'Tipo de demanda atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar tipo de demanda', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar tipo de demanda', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -145,7 +145,7 @@ export function useDeleteDemandType() {
       toast({ title: 'Tipo de demanda removido!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover tipo de demanda', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover tipo de demanda', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -184,7 +184,7 @@ export function useCreateSettlement() {
       toast({ title: 'Assentamento criado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao criar assentamento', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao criar assentamento', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -289,7 +289,7 @@ export function useUpdateSettlement() {
       toast({ title: 'Assentamento atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar assentamento', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar assentamento', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -313,7 +313,7 @@ export function useDeleteSettlement() {
       toast({ title: 'Assentamento removido!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover assentamento', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover assentamento', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -369,7 +369,7 @@ export function useCreateLocation() {
       toast({ title: 'Localidade criada!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao criar localidade', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao criar localidade', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -394,7 +394,7 @@ export function useUpdateLocation() {
       toast({ title: 'Localidade atualizada!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar localidade', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar localidade', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -416,7 +416,7 @@ export function useDeleteLocation() {
       toast({ title: 'Localidade removida!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover localidade', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover localidade', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -610,7 +610,7 @@ export function useDeleteProducer() {
       toast({ title: 'Produtor removido!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover produtor', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover produtor', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -633,7 +633,7 @@ export function useDeleteProducers() {
       toast({ title: `${ids.length} produtor(es) removido(s)!` });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover produtores', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover produtores', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -688,7 +688,7 @@ export function useUpdateServicePositions() {
     },
     onError: (error: Error) => {
       console.error('[useUpdateServicePositions] Falha ao salvar posições:', error.message);
-      toast({ title: 'Erro ao salvar ordem dos atendimentos', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao salvar ordem dos atendimentos', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -749,7 +749,7 @@ export function useCreateService() {
       toast({ title: 'Atendimento agendado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao agendar atendimento', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao agendar atendimento', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -784,7 +784,7 @@ export function useUpdateService() {
       toast({ title: 'Atendimento atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar atendimento', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar atendimento', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -804,7 +804,7 @@ export function useDeleteService() {
       toast({ title: 'Atendimento removido!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover atendimento', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover atendimento', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -895,7 +895,7 @@ export function useSetOperatorDemandTypes() {
       queryClient.invalidateQueries({ queryKey: ['operator_demand_types', variables.operatorId] });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao salvar acessos do operador', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao salvar acessos do operador', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -976,7 +976,7 @@ export function useCreateMachinery() {
       toast({ title: 'Maquinário cadastrado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao cadastrar maquinário', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao cadastrar maquinário', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1001,7 +1001,7 @@ export function useUpdateMachinery() {
       toast({ title: 'Maquinário atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar maquinário', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar maquinário', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1021,7 +1021,7 @@ export function useDeleteMachinery() {
       toast({ title: 'Maquinário removido!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover maquinário', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover maquinário', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1101,7 +1101,7 @@ export function useCreateDelivery() {
       toast({ title: 'Entrega cadastrada!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao cadastrar entrega', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao cadastrar entrega', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1123,7 +1123,7 @@ export function useUpdateDelivery() {
       toast({ title: 'Entrega atualizada!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar entrega', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar entrega', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1145,7 +1145,7 @@ export function useDeleteDelivery() {
       toast({ title: 'Entrega removida!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover entrega', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover entrega', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1215,7 +1215,7 @@ export function useCreatePatrimony() {
       toast({ title: 'Bem cadastrado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao cadastrar bem', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao cadastrar bem', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1234,7 +1234,7 @@ export function useUpdatePatrimony() {
       toast({ title: 'Bem atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar bem do patrimônio', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar bem do patrimônio', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1271,7 +1271,7 @@ export function useDeletePatrimony() {
       toast({ title: 'Bem removido!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover bem do patrimônio', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover bem do patrimônio', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1347,7 +1347,7 @@ export function useCreatePatrimonyTransfer() {
       toast({ title: 'Movimentação registrada!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao registrar movimentação', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao registrar movimentação', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1385,7 +1385,7 @@ export function useCreateResponsibleTechnician() {
       toast({ title: 'Responsável Técnico cadastrado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao cadastrar responsável técnico', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao cadastrar responsável técnico', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1409,7 +1409,7 @@ export function useUpdateResponsibleTechnician() {
       toast({ title: 'Responsável Técnico atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar responsável técnico', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar responsável técnico', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1430,7 +1430,7 @@ export function useDeleteResponsibleTechnician() {
       toast({ title: 'Responsável Técnico removido!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1482,7 +1482,7 @@ export function useCreateDeliveryLot() {
       toast({ title: 'Lote cadastrado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao cadastrar lote', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao cadastrar lote', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1503,7 +1503,7 @@ export function useUpdateDeliveryLot() {
       toast({ title: 'Lote atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar lote', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar lote', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1524,7 +1524,7 @@ export function useDeleteDeliveryLot() {
       toast({ title: 'Lote removido!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover lote', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover lote', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1583,7 +1583,7 @@ export function useSaveDeliveryItems() {
     onError: (error: Error) => {
       toast({
         title: 'Erro ao salvar lotes da entrega',
-        description: error.message,
+        description: friendlyDbError(error),
         variant: 'destructive',
       });
     },
@@ -1626,7 +1626,7 @@ export function useCreateSefazProducer() {
       toast({ title: 'Produtor SEFAZ cadastrado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao cadastrar', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao cadastrar', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1645,7 +1645,7 @@ export function useUpdateSefazProducer() {
       toast({ title: 'Produtor SEFAZ atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar produtor SEFAZ', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar produtor SEFAZ', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1664,7 +1664,7 @@ export function useDeleteSefazProducer() {
       toast({ title: 'Produtor removido!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover produtor SEFAZ', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover produtor SEFAZ', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1706,7 +1706,7 @@ export function useCreateSefazService() {
       toast({ title: 'Atendimento SEFAZ registrado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao registrar atendimento', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao registrar atendimento', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1725,7 +1725,7 @@ export function useUpdateSefazService() {
       toast({ title: 'Atendimento atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar atendimento SEFAZ', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao atualizar atendimento SEFAZ', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -1744,7 +1744,7 @@ export function useDeleteSefazService() {
       toast({ title: 'Atendimento removido!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao remover atendimento SEFAZ', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao remover atendimento SEFAZ', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }

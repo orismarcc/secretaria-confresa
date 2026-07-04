@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { friendlyDbError } from '@/lib/dbErrors';
 
 const FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-users`;
 
@@ -65,7 +66,7 @@ export function useCreateOperator() {
     onError: (error: Error) => {
       toast({ 
         title: 'Erro ao criar operador', 
-        description: error.message, 
+        description: friendlyDbError(error),
         variant: 'destructive' 
       });
     },
@@ -102,7 +103,7 @@ export function useUpdateOperator() {
     onError: (error: Error) => {
       toast({ 
         title: 'Erro ao atualizar operador', 
-        description: error.message, 
+        description: friendlyDbError(error),
         variant: 'destructive' 
       });
     },
@@ -141,7 +142,7 @@ export function useToggleOperatorStatus() {
     onError: (error: Error) => {
       toast({ 
         title: 'Erro ao alterar status', 
-        description: error.message, 
+        description: friendlyDbError(error),
         variant: 'destructive' 
       });
     },
@@ -178,7 +179,7 @@ export function useDeleteOperator() {
     onError: (error: Error) => {
       toast({ 
         title: 'Erro ao remover operador', 
-        description: error.message, 
+        description: friendlyDbError(error),
         variant: 'destructive' 
       });
     },
