@@ -70,6 +70,8 @@ import { format, parseISO, subMonths, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { normalizeText } from '@/lib/text';
+import { openWhatsApp } from '@/lib/phone';
+import { useToast } from '@/hooks/use-toast';
 import {
   useDeliveries,
   useCreateDelivery,
@@ -1140,6 +1142,7 @@ function DeliveryStats({
 type TabType = 'pending' | 'completed' | 'stats' | 'lots';
 
 export default function DeliveriesPage() {
+  const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const { data: deliveries = [], isLoading } = useDeliveries();
   const { data: producers = [] } = useProducers();
@@ -1163,6 +1166,8 @@ export default function DeliveriesPage() {
   const [realizeId, setRealizeId] = useState<string | null>(null);
   const [realizeName, setRealizeName] = useState('');
   const [realizeDate, setRealizeDate] = useState('');
+  // Lotes expandidos na aba de pendentes (agrupamento por lote)
+  const [expandedLots, setExpandedLots] = useState<Set<string>>(new Set());
 
   // Lots for selected demand type (in form)
   const { data: lotsForType = [], isLoading: lotsLoading } = useDeliveryLots(formData.demand_type_id || undefined);
@@ -1291,6 +1296,22 @@ export default function DeliveriesPage() {
   const handleSubmit = async () => {
     if (!formData.producer_id || !formData.demand_type_id) return;
 
+    // Regra: uma entrega por (produtor, tipo). Se já existe, só edição — nunca duplicar.
+    if (!editingId) {
+      const jaExiste = (deliveries as any[]).find(
+        (d) => d.producer_id === formData.producer_id && d.demand_type_id === formData.demand_type_id,
+      );
+      if (jaExiste) {
+        const tipoNome = (demandTypes as any[]).find((t) => t.id === formData.demand_type_id)?.name || 'este tipo';
+        toast({
+          title: 'Entrega já cadastrada',
+          description: `Este produtor já possui uma entrega de "${tipoNome}". Edite a entrega existente para adicionar lotes ou alterar dados.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     const settlementId = selectedProducer?.settlement_id || null;
     const resolvedQty = formData.quantity ? Number(formData.quantity) : (lotsTotal > 0 ? lotsTotal : null);
 
@@ -1354,6 +1375,148 @@ export default function DeliveriesPage() {
     if (!dateStr) return null;
     try { return format(parseISO(dateStr), 'dd/MM/yyyy', { locale: ptBR }); }
     catch { return dateStr; }
+  };
+
+  const toggleLot = (id: string) =>
+    setExpandedLots((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  // Agrupa as entregas (filtradas) por lote. Uma entrega em vários lotes aparece
+  // em cada grupo; sem itens de lote → "Sem lote específico".
+  const deliveriesByLot = useMemo(() => {
+    const groups = new Map<string, { name: string; deliveries: any[] }>();
+    (filtered as any[]).forEach((d) => {
+      const items = (d.delivery_items ?? []) as any[];
+      if (items.length === 0) {
+        const g = groups.get('__none__') ?? { name: 'Sem lote específico', deliveries: [] };
+        g.deliveries.push(d);
+        groups.set('__none__', g);
+      } else {
+        const seen = new Set<string>();
+        items.forEach((it) => {
+          const key = it.lot_id || '__none__';
+          if (seen.has(key)) return;
+          seen.add(key);
+          const name = it.delivery_lots?.name || 'Sem lote específico';
+          const g = groups.get(key) ?? { name, deliveries: [] };
+          g.deliveries.push(d);
+          groups.set(key, g);
+        });
+      }
+    });
+    return Array.from(groups.entries())
+      .map(([id, g]) => ({ id, ...g }))
+      .sort((a, b) => (a.id === '__none__' ? 1 : b.id === '__none__' ? -1 : a.name.localeCompare(b.name, 'pt-BR')));
+  }, [filtered]);
+
+  const renderDeliveryCard = (d: any) => {
+    const startDate = formatDate(d.delivery_date_start);
+    const endDate = formatDate(d.delivery_date_end);
+    const completedDate = d.completed_at ? formatDate(d.completed_at.slice(0, 10)) : null;
+    const isCompleted = d.status === 'completed';
+    const settlementLabel = d.settlements?.name || d.producers?.settlements?.name || null;
+    const color = getTypeColor(d.demand_type_id, deliveryDemandTypes);
+
+    return (
+      <div
+        key={d.id}
+        className={cn(
+          'rounded-xl border p-4 space-y-3 hover:shadow-sm transition-shadow',
+          isCompleted ? 'border-success/30 bg-success/5' : cn('bg-card', color.border),
+        )}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', color.dot)} />
+              <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <span className="truncate font-medium text-sm">{d.producers?.name || '—'}</span>
+            </div>
+            <Badge
+              variant="secondary"
+              className={cn('text-xs', isCompleted ? 'bg-success/10 text-success border-success/20' : color.badge)}
+            >
+              {d.demand_types?.name || '—'}
+            </Badge>
+          </div>
+          <div className="flex gap-1 shrink-0">
+            {!isCompleted && (
+              <Button
+                variant="ghost" size="icon"
+                className="h-8 w-8 text-success hover:text-success hover:bg-success/10"
+                title="Marcar como realizada"
+                onClick={() => openRealize(d)}
+              >
+                <CheckCircle className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => openEdit(d)}>
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost" size="icon"
+              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+              title="Remover"
+              onClick={() => openDelete(d)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+
+        {isCompleted && completedDate && (
+          <div className="flex items-center gap-1.5 text-sm font-medium text-success">
+            <CheckCircle className="h-4 w-4 shrink-0" />
+            <span>Realizada em {completedDate}</span>
+          </div>
+        )}
+
+        <div className="space-y-1.5 text-sm">
+          {d.producers?.cpf && (
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <CreditCard className="h-3.5 w-3.5 shrink-0" />
+              <span className="tabular-nums">{d.producers.cpf}</span>
+            </div>
+          )}
+          {d.producers?.phone && (
+            <button
+              type="button"
+              onClick={() => openWhatsApp(d.producers.phone)}
+              className="flex items-center gap-1.5 text-emerald-600 hover:text-emerald-700 font-medium"
+            >
+              <Phone className="h-3.5 w-3.5 shrink-0" />
+              <span>{d.producers.phone}</span>
+            </button>
+          )}
+          {d.quantity != null && (
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Hash className="h-3.5 w-3.5 shrink-0" />
+              <span>Quantidade: <span className="text-foreground font-medium">{d.quantity}</span></span>
+            </div>
+          )}
+          {(startDate || endDate) && (
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <CalendarRange className="h-3.5 w-3.5 shrink-0" />
+              <span>{startDate && endDate ? `${startDate} → ${endDate}` : startDate || endDate}</span>
+            </div>
+          )}
+          {d.notes && (
+            <p className="text-xs text-muted-foreground line-clamp-2 pt-1 border-t">{d.notes}</p>
+          )}
+        </div>
+
+        {settlementLabel && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1 border-t">
+            <MapPin className="h-3 w-3 shrink-0" />
+            <span>{settlementLabel}</span>
+          </div>
+        )}
+      </div>
+    );
   };
 
   // ── Loading skeleton ──────────────────────────────────────────────────────────
@@ -1435,111 +1598,36 @@ export default function DeliveriesPage() {
                 {tab === 'pending' ? 'Nenhuma entrega pendente' : 'Nenhuma entrega realizada'}
               </p>
             </div>
-          ) : (
+          ) : tab === 'completed' ? (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map((d: any) => {
-                const startDate = formatDate(d.delivery_date_start);
-                const endDate = formatDate(d.delivery_date_end);
-                const completedDate = d.completed_at ? formatDate(d.completed_at.slice(0, 10)) : null;
-                const isCompleted = d.status === 'completed';
-                const settlementLabel = d.settlements?.name || d.producers?.settlements?.name || null;
-                const color = getTypeColor(d.demand_type_id, deliveryDemandTypes);
-
+              {filtered.map(renderDeliveryCard)}
+            </div>
+          ) : (
+            /* Pendentes agrupadas por lote — cards de resumo clicáveis */
+            <div className="space-y-3">
+              {deliveriesByLot.map((group) => {
+                const isOpen = expandedLots.has(group.id);
                 return (
-                  <div
-                    key={d.id}
-                    className={cn(
-                      'rounded-xl border p-4 space-y-3 hover:shadow-sm transition-shadow',
-                      isCompleted ? 'border-success/30 bg-success/5' : cn('bg-card', color.border),
-                    )}
-                  >
-                    {/* Header */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 mb-1.5">
-                          {/* Color dot indicator */}
-                          <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', color.dot)} />
-                          <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                          <span className="truncate font-medium text-sm">{d.producers?.name || '—'}</span>
-                        </div>
-                        <Badge
-                          variant="secondary"
-                          className={cn('text-xs', isCompleted ? 'bg-success/10 text-success border-success/20' : color.badge)}
-                        >
-                          {d.demand_types?.name || '—'}
+                  <div key={group.id} className="rounded-xl border bg-card overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => toggleLot(group.id)}
+                      className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Layers className="h-4 w-4 text-primary shrink-0" />
+                        <span className="font-semibold text-sm truncate">{group.name}</span>
+                        <Badge variant="secondary" className="shrink-0">
+                          {group.deliveries.length} pendente{group.deliveries.length !== 1 ? 's' : ''}
                         </Badge>
                       </div>
-
-                      {/* Actions */}
-                      <div className="flex gap-1 shrink-0">
-                        {!isCompleted && (
-                          <Button
-                            variant="ghost" size="icon"
-                            className="h-8 w-8 text-success hover:text-success hover:bg-success/10"
-                            title="Marcar como realizada"
-                            onClick={() => openRealize(d)}
-                          >
-                            <CheckCircle className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar" onClick={() => openEdit(d)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost" size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          title="Remover"
-                          onClick={() => openDelete(d)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Completed badge */}
-                    {isCompleted && completedDate && (
-                      <div className="flex items-center gap-1.5 text-sm font-medium text-success">
-                        <CheckCircle className="h-4 w-4 shrink-0" />
-                        <span>Realizada em {completedDate}</span>
-                      </div>
-                    )}
-
-                    {/* Details */}
-                    <div className="space-y-1.5 text-sm">
-                      {d.producers?.cpf && (
-                        <div className="flex items-center gap-1.5 text-muted-foreground">
-                          <CreditCard className="h-3.5 w-3.5 shrink-0" />
-                          <span className="tabular-nums">{d.producers.cpf}</span>
-                        </div>
-                      )}
-                      {d.producers?.phone && (
-                        <div className="flex items-center gap-1.5 text-muted-foreground">
-                          <Phone className="h-3.5 w-3.5 shrink-0" />
-                          <span>{d.producers.phone}</span>
-                        </div>
-                      )}
-                      {d.quantity != null && (
-                        <div className="flex items-center gap-1.5 text-muted-foreground">
-                          <Hash className="h-3.5 w-3.5 shrink-0" />
-                          <span>Quantidade: <span className="text-foreground font-medium">{d.quantity}</span></span>
-                        </div>
-                      )}
-                      {(startDate || endDate) && (
-                        <div className="flex items-center gap-1.5 text-muted-foreground">
-                          <CalendarRange className="h-3.5 w-3.5 shrink-0" />
-                          <span>{startDate && endDate ? `${startDate} → ${endDate}` : startDate || endDate}</span>
-                        </div>
-                      )}
-                      {d.notes && (
-                        <p className="text-xs text-muted-foreground line-clamp-2 pt-1 border-t">{d.notes}</p>
-                      )}
-                    </div>
-
-                    {/* Footer: settlement */}
-                    {settlementLabel && (
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1 border-t">
-                        <MapPin className="h-3 w-3 shrink-0" />
-                        <span>{settlementLabel}</span>
+                      <ChevronDown
+                        className={cn('h-4 w-4 text-muted-foreground shrink-0 transition-transform', isOpen && 'rotate-180')}
+                      />
+                    </button>
+                    {isOpen && (
+                      <div className="border-t p-3 grid gap-3 sm:grid-cols-2 bg-muted/20">
+                        {group.deliveries.map(renderDeliveryCard)}
                       </div>
                     )}
                   </div>

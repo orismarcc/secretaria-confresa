@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { friendlyDbError } from '@/lib/dbErrors';
+import { Sentry } from '@/lib/sentry';
 
 // ============= SCHEMA-RESILIENCE HELPER =============
 /**
@@ -432,7 +434,8 @@ export function useCreateProducer() {
       toast({ title: 'Produtor cadastrado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao cadastrar produtor', description: error.message, variant: 'destructive' });
+      Sentry.captureException(error, { tags: { op: 'create_producer' } });
+      toast({ title: 'Erro ao cadastrar produtor', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -501,7 +504,8 @@ export function useUpdateProducer() {
       toast({ title: 'Produtor atualizado!' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao atualizar produtor', description: error.message, variant: 'destructive' });
+      Sentry.captureException(error, { tags: { op: 'update_producer' } });
+      toast({ title: 'Erro ao atualizar produtor', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -979,7 +983,7 @@ export function useDeliveries() {
           ),
           demand_types(name, category),
           settlements(name),
-          delivery_items(quantity)
+          delivery_items(quantity, lot_id, delivery_lots(name))
         `)
         .order('created_at', { ascending: false });
       if (error) throw error;
