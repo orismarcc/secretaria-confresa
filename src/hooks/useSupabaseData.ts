@@ -189,6 +189,86 @@ export function useCreateSettlement() {
   });
 }
 
+// ============= GLEBAS (subdivisões de assentamentos) =============
+export function useGlebas() {
+  return useQuery({
+    queryKey: ['glebas'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('glebas')
+        .select('*')
+        .order('name');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useCreateGleba() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ name, settlement_id }: { name: string; settlement_id: string }) => {
+      const { data, error } = await supabase
+        .from('glebas')
+        .insert({ name, settlement_id })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['glebas'] });
+      toast({ title: 'Gleba criada!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao criar gleba', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
+export function useUpdateGleba() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const { data, error } = await supabase
+        .from('glebas')
+        .update({ name })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['glebas'] });
+      toast({ title: 'Gleba atualizada!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao atualizar gleba', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
+export function useDeleteGleba() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('glebas').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['glebas'] });
+      toast({ title: 'Gleba removida!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao remover gleba', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
 export function useUpdateSettlement() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

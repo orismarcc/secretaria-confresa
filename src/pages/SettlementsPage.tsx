@@ -6,7 +6,7 @@ import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
 import { SettlementForm } from '@/components/forms/SettlementForm';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { Plus, Pencil, Trash2, Eye, Tractor, Users2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Eye, Tractor, Users2, Layers } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Sheet,
@@ -22,9 +22,11 @@ import {
   useServices,
   useProducers,
   useDemandTypes,
+  useGlebas,
 } from '@/hooks/useSupabaseData';
 import { getPatrulhaIds, computeSettlementStats } from '@/lib/analyticsUtils';
 import { textIncludes } from '@/lib/text';
+import { GlebasManagerDialog } from '@/components/GlebasManagerDialog';
 
 interface Settlement {
   id: string;
@@ -37,6 +39,7 @@ export default function SettlementsPage() {
   const { data: services = [] } = useServices();
   const { data: producers = [] } = useProducers();
   const { data: demandTypes = [] } = useDemandTypes();
+  const { data: glebas = [] } = useGlebas();
 
   const createSettlement = useCreateSettlement();
   const updateSettlement = useUpdateSettlement();
@@ -51,6 +54,14 @@ export default function SettlementsPage() {
   // Mobile detail sheet
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
   const [detailSettlement, setDetailSettlement] = useState<Settlement | null>(null);
+
+  // Glebas
+  const [glebasSettlement, setGlebasSettlement] = useState<Settlement | null>(null);
+  const glebasCount = useMemo(() => {
+    const map: Record<string, number> = {};
+    (glebas as any[]).forEach((g) => { map[g.settlement_id] = (map[g.settlement_id] || 0) + 1; });
+    return map;
+  }, [glebas]);
 
   // ── Computed stats ──────────────────────────────────────────────────────────
 
@@ -148,6 +159,20 @@ export default function SettlementsPage() {
             onClick={() => { setDetailSettlement(s); setDetailSheetOpen(true); }}
           >
             <Eye className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Glebas"
+            className="relative"
+            onClick={() => setGlebasSettlement(s)}
+          >
+            <Layers className="h-4 w-4" />
+            {glebasCount[s.id] > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 text-[9px] font-bold bg-primary text-primary-foreground rounded-full h-4 min-w-4 px-0.5 flex items-center justify-center">
+                {glebasCount[s.id]}
+              </span>
+            )}
           </Button>
           <Button variant="ghost" size="icon" onClick={() => openEditForm(s)}>
             <Pencil className="h-4 w-4" />
@@ -262,6 +287,13 @@ export default function SettlementsPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Gerenciar glebas do assentamento */}
+      <GlebasManagerDialog
+        open={!!glebasSettlement}
+        onOpenChange={(open) => !open && setGlebasSettlement(null)}
+        settlement={glebasSettlement}
+      />
     </AppLayout>
   );
 }

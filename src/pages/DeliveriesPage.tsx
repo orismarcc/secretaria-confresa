@@ -54,6 +54,7 @@ import {
   CalendarCheck,
   Search,
   ChevronsUpDown,
+  ChevronDown,
   Check as CheckIcon,
   BarChart2,
   MapPin,
