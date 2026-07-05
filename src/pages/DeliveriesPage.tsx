@@ -1675,9 +1675,12 @@ export default function DeliveriesPage() {
                           </div>
                         )}
                         {settlementsList.length > 0 && (
-                          <div className="flex items-start gap-1 mt-1.5 pl-6 text-xs text-muted-foreground">
-                            <MapPin className="h-3 w-3 mt-0.5 shrink-0" />
-                            <span><span className="font-medium">Assentamentos:</span> {settlementsList.join(', ')}</span>
+                          <div className="flex items-center gap-1 mt-1.5 pl-6 text-xs text-muted-foreground">
+                            <MapPin className="h-3 w-3 shrink-0" />
+                            <span>
+                              <span className="font-medium text-foreground">{settlementsList.length}</span>{' '}
+                              {settlementsList.length === 1 ? 'assentamento atendido' : 'assentamentos atendidos'}
+                            </span>
                           </div>
                         )}
                       </div>
