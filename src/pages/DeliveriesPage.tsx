@@ -1172,6 +1172,8 @@ export default function DeliveriesPage() {
 
   // Lots for selected demand type (in form)
   const { data: lotsForType = [], isLoading: lotsLoading } = useDeliveryLots(formData.demand_type_id || undefined);
+  // Resumo de TODOS os lotes (reservado/restante) — para os cards de resumo por lote
+  const { data: allLotsSummary = [] } = useDeliveryLots();
   // Existing items when editing
   const { data: editingItems = [] } = useDeliveryItems(editingId ?? undefined);
 
@@ -1418,6 +1420,29 @@ export default function DeliveriesPage() {
       .sort((a, b) => (a.id === '__none__' ? 1 : b.id === '__none__' ? -1 : a.name.localeCompare(b.name, 'pt-BR')));
   }, [filtered]);
 
+  // Resumo por lote: reservado/restante (da view) + assentamentos atendidos (todas as entregas)
+  const lotSummaryById = useMemo(() => {
+    const m = new Map<string, any>();
+    (allLotsSummary as any[]).forEach((l) => m.set(l.id, l));
+    return m;
+  }, [allLotsSummary]);
+
+  const lotSettlements = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    (deliveries as any[]).forEach((d) => {
+      const settName = d.settlements?.name || d.producers?.settlements?.name;
+      if (!settName) return;
+      (d.delivery_items ?? []).forEach((it: any) => {
+        if (!it.lot_id) return;
+        if (!m.has(it.lot_id)) m.set(it.lot_id, new Set());
+        m.get(it.lot_id)!.add(settName);
+      });
+    });
+    return m;
+  }, [deliveries]);
+
+  const fmtQty = (n: any) => Number(n || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+
   const renderDeliveryCard = (d: any) => {
     const startDate = formatDate(d.delivery_date_start);
     const endDate = formatDate(d.delivery_date_end);
@@ -1613,22 +1638,51 @@ export default function DeliveriesPage() {
             <div className="space-y-3">
               {deliveriesByLot.map((group) => {
                 const isOpen = expandedLots.has(group.id);
+                const summary = group.id !== '__none__' ? lotSummaryById.get(group.id) : null;
+                const settlementsList = group.id !== '__none__'
+                  ? Array.from(lotSettlements.get(group.id) ?? []).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+                  : [];
+                const unit = summary?.unit || 'un';
                 return (
                   <div key={group.id} className="rounded-xl border bg-card overflow-hidden">
                     <button
                       type="button"
                       onClick={() => toggleLot(group.id)}
-                      className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
+                      className="w-full flex items-start justify-between gap-3 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <Layers className="h-4 w-4 text-primary shrink-0" />
-                        <span className="font-semibold text-sm truncate">{group.name}</span>
-                        <Badge variant="secondary" className="shrink-0">
-                          {group.deliveries.length} pendente{group.deliveries.length !== 1 ? 's' : ''}
-                        </Badge>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Layers className="h-4 w-4 text-primary shrink-0" />
+                          <span className="font-semibold text-sm truncate">{group.name}</span>
+                          <Badge variant="secondary" className="shrink-0">
+                            {group.deliveries.length} pendente{group.deliveries.length !== 1 ? 's' : ''}
+                          </Badge>
+                        </div>
+                        {summary && (
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 pl-6 text-xs">
+                            <span className="inline-flex items-center gap-1 text-muted-foreground">
+                              <Warehouse className="h-3 w-3" />
+                              Inicial: <span className="font-medium text-foreground">{fmtQty(summary.initial_quantity)} {unit}</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-amber-700">
+                              <Box className="h-3 w-3" />
+                              Reservado: <span className="font-semibold">{fmtQty(summary.reserved_quantity)} {unit}</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-emerald-700">
+                              <TrendingUp className="h-3 w-3" />
+                              Restante: <span className="font-semibold">{fmtQty(summary.remaining_quantity)} {unit}</span>
+                            </span>
+                          </div>
+                        )}
+                        {settlementsList.length > 0 && (
+                          <div className="flex items-start gap-1 mt-1.5 pl-6 text-xs text-muted-foreground">
+                            <MapPin className="h-3 w-3 mt-0.5 shrink-0" />
+                            <span><span className="font-medium">Assentamentos:</span> {settlementsList.join(', ')}</span>
+                          </div>
+                        )}
                       </div>
                       <ChevronDown
-                        className={cn('h-4 w-4 text-muted-foreground shrink-0 transition-transform', isOpen && 'rotate-180')}
+                        className={cn('h-4 w-4 text-muted-foreground shrink-0 mt-0.5 transition-transform', isOpen && 'rotate-180')}
                       />
                     </button>
                     {isOpen && (
