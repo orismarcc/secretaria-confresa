@@ -66,12 +66,14 @@ import {
   Warehouse,
   TrendingUp,
   MinusCircle,
+  Download,
 } from 'lucide-react';
 import { format, parseISO, subMonths, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { normalizeText } from '@/lib/text';
 import { openWhatsApp } from '@/lib/phone';
+import { downloadVCard } from '@/lib/vcard';
 import { useToast } from '@/hooks/use-toast';
 import {
   useDeliveries,
@@ -1443,6 +1445,35 @@ export default function DeliveriesPage() {
 
   const fmtQty = (n: any) => Number(n || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
+  // Exporta os contatos (produtores) de um lote como .vcf para montar grupo no WhatsApp
+  const exportLotContacts = (lotName: string, groupDeliveries: any[]) => {
+    // Contatos únicos por produtor (evita repetição se o produtor tiver +1 entrega no lote)
+    const seen = new Set<string>();
+    const contatos: { name: string; phone: string | null }[] = [];
+    groupDeliveries.forEach((d) => {
+      const pid = d.producer_id;
+      if (pid && seen.has(pid)) return;
+      if (pid) seen.add(pid);
+      contatos.push({ name: d.producers?.name || '', phone: d.producers?.phone || null });
+    });
+    const safeName = lotName.replace(/[^\p{L}\p{N}\s-]/gu, '').trim().replace(/\s+/g, '-') || 'lote';
+    const r = downloadVCard(contatos, `contatos-${safeName}.vcf`);
+    if (r.exported === 0) {
+      toast({
+        title: 'Nenhum contato exportável',
+        description: 'Os produtores deste lote não têm número de celular válido cadastrado.',
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: `${r.exported} contato(s) exportado(s)`,
+        description: r.skipped > 0
+          ? `${r.skipped} sem número válido foram ignorados. Importe o arquivo .vcf no celular e crie o grupo.`
+          : 'Importe o arquivo .vcf no celular e crie o grupo no WhatsApp selecionando-os.',
+      });
+    }
+  };
+
   const renderDeliveryCard = (d: any) => {
     const startDate = formatDate(d.delivery_date_start);
     const endDate = formatDate(d.delivery_date_end);
@@ -1689,8 +1720,21 @@ export default function DeliveriesPage() {
                       />
                     </button>
                     {isOpen && (
-                      <div className="border-t p-3 grid gap-3 sm:grid-cols-2 bg-muted/20">
-                        {group.deliveries.map(renderDeliveryCard)}
+                      <div className="border-t bg-muted/20">
+                        <div className="flex justify-end px-3 pt-3">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5"
+                            onClick={() => exportLotContacts(group.name, group.deliveries)}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            Exportar contatos (WhatsApp)
+                          </Button>
+                        </div>
+                        <div className="p-3 grid gap-3 sm:grid-cols-2">
+                          {group.deliveries.map(renderDeliveryCard)}
+                        </div>
                       </div>
                     )}
                   </div>
