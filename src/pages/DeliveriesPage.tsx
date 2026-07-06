@@ -71,7 +71,7 @@ import {
 import { format, parseISO, subMonths, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { normalizeText } from '@/lib/text';
+import { normalizeText, phoneMatches } from '@/lib/text';
 import { openWhatsApp } from '@/lib/phone';
 import { downloadVCard } from '@/lib/vcard';
 import { useToast } from '@/hooks/use-toast';
@@ -131,7 +131,7 @@ function ProducerCombobox({
       (p) =>
         normalizeText(p.name).includes(t) ||
         p.cpf?.includes(t) ||
-        p.phone?.includes(t),
+        phoneMatches(p.phone, searchTerm),
     );
   }, [producers, searchTerm]);
 
@@ -1247,7 +1247,9 @@ export default function DeliveriesPage() {
         const matchesTab = tab === 'pending' ? isPending : d.status === 'completed';
         const matchesSearch =
           normalizeText(d.producers?.name).includes(q) ||
-          normalizeText(d.demand_types?.name).includes(q);
+          normalizeText(d.demand_types?.name).includes(q) ||
+          d.producers?.cpf?.includes(search) ||
+          phoneMatches(d.producers?.phone, search);
         return matchesTab && matchesSearch;
       })
       .sort((a: any, b: any) => {

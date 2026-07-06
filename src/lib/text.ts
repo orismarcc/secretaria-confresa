@@ -21,3 +21,17 @@ export function textIncludes(
 ): boolean {
   return normalizeText(haystack).includes(normalizeText(needle));
 }
+
+/**
+ * Busca por telefone comparando apenas dígitos (ignora () espaços e -).
+ * Retorna false se o termo não tiver dígito algum, para não casar tudo
+ * quando a pessoa está buscando por nome.
+ */
+export function phoneMatches(
+  phone: string | null | undefined,
+  search: string | null | undefined,
+): boolean {
+  const s = (search ?? '').replace(/\D/g, '');
+  if (!s) return false;
+  return (phone ?? '').replace(/\D/g, '').includes(s);
+}

@@ -7,7 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ProducerForm } from '@/components/forms/ProducerForm';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ProducerDetailSheet } from '@/components/ProducerDetailSheet';
-import { textIncludes } from '@/lib/text';
+import { textIncludes, phoneMatches } from '@/lib/text';
 import {
   Select,
   SelectContent,
@@ -70,7 +70,7 @@ export default function ProducersPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const filtered = producers.filter((p: DbProducer) => {
-    const matchesSearch = textIncludes(p.name, search) || p.cpf.includes(search);
+    const matchesSearch = textIncludes(p.name, search) || p.cpf.includes(search) || phoneMatches((p as any).phone, search);
     const matchesSettlement = settlementFilter === 'all' || p.settlement_id === settlementFilter;
     return matchesSearch && matchesSettlement;
   });

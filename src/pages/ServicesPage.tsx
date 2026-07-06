@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ServiceForm } from '@/components/forms/ServiceForm';
 import { DEMAND_CATEGORIES } from '@/components/forms/DemandTypeForm';
 import { ComunicadoDamDialog, type ComunicadoSource } from '@/components/ComunicadoDamDialog';
-import { textIncludes } from '@/lib/text';
+import { textIncludes, phoneMatches } from '@/lib/text';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -236,7 +236,9 @@ export default function ServicesPage() {
     const matchesSearch =
       textIncludes(producer?.name, search) ||
       producer?.cpf?.includes(search) ||
-      textIncludes(s.producers?.name, search);
+      textIncludes(s.producers?.name, search) ||
+      phoneMatches((producer as any)?.phone, search) ||
+      phoneMatches(s.producers?.phone, search);
     const matchesDemandType = demandTypeFilter === 'all' || s.demand_type_id === demandTypeFilter;
     const matchesCategory = categoryFilter === 'all' || (dt as any)?.category === categoryFilter;
     const matchesStatus = statusFilter === 'active'
