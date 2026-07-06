@@ -1454,7 +1454,12 @@ export default function DeliveriesPage() {
       const pid = d.producer_id;
       if (pid && seen.has(pid)) return;
       if (pid) seen.add(pid);
-      contatos.push({ name: d.producers?.name || '', phone: d.producers?.phone || null });
+      // Prefixa o nome com o tipo de entrega (ex.: "ENTREGA DE ALEVINOS - Fulano")
+      // para identificar facilmente os contatos ao montar o grupo.
+      const prefixo = (d.demand_types?.name || '').trim().toUpperCase();
+      const nomeProdutor = (d.producers?.name || '').trim();
+      const nome = prefixo ? `${prefixo} - ${nomeProdutor}` : nomeProdutor;
+      contatos.push({ name: nome, phone: d.producers?.phone || null });
     });
     const safeName = lotName.replace(/[^\p{L}\p{N}\s-]/gu, '').trim().replace(/\s+/g, '-') || 'lote';
     const r = downloadVCard(contatos, `contatos-${safeName}.vcf`);
