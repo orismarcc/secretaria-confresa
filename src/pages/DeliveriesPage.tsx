@@ -1483,6 +1483,7 @@ export default function DeliveriesPage() {
     const startDate = formatDate(d.delivery_date_start);
     const endDate = formatDate(d.delivery_date_end);
     const completedDate = d.completed_at ? formatDate(d.completed_at.slice(0, 10)) : null;
+    const registeredDate = d.created_at ? formatDate(d.created_at.slice(0, 10)) : null;
     const isCompleted = d.status === 'completed';
     const settlementLabel = d.settlements?.name || d.producers?.settlements?.name || null;
     const color = getTypeColor(d.demand_type_id, deliveryDemandTypes);
@@ -1576,10 +1577,17 @@ export default function DeliveriesPage() {
           )}
         </div>
 
-        {settlementLabel && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1 border-t">
-            <MapPin className="h-3 w-3 shrink-0" />
-            <span>{settlementLabel}</span>
+        {(settlementLabel || registeredDate) && (
+          <div className="flex items-center justify-between gap-2 pt-1 border-t text-xs text-muted-foreground">
+            {settlementLabel ? (
+              <span className="flex items-center gap-1.5 min-w-0">
+                <MapPin className="h-3 w-3 shrink-0" />
+                <span className="truncate">{settlementLabel}</span>
+              </span>
+            ) : <span />}
+            {registeredDate && (
+              <span className="shrink-0 text-[11px]">Cadastro: {registeredDate}</span>
+            )}
           </div>
         )}
       </div>
