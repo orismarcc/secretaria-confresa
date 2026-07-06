@@ -49,8 +49,18 @@ export function buildVCard(contacts: VCardContact[]): VCardResult {
     const tel = toBrazilE164(c.phone);
     const name = (c.name ?? '').trim();
     if (!tel || !name) { skipped++; continue; }
+    const en = escapeVCard(name);
     blocks.push(
-      ['BEGIN:VCARD', 'VERSION:3.0', `FN:${escapeVCard(name)}`, `TEL;TYPE=CELL:${tel}`, 'END:VCARD'].join('\r\n'),
+      [
+        'BEGIN:VCARD',
+        'VERSION:3.0',
+        // N (estruturado) é o que muitos celulares usam para gravar o nome;
+        // sem ele o contato é salvo só com o número. Nome completo no 1º campo.
+        `N:${en};;;;`,
+        `FN:${en}`,
+        `TEL;TYPE=CELL:${tel}`,
+        'END:VCARD',
+      ].join('\r\n'),
     );
   }
   return { vcf: blocks.join('\r\n'), exported: blocks.length, skipped };
