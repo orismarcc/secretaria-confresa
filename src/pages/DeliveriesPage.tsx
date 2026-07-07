@@ -1326,7 +1326,11 @@ export default function DeliveriesPage() {
     }
 
     const settlementId = selectedProducer?.settlement_id || null;
-    const resolvedQty = formData.quantity ? Number(formData.quantity) : (lotsTotal > 0 ? lotsTotal : null);
+    // Quando há lotes selecionados, o total dos lotes é a fonte da verdade da
+    // quantidade da entrega. O campo manual pode estar com valor antigo ao editar
+    // duas entregas do mesmo tipo em sequência (efeito que o limpa só dispara
+    // quando o tipo muda), o que fazia o card não atualizar. Sem lotes, usa o manual.
+    const resolvedQty = lotsTotal > 0 ? lotsTotal : (formData.quantity ? Number(formData.quantity) : null);
 
     const payload: Record<string, unknown> = {
       producer_id: formData.producer_id,
