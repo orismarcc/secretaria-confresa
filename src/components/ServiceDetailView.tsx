@@ -26,6 +26,7 @@ import {
   Receipt,
 } from 'lucide-react';
 import { isDamOverdue } from '@/lib/damUtils';
+import { getUserColorClass } from '@/lib/userColors';
 
 function buildWhatsAppUrl(phone: string): string {
   const digits = phone.replace(/\D/g, '');
@@ -301,7 +302,7 @@ export function ServiceDetailView({
         {service.profiles?.name && (
           <div>
             <p className="text-sm text-muted-foreground">Cadastrado por</p>
-            <p className="font-medium">{service.profiles.name}</p>
+            <p className={`font-medium ${getUserColorClass(service.profiles.name)}`}>{service.profiles.name}</p>
           </div>
         )}
 

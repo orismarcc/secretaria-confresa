@@ -14,6 +14,7 @@ import { ServiceForm } from '@/components/forms/ServiceForm';
 import { DEMAND_CATEGORIES } from '@/components/forms/DemandTypeForm';
 import { ComunicadoDamDialog, type ComunicadoSource } from '@/components/ComunicadoDamDialog';
 import { textIncludes, phoneMatches } from '@/lib/text';
+import { getUserColorClass } from '@/lib/userColors';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -614,7 +615,7 @@ export default function ServicesPage() {
               </span>
             )}
             {registeredBy && (
-              <span className="text-xs text-muted-foreground truncate max-w-[110px]" title={registeredBy}>
+              <span className={`text-xs font-medium truncate max-w-[110px] ${getUserColorClass(registeredBy)}`} title={registeredBy}>
                 por {registeredBy}
               </span>
             )}

@@ -74,6 +74,7 @@ import { cn } from '@/lib/utils';
 import { normalizeText, phoneMatches } from '@/lib/text';
 import { openWhatsApp } from '@/lib/phone';
 import { downloadVCard } from '@/lib/vcard';
+import { getUserColorClass } from '@/lib/userColors';
 import { useToast } from '@/hooks/use-toast';
 import {
   useDeliveries,
@@ -1591,7 +1592,7 @@ export default function DeliveriesPage() {
             {(registeredDate || creatorName) && (
               <span className="shrink-0 text-right text-[11px] leading-tight">
                 {registeredDate && <span className="block">Cadastro: {registeredDate}</span>}
-                {creatorName && <span className="block">por {creatorName}</span>}
+                {creatorName && <span className={cn('block font-medium', getUserColorClass(creatorName))}>por {creatorName}</span>}
               </span>
             )}
           </div>
