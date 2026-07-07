@@ -1063,7 +1063,8 @@ export function useDeliveries() {
           ),
           demand_types(name, category),
           settlements(name),
-          delivery_items(quantity, lot_id, delivery_lots(name))
+          delivery_items(quantity, lot_id, delivery_lots(name)),
+          creator:profiles!deliveries_created_by_fkey(name)
         `)
         .order('created_at', { ascending: false });
       if (error) throw error;
