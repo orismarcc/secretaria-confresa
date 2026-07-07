@@ -12,7 +12,7 @@ interface Rule { match: string; className: string }
 const RULES: Rule[] = [
   { match: 'orismar', className: 'text-blue-600' },              // azul
   { match: 'karynne', className: 'text-pink-500' },              // rosa
-  { match: 'pablo',   className: 'text-zinc-900 dark:text-zinc-100' }, // preto
+  { match: 'pablo',   className: 'text-red-600' },              // vermelho
   { match: 'cassio',  className: 'text-zinc-900 dark:text-zinc-100' }, // preto
 ];
 
