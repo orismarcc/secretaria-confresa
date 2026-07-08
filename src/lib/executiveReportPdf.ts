@@ -327,8 +327,9 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
     let y = sectionTitle(doc, M, headerH + 8, 'Resumo');
     y = drawKpis(doc, M, y + 1, contentW, kpis) + 8;
 
-    // Gráfico mensal
-    if (chartSeries.some((s) => s.data.some((v) => v > 0))) {
+    // Gráfico mensal — omitido para Entregas (esporádicas, gaps longos de meses
+    // tornam o gráfico vazio/sem utilidade). Mantido para atendimentos e "Tudo".
+    if (category !== 'entregas' && chartSeries.some((s) => s.data.some((v) => v > 0))) {
       y = sectionTitle(doc, M, y, 'Produção por mês (últimos 12 meses)');
       drawBarChart(doc, { x: M + 8, y: y + 2, w: contentW - 10, h: 42 }, months.map((m) => m.label), chartSeries);
       y += 2 + 42 + (chartSeries.length > 1 ? 13 : 8);
