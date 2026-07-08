@@ -139,7 +139,7 @@ function drawBarChart(
   }
 }
 
-// ─── Pie chart (vetorial) ──────────────────────────────────────────────────────
+// ─── Donut chart (vetorial) ────────────────────────────────────────────────────
 
 // Paleta de fatias — cores bem distintas para leitura fácil na apresentação.
 const PIE_COLORS: RGB[] = [
@@ -163,73 +163,116 @@ interface PieSlice {
 }
 
 /**
- * Desenha um gráfico de pizza preenchido (leque de triângulos) + legenda à
- * direita com valor e percentual. Retorna o Y após o gráfico.
+ * Desenha um gráfico de rosca (donut): a quantidade aparece dentro de cada
+ * fatia, o total fica no centro do furo e a legenda (nome + %) fica à direita,
+ * centralizada verticalmente em relação ao donut. Retorna o Y após o gráfico.
  */
-function drawPieChart(
+function drawDonutChart(
   doc: jsPDF,
-  opts: { cx: number; cy: number; r: number; legendX: number; legendW: number },
+  opts: {
+    cx: number; cy: number; rOuter: number; rInner: number;
+    legendX: number; legendW: number; centerValue: string; centerLabel: string;
+  },
   slices: PieSlice[],
 ): number {
-  const { cx, cy, r, legendX, legendW } = opts;
+  const { cx, cy, rOuter, rInner, legendX, legendW, centerValue, centerLabel } = opts;
   const total = slices.reduce((s, x) => s + x.value, 0) || 1;
 
-  // Fatias
+  // 1) Fatias preenchidas até o raio externo (leque de triângulos)
   let start = -Math.PI / 2; // começa no topo
+  const boundaries: number[] = [start];
   slices.forEach((sl) => {
     const ang = (sl.value / total) * Math.PI * 2;
     const end = start + ang;
     doc.setFillColor(sl.color[0], sl.color[1], sl.color[2]);
-    const step = Math.max(0.03, ang / Math.ceil(ang / 0.09)); // ~5° por triângulo
+    const step = Math.max(0.02, ang / Math.ceil(ang / 0.07));
     for (let a = start; a < end - 1e-6; a += step) {
       const a2 = Math.min(a + step, end);
       doc.triangle(
         cx, cy,
-        cx + r * Math.cos(a), cy + r * Math.sin(a),
-        cx + r * Math.cos(a2), cy + r * Math.sin(a2),
+        cx + rOuter * Math.cos(a), cy + rOuter * Math.sin(a),
+        cx + rOuter * Math.cos(a2), cy + rOuter * Math.sin(a2),
         'F',
       );
     }
-    // Percentual sobre a fatia (só se for grande o suficiente)
-    const pct = (sl.value / total) * 100;
-    if (pct >= 7) {
-      const mid = start + ang / 2;
-      const lr = r * 0.62;
-      doc.setFontSize(7);
-      doc.setTextColor(255);
-      doc.text(`${Math.round(pct)}%`, cx + lr * Math.cos(mid), cy + lr * Math.sin(mid) + 1, { align: 'center' });
-    }
     start = end;
+    boundaries.push(end);
   });
 
-  // Borda branca sutil ao redor
+  // 2) Separadores brancos entre as fatias
   doc.setDrawColor(255);
-  doc.setLineWidth(0.6);
-  doc.circle(cx, cy, r, 'S');
+  doc.setLineWidth(0.9);
+  boundaries.forEach((a) => {
+    doc.line(
+      cx + (rInner - 0.5) * Math.cos(a), cy + (rInner - 0.5) * Math.sin(a),
+      cx + (rOuter + 0.5) * Math.cos(a), cy + (rOuter + 0.5) * Math.sin(a),
+    );
+  });
 
-  // Legenda
-  let ly = cy - r + 1;
-  const lineH = 5.2;
+  // 3) Furo central (transforma pizza em donut)
+  doc.setFillColor(255, 255, 255);
+  doc.circle(cx, cy, rInner, 'F');
+
+  // 4) Aros sutis interno/externo
+  doc.setDrawColor(228);
+  doc.setLineWidth(0.3);
+  doc.circle(cx, cy, rOuter, 'S');
+  doc.circle(cx, cy, rInner, 'S');
+
+  // 5) Quantidade dentro de cada fatia (na faixa da rosca)
+  const rMid = (rInner + rOuter) / 2;
+  start = -Math.PI / 2;
+  slices.forEach((sl) => {
+    const ang = (sl.value / total) * Math.PI * 2;
+    if (ang > 0.26) {
+      const mid = start + ang / 2;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(255);
+      doc.text(fmtInt(sl.value), cx + rMid * Math.cos(mid), cy + rMid * Math.sin(mid) + 1.1, { align: 'center' });
+    }
+    start += ang;
+  });
+
+  // 6) Centro do donut: total
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(...GREEN);
+  doc.text(centerValue, cx, cy - 0.2, { align: 'center' });
   doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.5);
+  doc.setTextColor(125);
+  doc.text(centerLabel, cx, cy + 4.4, { align: 'center' });
+
+  // 7) Legenda — centralizada verticalmente em relação ao donut
+  const lineH = 5.8;
+  const legendH = slices.length * lineH;
+  let ly = cy - legendH / 2 + lineH / 2;
   slices.forEach((sl) => {
     const pct = (sl.value / total) * 100;
+    const pctStr = `${pct.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%`;
+    // marcador em bolinha
     doc.setFillColor(sl.color[0], sl.color[1], sl.color[2]);
-    doc.rect(legendX, ly - 2.4, 3, 3, 'F');
-    doc.setFontSize(7.5);
-    doc.setTextColor(60);
-    const valStr = `  ${fmtInt(sl.value)} (${pct.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%)`;
-    const maxNameW = legendW - 5 - doc.getTextWidth(valStr);
+    doc.circle(legendX + 1.7, ly - 0.9, 1.7, 'F');
+    // nome (truncado para caber antes da %)
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(55);
+    const pctW = doc.getTextWidth(pctStr);
+    const nameX = legendX + 6;
+    const maxNameW = legendW - (nameX - legendX) - pctW - 3;
     let name = sl.label;
     while (name.length > 4 && doc.getTextWidth(name) > maxNameW) name = name.slice(0, -1);
-    if (name !== sl.label) name = name.slice(0, -1) + '…';
-    doc.text(name, legendX + 4.5, ly);
-    doc.setTextColor(110);
-    doc.text(valStr, legendX + 4.5 + doc.getTextWidth(name), ly);
+    if (name !== sl.label) name = name.replace(/\s*$/, '') + '…';
+    doc.text(name, nameX, ly);
+    // percentual à direita, alinhado
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...GREEN);
+    doc.text(pctStr, legendX + legendW, ly, { align: 'right' });
     ly += lineH;
   });
 
-  const pieBottom = cy + r + 2;
-  return Math.max(pieBottom, ly);
+  return Math.max(cy + rOuter + 2, cy + legendH / 2 + 2);
 }
 
 // ─── KPI boxes ─────────────────────────────────────────────────────────────────
@@ -471,15 +514,21 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
           } else {
             pieSlices = pieAll.map((s, i) => ({ ...s, color: PIE_COLORS[i % PIE_COLORS.length] }));
           }
-          const r = 24;
-          const needed = 8 + Math.max(2 * r + 8, pieSlices.length * 5.2) + 10;
+          const rOuter = 24;
+          const rInner = 14;
+          const totalPessoas = pieSlices.reduce((s, x) => s + x.value, 0);
+          const needed = 8 + Math.max(2 * rOuter + 8, pieSlices.length * 5.8) + 10;
           if (y + needed > 285) { doc.addPage(); y = 16; }
           y = sectionTitle(doc, M, y, 'Pessoas atendidas por assentamento');
-          const cx = M + 6 + r;
-          const cy = y + 4 + r;
-          const legendX = cx + r + 14;
+          const cx = M + 6 + rOuter;
+          const cy = y + 6 + rOuter;
+          const legendX = cx + rOuter + 16;
           const legendW = pageWidth - M - legendX;
-          y = drawPieChart(doc, { cx, cy, r, legendX, legendW }, pieSlices) + 8;
+          y = drawDonutChart(
+            doc,
+            { cx, cy, rOuter, rInner, legendX, legendW, centerValue: fmtInt(totalPessoas), centerLabel: 'pessoas' },
+            pieSlices,
+          ) + 8;
         }
 
         if (y > 235) { doc.addPage(); y = 16; }
