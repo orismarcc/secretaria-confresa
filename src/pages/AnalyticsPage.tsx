@@ -141,6 +141,18 @@ export default function AnalyticsPage() {
   // ── Relatório Executivo (PDF) — filtros ─────────────────────────────────────
   const [execCategory, setExecCategory] = useState('all');
   const [execSettlement, setExecSettlement] = useState('all');
+  const [execDeliveryLot, setExecDeliveryLot] = useState('all');
+
+  /** Lotes (projetos) distintos presentes nas entregas — p/ filtro do relatório. */
+  const deliveryLots = useMemo(() => {
+    const m = new Map<string, string>();
+    (deliveries as any[]).forEach((d) =>
+      ((d.delivery_items ?? []) as any[]).forEach((it) => {
+        if (it.lot_id && it.delivery_lots?.name) m.set(it.lot_id, it.delivery_lots.name);
+      }),
+    );
+    return Array.from(m, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, [deliveries]);
 
   const monthsCount = useMemo(() => {
     const now = new Date();
@@ -1152,7 +1164,10 @@ export default function AnalyticsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-5">
-              <div className="grid gap-3 grid-cols-1 sm:grid-cols-3 items-end">
+              <div className={cn(
+                'grid gap-3 grid-cols-1 sm:grid-cols-2 items-end',
+                execCategory === 'entregas' ? 'lg:grid-cols-4' : 'lg:grid-cols-3',
+              )}>
                 {/* Tipo */}
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">Tipo</Label>
@@ -1166,6 +1181,22 @@ export default function AnalyticsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Projeto (lote) — só para Entregas */}
+                {execCategory === 'entregas' && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Projeto (lote)</Label>
+                    <Select value={execDeliveryLot} onValueChange={setExecDeliveryLot}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os projetos</SelectItem>
+                        {deliveryLots.map((l) => (
+                          <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 {/* Assentamento */}
                 <div className="space-y-1.5">
@@ -1191,6 +1222,7 @@ export default function AnalyticsPage() {
                     settlements: settlements as any[],
                     category: execCategory,
                     settlementId: execSettlement,
+                    deliveryLotId: execCategory === 'entregas' ? execDeliveryLot : 'all',
                   })}
                   className="w-full gap-2"
                 >

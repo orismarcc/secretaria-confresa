@@ -65,6 +65,8 @@ export interface ExecutiveReportOptions {
   category: string;
   /** 'all' | id do assentamento */
   settlementId: string;
+  /** 'all' | id do lote (projeto) — só se aplica quando category = 'entregas' */
+  deliveryLotId?: string;
 }
 
 // ─── Bar chart (vetorial) ──────────────────────────────────────────────────────
@@ -187,20 +189,32 @@ function sectionTitle(doc: jsPDF, x: number, y: number, text: string): number {
 
 // ─── Delivery quantity helper (itens sem dupla contagem) ───────────────────────
 
-function deliveryQty(d: any): number {
+function deliveryQty(d: any, lotId?: string): number {
   const items = (d.delivery_items ?? []) as any[];
-  if (items.length > 0) return items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
-  return Number(d.quantity) || 0;
+  const rel = lotId && lotId !== 'all' ? items.filter((it) => it.lot_id === lotId) : items;
+  if (rel.length > 0) return rel.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+  // Sem itens: só usa o campo direto quando não há filtro de lote
+  return lotId && lotId !== 'all' ? 0 : Number(d.quantity) || 0;
 }
 
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 export function generateExecutiveReport(opts: ExecutiveReportOptions) {
   const { services, deliveries, producers, demandTypes, settlements, category, settlementId } = opts;
+  const deliveryLotId = opts.deliveryLotId ?? 'all';
 
   const dtById = new Map((demandTypes as any[]).map((d) => [d.id, d]));
   const stById = new Map((settlements as any[]).map((s) => [s.id, s]));
   const prById = new Map((producers as any[]).map((p) => [p.id, p]));
+
+  // Nome do lote (projeto) a partir dos itens das entregas
+  const lotNameById = new Map<string, string>();
+  (deliveries as any[]).forEach((d) =>
+    ((d.delivery_items ?? []) as any[]).forEach((it) => {
+      if (it.lot_id && it.delivery_lots?.name) lotNameById.set(it.lot_id, it.delivery_lots.name);
+    }),
+  );
+  const lotFilterName = deliveryLotId !== 'all' ? lotNameById.get(deliveryLotId) : null;
 
   const settlementName = (id: string | null | undefined, embedded?: any) =>
     stById.get(id)?.name || embedded?.name || 'Sem assentamento';
@@ -223,9 +237,14 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
     ? (deliveries as any[]).filter((d) => d.status === 'completed')
     : [];
   if (settlementId !== 'all') compDeliveries = compDeliveries.filter((d) => d.settlement_id === settlementId);
+  if (deliveryLotId !== 'all') {
+    compDeliveries = compDeliveries.filter((d) =>
+      ((d.delivery_items ?? []) as any[]).some((it) => it.lot_id === deliveryLotId),
+    );
+  }
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
-  const itensEntregues = compDeliveries.reduce((s, d) => s + deliveryQty(d), 0);
+  const itensEntregues = compDeliveries.reduce((s, d) => s + deliveryQty(d, deliveryLotId), 0);
   const areaTrabalhada = compServices.reduce((s, x) => s + (Number(x.worked_area) || 0), 0);
   const produtoresSet = new Set<string>();
   compServices.forEach((s) => s.producer_id && produtoresSet.add(s.producer_id));
@@ -269,7 +288,7 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
   const filtroTipo =
     category === 'all' ? 'Todos os tipos' : category === 'entregas' ? 'Entregas' : categoryLabel(category);
   const filtroAssent = settlementId !== 'all' ? settlementName(settlementId) : 'Todos os assentamentos';
-  const subtitle = `${filtroTipo} · ${filtroAssent}`;
+  const subtitle = [filtroTipo, lotFilterName, filtroAssent].filter(Boolean).join(' · ');
 
   // ── Montagem do documento ─────────────────────────────────────────────────
   const img = new Image();
@@ -331,7 +350,7 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
       compDeliveries.forEach((d) => {
         const g = bump(d.settlement_id, d.settlements);
         g.entregas++;
-        g.itens += deliveryQty(d);
+        g.itens += deliveryQty(d, deliveryLotId);
         if (d.producer_id) g.prod.add(d.producer_id);
       });
       const rows = Object.values(agg)
@@ -399,6 +418,7 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
         .sort((a, b) => (parseDate(b.completed_at)?.getTime() || 0) - (parseDate(a.completed_at)?.getTime() || 0))
         .map((d) => {
           const lotes = ((d.delivery_items ?? []) as any[])
+            .filter((it) => deliveryLotId === 'all' || it.lot_id === deliveryLotId)
             .map((it) => it.delivery_lots?.name)
             .filter(Boolean)
             .join(', ');
@@ -406,7 +426,7 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
             prById.get(d.producer_id)?.name || d.producers?.name || 'N/A',
             dtById.get(d.demand_type_id)?.name || d.demand_types?.name || 'N/A',
             lotes || '-',
-            fmtInt(deliveryQty(d)),
+            fmtInt(deliveryQty(d, deliveryLotId)),
             settlementName(d.settlement_id, d.settlements),
             fmtDate(d.completed_at),
           ];
@@ -437,9 +457,11 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
       );
     }
 
+    const slug = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const tipoSlug = category === 'all' ? 'geral' : category;
-    const assentSlug = settlementId !== 'all' ? '-' + settlementName(settlementId).toLowerCase().replace(/\s+/g, '-') : '';
-    doc.save(`relatorio-atividades-${tipoSlug}${assentSlug}-${format(now, 'yyyy-MM-dd')}.pdf`);
+    const loteSlug = lotFilterName ? '-' + slug(lotFilterName) : '';
+    const assentSlug = settlementId !== 'all' ? '-' + slug(settlementName(settlementId)) : '';
+    doc.save(`relatorio-atividades-${tipoSlug}${loteSlug}${assentSlug}-${format(now, 'yyyy-MM-dd')}.pdf`);
   };
   img.src = logoTransparent;
 }
