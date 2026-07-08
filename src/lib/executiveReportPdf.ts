@@ -139,6 +139,99 @@ function drawBarChart(
   }
 }
 
+// ─── Pie chart (vetorial) ──────────────────────────────────────────────────────
+
+// Paleta de fatias — cores bem distintas para leitura fácil na apresentação.
+const PIE_COLORS: RGB[] = [
+  [45, 90, 39],   // verde
+  [37, 99, 235],  // azul
+  [217, 119, 6],  // âmbar
+  [147, 51, 234], // roxo
+  [220, 38, 38],  // vermelho
+  [13, 148, 136], // teal
+  [219, 39, 119], // rosa
+  [101, 163, 13], // lima
+  [2, 132, 199],  // azul-céu
+  [234, 88, 12],  // laranja
+];
+const PIE_OTHERS: RGB = [148, 163, 184]; // cinza p/ "Outros"
+
+interface PieSlice {
+  label: string;
+  value: number;
+  color: RGB;
+}
+
+/**
+ * Desenha um gráfico de pizza preenchido (leque de triângulos) + legenda à
+ * direita com valor e percentual. Retorna o Y após o gráfico.
+ */
+function drawPieChart(
+  doc: jsPDF,
+  opts: { cx: number; cy: number; r: number; legendX: number; legendW: number },
+  slices: PieSlice[],
+): number {
+  const { cx, cy, r, legendX, legendW } = opts;
+  const total = slices.reduce((s, x) => s + x.value, 0) || 1;
+
+  // Fatias
+  let start = -Math.PI / 2; // começa no topo
+  slices.forEach((sl) => {
+    const ang = (sl.value / total) * Math.PI * 2;
+    const end = start + ang;
+    doc.setFillColor(sl.color[0], sl.color[1], sl.color[2]);
+    const step = Math.max(0.03, ang / Math.ceil(ang / 0.09)); // ~5° por triângulo
+    for (let a = start; a < end - 1e-6; a += step) {
+      const a2 = Math.min(a + step, end);
+      doc.triangle(
+        cx, cy,
+        cx + r * Math.cos(a), cy + r * Math.sin(a),
+        cx + r * Math.cos(a2), cy + r * Math.sin(a2),
+        'F',
+      );
+    }
+    // Percentual sobre a fatia (só se for grande o suficiente)
+    const pct = (sl.value / total) * 100;
+    if (pct >= 7) {
+      const mid = start + ang / 2;
+      const lr = r * 0.62;
+      doc.setFontSize(7);
+      doc.setTextColor(255);
+      doc.text(`${Math.round(pct)}%`, cx + lr * Math.cos(mid), cy + lr * Math.sin(mid) + 1, { align: 'center' });
+    }
+    start = end;
+  });
+
+  // Borda branca sutil ao redor
+  doc.setDrawColor(255);
+  doc.setLineWidth(0.6);
+  doc.circle(cx, cy, r, 'S');
+
+  // Legenda
+  let ly = cy - r + 1;
+  const lineH = 5.2;
+  doc.setFont('helvetica', 'normal');
+  slices.forEach((sl) => {
+    const pct = (sl.value / total) * 100;
+    doc.setFillColor(sl.color[0], sl.color[1], sl.color[2]);
+    doc.rect(legendX, ly - 2.4, 3, 3, 'F');
+    doc.setFontSize(7.5);
+    doc.setTextColor(60);
+    const valStr = `  ${fmtInt(sl.value)} (${pct.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}%)`;
+    const maxNameW = legendW - 5 - doc.getTextWidth(valStr);
+    let name = sl.label;
+    while (name.length > 4 && doc.getTextWidth(name) > maxNameW) name = name.slice(0, -1);
+    if (name !== sl.label) name = name.slice(0, -1) + '…';
+    doc.text(name, legendX + 4.5, ly);
+    doc.setTextColor(110);
+    doc.text(valStr, legendX + 4.5 + doc.getTextWidth(name), ly);
+    ly += lineH;
+  });
+
+  const pieBottom = cy + r + 2;
+  return Math.max(pieBottom, ly);
+}
+
 // ─── KPI boxes ─────────────────────────────────────────────────────────────────
 
 interface Kpi {
@@ -363,6 +456,32 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
           fmtInt(g.prod.size),
         ]);
       if (rows.length > 0) {
+        // ── Pizza: pessoas atendidas por assentamento ──────────────────────
+        const pieAll = Object.values(agg)
+          .map((g) => ({ label: g.name, value: g.prod.size }))
+          .filter((s) => s.value > 0)
+          .sort((a, b) => b.value - a.value);
+        if (pieAll.length >= 2) {
+          const TOP = 9;
+          let pieSlices: PieSlice[];
+          if (pieAll.length > TOP) {
+            const top = pieAll.slice(0, TOP).map((s, i) => ({ ...s, color: PIE_COLORS[i % PIE_COLORS.length] }));
+            const othersVal = pieAll.slice(TOP).reduce((s, x) => s + x.value, 0);
+            pieSlices = [...top, { label: `Outros (${pieAll.length - TOP} assent.)`, value: othersVal, color: PIE_OTHERS }];
+          } else {
+            pieSlices = pieAll.map((s, i) => ({ ...s, color: PIE_COLORS[i % PIE_COLORS.length] }));
+          }
+          const r = 24;
+          const needed = 8 + Math.max(2 * r + 8, pieSlices.length * 5.2) + 10;
+          if (y + needed > 285) { doc.addPage(); y = 16; }
+          y = sectionTitle(doc, M, y, 'Pessoas atendidas por assentamento');
+          const cx = M + 6 + r;
+          const cy = y + 4 + r;
+          const legendX = cx + r + 14;
+          const legendW = pageWidth - M - legendX;
+          y = drawPieChart(doc, { cx, cy, r, legendX, legendW }, pieSlices) + 8;
+        }
+
         if (y > 235) { doc.addPage(); y = 16; }
         y = sectionTitle(doc, M, y, 'Resumo por assentamento');
         autoTable(doc, {
