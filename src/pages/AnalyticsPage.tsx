@@ -11,6 +11,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { DEMAND_CATEGORIES } from '@/components/forms/DemandTypeForm';
+import { generateExecutiveReport } from '@/lib/executiveReportPdf';
 import { useServices, useSettlements, useDemandTypes, useDeliveries, useProducers } from '@/hooks/useSupabaseData';
 import { useOperators } from '@/hooks/useOperatorData';
 import {
@@ -131,6 +137,10 @@ export default function AnalyticsPage() {
 
   // ── Período global dos gráficos ─────────────────────────────────────────────
   const [period, setPeriod] = useState<ChartPeriod>('6m');
+
+  // ── Relatório Executivo (PDF) — filtros ─────────────────────────────────────
+  const [execCategory, setExecCategory] = useState('all');
+  const [execSettlement, setExecSettlement] = useState('all');
 
   const monthsCount = useMemo(() => {
     const now = new Date();
@@ -1127,6 +1137,69 @@ export default function AnalyticsPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* ── Relatório Executivo (PDF com gráficos) ──────────────────── */}
+          <Card className="overflow-hidden border-primary/30">
+            <CardHeader className="border-b bg-gradient-to-r from-primary/15 to-primary/5">
+              <CardTitle className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/20"><FileDown className="h-5 w-5 text-primary" /></div>
+                <div>
+                  <span className="text-lg">Relatório Executivo (PDF)</span>
+                  <p className="text-sm font-normal text-muted-foreground">
+                    Documento com indicadores, gráfico e tabelas do trabalho realizado — filtre por tipo e assentamento
+                  </p>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-5">
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-3 items-end">
+                {/* Tipo */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Tipo</Label>
+                  <Select value={execCategory} onValueChange={setExecCategory}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tudo</SelectItem>
+                      {DEMAND_CATEGORIES.map(c => (
+                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Assentamento */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Assentamento</Label>
+                  <Select value={execSettlement} onValueChange={setExecSettlement}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {(settlements as any[]).map((s: any) => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Botão */}
+                <Button
+                  onClick={() => generateExecutiveReport({
+                    services: services as any[],
+                    deliveries: deliveries as any[],
+                    producers: producers as any[],
+                    demandTypes: demandTypes as any[],
+                    settlements: settlements as any[],
+                    category: execCategory,
+                    settlementId: execSettlement,
+                  })}
+                  className="w-full gap-2"
+                >
+                  <FileDown className="h-4 w-4" />
+                  Baixar PDF
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* ── Central de Relatórios ───────────────────────────────────── */}
           <ReportsCenter
