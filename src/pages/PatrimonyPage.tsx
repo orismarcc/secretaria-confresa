@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { SearchInput } from '@/components/SearchInput';
@@ -9,7 +9,9 @@ import {
   Plus, Pencil, Trash2, Building2, MessageCircle,
   MapPin, User, DollarSign, Calendar, Hash,
   AlertTriangle, Filter, ArrowRightLeft, Eye,
+  Truck, Wrench, Tractor, Sofa, Package, Boxes, ChevronRight, ArrowLeft,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { openWhatsApp } from '@/lib/phone';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, parseISO } from 'date-fns';
@@ -64,6 +66,15 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string
   Outro:       { bg: 'bg-gray-50',    text: 'text-gray-600',    border: 'border-gray-200' },
 };
 
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  Veículo:     Truck,
+  Equipamento: Wrench,
+  Imóvel:      Building2,
+  Móvel:       Sofa,
+  Implemento:  Tractor,
+  Outro:       Package,
+};
+
 const CONDITION_CONFIG: Record<Condition, { label: string; bg: string; text: string; border: string; icon: string }> = {
   otimo:   { label: 'Ótimo',   bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-300',  icon: '✓' },
   bom:     { label: 'Bom',     bg: 'bg-blue-50',   text: 'text-blue-700',   border: 'border-blue-300',   icon: '◎' },
@@ -98,6 +109,7 @@ export default function PatrimonyPage() {
   const [dateFrom, setDateFrom]     = useState('');
   const [dateTo, setDateTo]         = useState('');
   const [filterCond, setFilterCond] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   // Dialog / sheet state
   const [formOpen, setFormOpen]                   = useState(false);
@@ -109,9 +121,46 @@ export default function PatrimonyPage() {
   const [detailOpen, setDetailOpen]               = useState(false);
   const [detailItem, setDetailItem]               = useState<PatrimonyItem | null>(null);
 
+  // ─── Category grouping ────────────────────────────────────────────────────────
+
+  const CATEGORY_KEY = (p: PatrimonyItem) => p.category || 'Sem categoria';
+
+  /** Resumo consolidado por categoria (contagem, valor, alertas). */
+  const categorySummaries = useMemo(() => {
+    const map = new Map<
+      string,
+      { name: string; count: number; totalValue: number; baixa: number; atencao: number }
+    >();
+    (patrimony as PatrimonyItem[]).forEach((p) => {
+      const key = CATEGORY_KEY(p);
+      const g = map.get(key) ?? { name: key, count: 0, totalValue: 0, baixa: 0, atencao: 0 };
+      g.count++;
+      g.totalValue += Number(p.value || 0);
+      if (p.written_off) g.baixa++;
+      if (p.condition === 'ruim' || p.condition === 'pessimo') g.atencao++;
+      map.set(key, g);
+    });
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [patrimony]);
+
+  const grandTotalValue = useMemo(
+    () => (patrimony as PatrimonyItem[]).reduce((s, p) => s + Number(p.value || 0), 0),
+    [patrimony],
+  );
+
   // ─── Filtered list ──────────────────────────────────────────────────────────
 
-  const filtered = (patrimony as PatrimonyItem[]).filter((p) => {
+  const hasFilters = !!(search || dateFrom || dateTo || filterCond !== 'all');
+  // Mostra os cards de categoria quando não há categoria escolhida nem filtros ativos.
+  const showCategoryGrid = selectedCategory === null && !hasFilters;
+
+  // Base: itens da categoria escolhida; se estiver buscando/filtrando sem categoria,
+  // busca em todos os bens.
+  const baseItems = selectedCategory !== null
+    ? (patrimony as PatrimonyItem[]).filter((p) => CATEGORY_KEY(p) === selectedCategory)
+    : (patrimony as PatrimonyItem[]);
+
+  const filtered = baseItems.filter((p) => {
     const matchesSearch =
       textIncludes(p.name, search) ||
       textIncludes(p.patrimony_number, search) ||
@@ -125,8 +174,6 @@ export default function PatrimonyPage() {
 
     return matchesSearch && matchesFrom && matchesTo && matchesCond;
   });
-
-  const hasFilters = search || dateFrom || dateTo || filterCond !== 'all';
 
   // ─── Handlers ───────────────────────────────────────────────────────────────
 
@@ -304,10 +351,108 @@ export default function PatrimonyPage() {
         </div>
       </div>
 
+      {/* ── Category overview cards ─────────────────────────────────────── */}
+      {showCategoryGrid && (
+        categorySummaries.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-3">
+            <Building2 className="h-12 w-12 opacity-30" />
+            <p>Nenhum bem cadastrado</p>
+          </div>
+        ) : (
+          <>
+            {/* Resumo geral */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground mb-4">
+              <span className="inline-flex items-center gap-1.5">
+                <Boxes className="h-4 w-4" />
+                {categorySummaries.length} {categorySummaries.length === 1 ? 'categoria' : 'categorias'}
+              </span>
+              <span className="text-muted-foreground/40">·</span>
+              <span>{(patrimony as PatrimonyItem[]).length} bens no total</span>
+              {grandTotalValue > 0 && (
+                <>
+                  <span className="text-muted-foreground/40">·</span>
+                  <span className="inline-flex items-center gap-1 font-medium text-emerald-700">
+                    <DollarSign className="h-3.5 w-3.5" />
+                    {formatBRL(grandTotalValue)}
+                  </span>
+                </>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {categorySummaries.map((cat) => {
+                const colors = CATEGORY_COLORS[cat.name] ?? CATEGORY_COLORS['Outro'];
+                const Icon = CATEGORY_ICONS[cat.name] ?? Package;
+                return (
+                  <button
+                    key={cat.name}
+                    type="button"
+                    onClick={() => setSelectedCategory(cat.name)}
+                    className="group text-left rounded-xl border bg-card p-5 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all flex flex-col gap-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className={`p-3 rounded-xl ${colors.bg}`}>
+                        <Icon className={`h-6 w-6 ${colors.text}`} />
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-muted-foreground/40 group-hover:text-muted-foreground group-hover:translate-x-0.5 transition-all" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-base leading-tight">{cat.name}</h3>
+                      <p className="mt-0.5 text-3xl font-black text-foreground">
+                        {cat.count}{' '}
+                        <span className="text-sm font-medium text-muted-foreground">
+                          {cat.count === 1 ? 'bem' : 'bens'}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {cat.totalValue > 0 && (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <DollarSign className="h-3 w-3" />
+                          {formatBRL(cat.totalValue)}
+                        </span>
+                      )}
+                      {cat.atencao > 0 && (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                          <AlertTriangle className="h-3 w-3" />
+                          {cat.atencao} p/ atenção
+                        </span>
+                      )}
+                      {cat.baixa > 0 && (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+                          {cat.baixa} em baixa
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )
+      )}
+
+      {/* ── Items view (categoria selecionada ou busca ativa) ────────────── */}
+      {!showCategoryGrid && (
+      <>
+      {selectedCategory !== null && (
+        <button
+          type="button"
+          onClick={() => setSelectedCategory(null)}
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground mb-3"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Todas as categorias
+        </button>
+      )}
+
       {/* Count summary */}
       <p className="text-sm text-muted-foreground mb-4">
+        {selectedCategory !== null && (
+          <span className="font-semibold text-foreground">{selectedCategory} · </span>
+        )}
         {filtered.length} {filtered.length === 1 ? 'bem encontrado' : 'bens encontrados'}
-        {(patrimony as PatrimonyItem[]).length !== filtered.length && ` de ${(patrimony as PatrimonyItem[]).length} total`}
+        {baseItems.length !== filtered.length && ` de ${baseItems.length} total`}
       </p>
 
       {/* Card grid */}
@@ -484,6 +629,8 @@ export default function PatrimonyPage() {
             );
           })}
         </div>
+      )}
+      </>
       )}
 
       {/* ── Patrimony Form (create / edit) ─── */}
