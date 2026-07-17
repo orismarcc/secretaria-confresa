@@ -19,6 +19,7 @@ import {
   Package,
   Receipt,
   Landmark,
+  History,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -42,6 +43,7 @@ const adminNavItems = [
   { path: '/patrimony', label: 'Patrimônio', icon: Building2 },
   { path: '/sefaz', label: 'SEFAZ', icon: FileText },
   { path: '/calendar', label: 'Calendário', icon: CalendarDays },
+  { path: '/audit', label: 'Auditoria', icon: History },
 ];
 
 const operatorNavItems = [
