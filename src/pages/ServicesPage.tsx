@@ -4,7 +4,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { DataTable } from '@/components/DataTable';
-import { StatusBadge } from '@/components/StatusBadge';
+import { StatusMenu } from '@/components/StatusMenu';
 import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -172,7 +172,7 @@ export default function ServicesPage() {
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   // Ordenação: 'default' (preferência proximo/DAM) ou por data de cadastro
-  const [sortBy, setSortBy] = useState<'default' | 'created_desc' | 'created_asc'>('default');
+  const [sortBy, setSortBy] = useState<'default' | 'created_desc' | 'created_asc' | 'dam_paid_desc' | 'dam_paid_asc'>('default');
   const [currentPage, setCurrentPage] = useState(1);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -256,10 +256,20 @@ export default function ServicesPage() {
 
   const sortedServices = useMemo(() => [...filteredServices].sort((a: DbService, b: DbService) => {
     // Ordenação explícita por data de cadastro (sobrepõe a ordem padrão, mantendo os filtros)
-    if (sortBy !== 'default') {
+    if (sortBy === 'created_desc' || sortBy === 'created_asc') {
       const aC = parseSupabaseDate(a.created_at)?.getTime() ?? 0;
       const bC = parseSupabaseDate(b.created_at)?.getTime() ?? 0;
       return sortBy === 'created_desc' ? bC - aC : aC - bC;
+    }
+    // Ordenação por data de pagamento da DAM — DAMs pagas primeiro (por data),
+    // atendimentos sem DAM paga vão para o fim da lista.
+    if (sortBy === 'dam_paid_desc' || sortBy === 'dam_paid_asc') {
+      const aP = a.dam_paid && a.dam_paid_at ? (parseSupabaseDate(a.dam_paid_at)?.getTime() ?? null) : null;
+      const bP = b.dam_paid && b.dam_paid_at ? (parseSupabaseDate(b.dam_paid_at)?.getTime() ?? null) : null;
+      if (aP === null && bP === null) return 0;
+      if (aP === null) return 1;
+      if (bP === null) return -1;
+      return sortBy === 'dam_paid_desc' ? bP - aP : aP - bP;
     }
     if (statusFilter === 'active') {
       // 1) "proximo" sempre como grupo no topo
@@ -473,6 +483,19 @@ export default function ServicesPage() {
     setDetailOpen(true);
   };
 
+  // Mudança rápida de status pelo badge (sem abrir detalhes).
+  // Usada apenas para pendente/em execução/próximo — finalizar e cancelar têm
+  // fluxos próprios (data e motivo). Mantém a invariante de completed_at nulo.
+  const quickChangeStatus = (service: DbService, newStatus: string) => {
+    if (newStatus === service.status) return;
+    updateService.mutate({
+      id: service.id,
+      status: newStatus,
+      completed_at: null,
+      cancellation_reason: null,
+    });
+  };
+
   // ── mappers ───────────────────────────────────────────────────────────────
 
   const mapServiceForForm = (s: DbService | null) => {
@@ -602,8 +625,13 @@ export default function ServicesPage() {
         const completedAt = parseSupabaseDate(s.completed_at);
         const registeredBy = (s as any).profiles?.name;
         return (
-          <div className="flex flex-col gap-0.5">
-            <StatusBadge status={s.status as 'pending' | 'in_progress' | 'completed'} />
+          <div className="flex flex-col gap-0.5 items-start">
+            <StatusMenu
+              status={s.status}
+              onChange={(st) => quickChangeStatus(s, st)}
+              onFinalize={() => openFinalizeDialog(s)}
+              onCancel={() => openCancelDialog(s)}
+            />
             {createdAt && (
               <span className="text-xs text-muted-foreground">
                 Cadastro: {format(createdAt, 'dd/MM/yy', { locale: ptBR })}
@@ -808,6 +836,8 @@ export default function ServicesPage() {
               <SelectItem value="default">Ordem padrão</SelectItem>
               <SelectItem value="created_desc">Cadastro (mais recente)</SelectItem>
               <SelectItem value="created_asc">Cadastro (mais antigo)</SelectItem>
+              <SelectItem value="dam_paid_desc">DAM paga (mais recente)</SelectItem>
+              <SelectItem value="dam_paid_asc">DAM paga (mais antiga)</SelectItem>
             </SelectContent>
           </Select>
 

@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Eye, Trash2 } from 'lucide-react';
+import { Plus, Eye, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   useProducers,
@@ -68,6 +68,8 @@ export default function ProducersPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedProducer, setSelectedProducer] = useState<DbProducer | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
 
   const filtered = producers.filter((p: DbProducer) => {
     const matchesSearch = textIncludes(p.name, search) || p.cpf.includes(search) || phoneMatches((p as any).phone, search);
@@ -75,12 +77,18 @@ export default function ProducersPage() {
     return matchesSearch && matchesSettlement;
   });
 
+  // Paginação (lista pode ser muito longa)
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paged = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
   const allSelected = filtered.length > 0 && filtered.every(p => selectedIds.has(p.id));
   const someSelected = filtered.some(p => selectedIds.has(p.id));
 
   // Clear bulk selection when filters change so hidden rows aren't deleted accidentally
   useEffect(() => {
     setSelectedIds(new Set());
+    setPage(1);
   }, [search, settlementFilter]);
 
   const toggleAll = () => {
@@ -292,7 +300,7 @@ export default function ProducersPage() {
                 </td>
               </tr>
             ) : (
-              filtered.map((p: DbProducer) => (
+              paged.map((p: DbProducer) => (
                 <tr key={p.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                   <td className="px-3 py-3">
                     <Checkbox
@@ -317,6 +325,57 @@ export default function ProducersPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Paginação */}
+      {filtered.length > 0 && (
+        <div className="flex items-center justify-between mt-4 flex-wrap gap-2">
+          <span className="text-sm text-muted-foreground">
+            {filtered.length} produtor(es) · página {safePage} de {totalPages}
+          </span>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+                .reduce<(number | '…')[]>((acc, p, idx, arr) => {
+                  if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('…');
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((p, i) =>
+                  p === '…'
+                    ? <span key={`ellipsis-${i}`} className="px-2 text-muted-foreground text-sm">…</span>
+                    : (
+                      <Button
+                        key={p}
+                        variant={safePage === p ? 'default' : 'outline'}
+                        size="icon"
+                        onClick={() => setPage(p as number)}
+                        className="w-8 h-8 text-xs"
+                      >
+                        {p}
+                      </Button>
+                    )
+                )}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       <ProducerDetailSheet
         open={detailOpen}

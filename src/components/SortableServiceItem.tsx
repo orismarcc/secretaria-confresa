@@ -1,6 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { StatusBadge } from '@/components/StatusBadge';
+import { StatusMenu } from '@/components/StatusMenu';
 import { GripVertical, CheckCircle2, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -26,6 +27,9 @@ interface SortableServiceItemProps {
   onView?: (id: string) => void;
   isFinalizePending?: boolean;
   variant?: 'dashboard' | 'operator' | 'proximos';
+  /** Quando fornecido, o status vira um menu clicável (alterar sem abrir detalhes). */
+  onChangeStatus?: (id: string, status: string) => void;
+  onCancelStatus?: (id: string) => void;
 }
 
 export function SortableServiceItem({
@@ -36,6 +40,8 @@ export function SortableServiceItem({
   onView,
   isFinalizePending,
   variant = 'dashboard',
+  onChangeStatus,
+  onCancelStatus,
 }: SortableServiceItemProps) {
   const {
     attributes,
@@ -125,9 +131,18 @@ export function SortableServiceItem({
           )}
         </div>
 
-        {/* Status badge — sm+ only (all items in this card have status "proximo") */}
+        {/* Status — sm+ only. Clicável quando onChangeStatus é fornecido. */}
         <div className="hidden sm:flex shrink-0">
-          <StatusBadge status={service.status as 'pending' | 'in_progress' | 'completed' | 'proximo'} />
+          {onChangeStatus ? (
+            <StatusMenu
+              status={service.status}
+              onChange={(st) => onChangeStatus(service.id, st)}
+              onFinalize={onFinalize ? () => onFinalize(service.id) : undefined}
+              onCancel={onCancelStatus ? () => onCancelStatus(service.id) : undefined}
+            />
+          ) : (
+            <StatusBadge status={service.status as 'pending' | 'in_progress' | 'completed' | 'proximo'} />
+          )}
         </div>
 
         {/* View details button */}

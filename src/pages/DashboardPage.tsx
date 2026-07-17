@@ -27,7 +27,9 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ServiceDetailView } from '@/components/ServiceDetailView';
-import { StatusBadge } from '@/components/StatusBadge';
+import { StatusMenu } from '@/components/StatusMenu';
+import { Textarea } from '@/components/ui/textarea';
+import { XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { isDamOverdue } from '@/lib/damUtils';
@@ -83,6 +85,39 @@ export default function DashboardPage() {
   const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
   const [serviceToFinalize, setServiceToFinalize] = useState<any | null>(null);
   const [finalizeDate, setFinalizeDate] = useState('');
+
+  // Cancellation dialog (motivo obrigatório)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [serviceToCancel, setServiceToCancel] = useState<any | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+
+  // Mudança rápida de status pelo badge (pendente/em execução/próximo).
+  const quickChangeStatus = useCallback((id: string, newStatus: string) => {
+    updateService.mutate({
+      id,
+      status: newStatus,
+      completed_at: null,
+      cancellation_reason: null,
+    });
+  }, [updateService]);
+
+  const openCancelDialog = useCallback((service: any) => {
+    setDetailOpen(false);
+    setServiceToCancel(service);
+    setCancelReason('');
+    setCancelDialogOpen(true);
+  }, []);
+
+  const handleCancel = useCallback(() => {
+    if (!serviceToCancel) return;
+    updateService.mutate({
+      id: serviceToCancel.id,
+      status: 'cancelled',
+      cancellation_reason: cancelReason.trim() || null,
+    });
+    setServiceToCancel(null);
+    setCancelDialogOpen(false);
+  }, [serviceToCancel, cancelReason, updateService]);
 
   const openDetail = useCallback((service: any) => {
     setDetailService(service);
@@ -268,6 +303,9 @@ export default function DashboardPage() {
                         demandTypeName={(service as any).demand_types?.name || 'N/A'}
                         variant="proximos"
                         onView={() => openDetail(service)}
+                        onChangeStatus={quickChangeStatus}
+                        onFinalize={() => openFinalizeDialog(service)}
+                        onCancelStatus={() => openCancelDialog(service)}
                       />
                     ))}
                   </div>
@@ -316,28 +354,36 @@ export default function DashboardPage() {
             ) : (
               <div className="space-y-1.5 sm:space-y-2 max-h-[260px] sm:max-h-[380px] overflow-y-auto pr-0.5 sm:pr-1">
                 {inProgressServices.map((service: any) => (
-                  <button
+                  <div
                     key={service.id}
-                    onClick={() => openDetail(service)}
-                    className="w-full text-left rounded-lg border bg-info/5 border-info/20 p-2 sm:p-3 hover:bg-info/10 transition-colors"
+                    className="w-full rounded-lg border bg-info/5 border-info/20 p-2 sm:p-3 hover:bg-info/10 transition-colors"
                   >
                     <div className="flex items-start justify-between gap-1">
-                      <div className="min-w-0">
+                      <button
+                        onClick={() => openDetail(service)}
+                        className="min-w-0 text-left flex-1"
+                      >
                         <p className="text-xs sm:text-sm font-medium truncate">
                           {service.producers?.name || 'N/A'}
                         </p>
                         <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
                           {service.demand_types?.name || 'N/A'}
                         </p>
-                      </div>
-                      <StatusBadge status="in_progress" className="shrink-0 text-[10px] sm:text-xs" />
+                        {service.scheduled_date && (
+                          <p className="text-[10px] text-muted-foreground mt-1">
+                            {format(new Date(service.scheduled_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
+                          </p>
+                        )}
+                      </button>
+                      <StatusMenu
+                        status={service.status}
+                        onChange={(st) => quickChangeStatus(service.id, st)}
+                        onFinalize={() => openFinalizeDialog(service)}
+                        onCancel={() => openCancelDialog(service)}
+                        className="shrink-0"
+                      />
                     </div>
-                    {service.scheduled_date && (
-                      <p className="text-[10px] text-muted-foreground mt-1">
-                        {format(new Date(service.scheduled_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
-                      </p>
-                    )}
-                  </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -490,6 +536,44 @@ export default function DashboardPage() {
               disabled={updateService.isPending}
             >
               Confirmar Finalização
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Cancel Dialog — motivo obrigatório ───────────────────── */}
+      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Cancelar Atendimento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">
+              Informe o motivo do cancelamento. Ele ficará registrado no histórico do produtor.
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="dash-cancel-reason">Motivo *</Label>
+              <Textarea
+                id="dash-cancel-reason"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Ex: produtor desistiu, duplicidade, erro de cadastro..."
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
+              Voltar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleCancel}
+              disabled={!cancelReason.trim() || updateService.isPending}
+            >
+              <XCircle className="h-4 w-4 mr-2" />
+              Confirmar Cancelamento
             </Button>
           </DialogFooter>
         </DialogContent>
