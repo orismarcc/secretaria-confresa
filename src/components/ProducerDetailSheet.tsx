@@ -121,6 +121,13 @@ export function ProducerDetailSheet({
 
   const isHistoryLoading = servicesLoading || deliveriesLoading;
 
+  // ── Resumo consolidado do produtor (item 4) ──────────────────────────────────
+  const completedServices = (services as any[]).filter(s => s.status === 'completed').length;
+  const completedDeliveries = (deliveries as any[]).filter(d => d.status === 'completed').length;
+  const damIssued = (services as any[]).filter(s => s.dam_issued).length;
+  const damPaid = (services as any[]).filter(s => s.dam_issued && s.dam_paid).length;
+  const damPending = (services as any[]).filter(s => s.dam_issued && !s.dam_paid).length;
+
   // ── Navigate to detail ───────────────────────────────────────────────────────
   const handleViewService = (serviceId: string) => {
     onOpenChange(false);
@@ -322,6 +329,42 @@ export function ProducerDetailSheet({
                 <Badge variant="secondary" className="text-xs">{history.length}</Badge>
               )}
             </div>
+
+            {/* Resumo consolidado */}
+            {!isHistoryLoading && history.length > 0 && (
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <div className="rounded-lg border bg-muted/30 p-2 text-center">
+                  <p className="text-lg font-bold leading-none">{services.length}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Atendimentos</p>
+                  {completedServices > 0 && (
+                    <p className="text-[10px] font-medium text-success leading-tight">{completedServices} final.</p>
+                  )}
+                </div>
+                <div className="rounded-lg border bg-blue-500/5 p-2 text-center">
+                  <p className="text-lg font-bold leading-none text-blue-600">{deliveries.length}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Entregas</p>
+                  {completedDeliveries > 0 && (
+                    <p className="text-[10px] font-medium text-blue-600 leading-tight">{completedDeliveries} realiz.</p>
+                  )}
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-2 text-center">
+                  {damIssued > 0 ? (
+                    <>
+                      <p className="text-lg font-bold leading-none text-success">{damPaid}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">DAMs pagas</p>
+                      {damPending > 0 && (
+                        <p className="text-[10px] font-medium text-warning leading-tight">{damPending} pend.</p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-lg font-bold leading-none text-muted-foreground">—</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">DAMs</p>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* DAM overdue alert */}
             {(() => {
