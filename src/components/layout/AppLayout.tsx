@@ -20,6 +20,7 @@ import {
   Receipt,
   Landmark,
   History,
+  Hammer,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -40,6 +41,7 @@ const adminNavItems = [
   { path: '/demand-types', label: 'Serviços', icon: FileText },
   { path: '/settlements', label: 'Assentamentos', icon: Landmark },
   { path: '/machinery', label: 'Maquinários', icon: Wrench },
+  { path: '/maintenance', label: 'Manutenções', icon: Hammer },
   { path: '/patrimony', label: 'Patrimônio', icon: Building2 },
   { path: '/sefaz', label: 'SEFAZ', icon: FileText },
   { path: '/calendar', label: 'Calendário', icon: CalendarDays },

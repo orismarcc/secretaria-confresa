@@ -3,7 +3,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { StatsCard } from '@/components/StatsCard';
 import {
-  ClipboardList, Clock, Loader2, CheckCircle2, Users, CalendarCheck, PlayCircle,
+  ClipboardList, Clock, Loader2, CheckCircle2, Users, CalendarCheck, PlayCircle, Wrench,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -57,6 +57,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { SortableServiceItem } from '@/components/SortableServiceItem';
+import { useMaintenances } from '@/hooks/useMaintenanceData';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -64,6 +65,13 @@ export default function DashboardPage() {
 
   const { data: producerStats, isLoading: statsLoading } = useDashboardStats();
   const { data: services = [], isLoading: servicesLoading } = useServices();
+  const { data: maintenances = [] } = useMaintenances();
+
+  // Maquinários atualmente em manutenção (sem data de fim)
+  const ongoingMaintenances = useMemo(
+    () => (maintenances as any[]).filter((m) => !m.ended_at),
+    [maintenances],
+  );
 
   // Estatísticas de atendimentos derivadas do cache de useServices (sem refetch)
   const stats = useMemo(() => ({
@@ -344,7 +352,7 @@ export default function DashboardPage() {
                 <Skeleton className="h-10 sm:h-14" />
                 <Skeleton className="h-10 sm:h-14" />
               </div>
-            ) : inProgressServices.length === 0 ? (
+            ) : (inProgressServices.length === 0 && ongoingMaintenances.length === 0) ? (
               <div className="flex flex-col items-center justify-center py-6 sm:py-10 text-center gap-1 sm:gap-2">
                 <PlayCircle className="h-7 w-7 sm:h-10 sm:w-10 text-muted-foreground/30" />
                 <p className="text-muted-foreground text-[10px] sm:text-sm leading-tight">
@@ -353,6 +361,33 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-1.5 sm:space-y-2 max-h-[260px] sm:max-h-[380px] overflow-y-auto pr-0.5 sm:pr-1">
+                {/* Maquinários em manutenção */}
+                {ongoingMaintenances.map((m: any) => (
+                  <button
+                    key={m.id}
+                    onClick={() => navigate('/maintenance')}
+                    className="w-full text-left rounded-lg border border-amber-300 bg-amber-50/60 p-2 sm:p-3 hover:bg-amber-50 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-1">
+                      <div className="min-w-0 flex items-center gap-2">
+                        <Wrench className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs sm:text-sm font-medium truncate">{m.machinery?.name || 'Maquinário'}</p>
+                          <p className="text-[10px] sm:text-xs text-amber-700 truncate">{m.description}</p>
+                        </div>
+                      </div>
+                      <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-semibold text-amber-700 bg-amber-500/15 border border-amber-300 rounded-full px-1.5 py-0.5 shrink-0">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" /> Em manutenção
+                      </span>
+                    </div>
+                    {m.started_at && (
+                      <p className="text-[10px] text-amber-700/70 mt-1">
+                        Desde {format(new Date(m.started_at.replace(' ', 'T')), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                      </p>
+                    )}
+                  </button>
+                ))}
+                {/* Atendimentos em execução */}
                 {inProgressServices.map((service: any) => (
                   <div
                     key={service.id}

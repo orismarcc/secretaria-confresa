@@ -27,11 +27,12 @@ import { format, parseISO, startOfMonth, subMonths, differenceInCalendarMonths }
 import { ptBR } from 'date-fns/locale';
 import {
   TrendingUp, TrendingDown, Minus, MapPin, ClipboardList, Tractor, Users2, Package, Layers,
-  FileDown, Truck, Stethoscope, Fuel, Clock, Timer, CalendarRange,
+  FileDown, Truck, Stethoscope, Fuel, Clock, Timer, CalendarRange, Wrench,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getPatrulhaIds, getDemandIdsByCategory, getDemandIdsByNameSubstring } from '@/lib/analyticsUtils';
 import { ReportsCenter } from '@/components/ReportsCenter';
+import { useMaintenances, maintenanceMinutes, formatDuration } from '@/hooks/useMaintenanceData';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import logoTransparent from '@/assets/logo-transparent.png';
@@ -132,6 +133,25 @@ export default function AnalyticsPage() {
   const { data: operators = [] } = useOperators();
   const { data: deliveries = [] } = useDeliveries();
   const { data: producers = [] } = useProducers();
+  const { data: maintenances = [] } = useMaintenances();
+
+  // ── Manutenções de maquinários (tempo e ocorrências por maquinário) ──────────
+  const maintenanceStats = useMemo(() => {
+    const byMachine: Record<string, { name: string; count: number; minutes: number }> = {};
+    let totalMinutes = 0;
+    let totalCount = 0;
+    (maintenances as any[]).forEach((m) => {
+      const key = m.machinery_id;
+      if (!byMachine[key]) byMachine[key] = { name: m.machinery?.name || 'Maquinário', count: 0, minutes: 0 };
+      byMachine[key].count++;
+      totalCount++;
+      const mins = maintenanceMinutes(m);
+      byMachine[key].minutes += mins;
+      totalMinutes += mins;
+    });
+    const list = Object.values(byMachine).sort((a, b) => b.minutes - a.minutes || b.count - a.count);
+    return { list, totalMinutes, totalCount };
+  }, [maintenances]);
 
   const isLoading = servicesLoading || settlementsLoading || demandTypesLoading;
 
@@ -1063,6 +1083,62 @@ export default function AnalyticsPage() {
                           {op.totalFuel > 0 && ` · ${op.totalFuel.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} L combustível`}
                           {op.totalHours > 0 && ` · ${op.totalHours.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} h trabalhadas`}
                         </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Manutenções de Maquinários */}
+          {maintenanceStats.list.length > 0 && (
+            <Card className="overflow-hidden">
+              <CardHeader className="border-b bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-amber-500/10">
+                <CardTitle className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-amber-500/20"><Wrench className="h-5 w-5 text-amber-600" /></div>
+                  <div className="flex-1">
+                    <span className="text-lg">Manutenções de Maquinários</span>
+                    <p className="text-sm font-normal text-muted-foreground">
+                      Tempo parado e ocorrências por maquinário
+                    </p>
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-5">
+                {/* Totais */}
+                <div className="grid grid-cols-2 gap-3 mb-5">
+                  <div className="rounded-xl border bg-amber-50/50 p-3 text-center">
+                    <p className="text-2xl sm:text-3xl font-black text-amber-700">{formatDuration(maintenanceStats.totalMinutes)}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Tempo total em manutenção</p>
+                  </div>
+                  <div className="rounded-xl border bg-muted/40 p-3 text-center">
+                    <p className="text-2xl sm:text-3xl font-black text-foreground">{maintenanceStats.totalCount}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {maintenanceStats.totalCount === 1 ? 'ocorrência registrada' : 'ocorrências registradas'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Por maquinário */}
+                <div className="space-y-3">
+                  {maintenanceStats.list.map((m, i) => {
+                    const maxMin = maintenanceStats.list[0].minutes || 1;
+                    const pct = Math.round((m.minutes / maxMin) * 100);
+                    return (
+                      <div key={i} className="space-y-1.5">
+                        <div className="flex items-center justify-between text-sm gap-2">
+                          <span className="font-medium truncate">{m.name}</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="inline-flex items-center text-xs text-amber-700 bg-amber-500/10 rounded-full px-2 py-0.5 font-medium">
+                              {m.count} {m.count === 1 ? 'vez' : 'vezes'}
+                            </span>
+                            <span className="font-semibold text-sm tabular-nums text-amber-700">{formatDuration(m.minutes)}</span>
+                          </div>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-border overflow-hidden">
+                          <div className="h-full rounded-full bg-amber-500 transition-all duration-700" style={{ width: `${pct}%` }} />
+                        </div>
                       </div>
                     );
                   })}
