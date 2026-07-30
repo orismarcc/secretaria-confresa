@@ -1172,6 +1172,7 @@ export default function DeliveriesPage() {
   const [realizeDate, setRealizeDate] = useState('');
   // Lotes expandidos na aba de pendentes (agrupamento por lote)
   const [expandedLots, setExpandedLots] = useState<Set<string>>(new Set());
+  const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
 
   // Lots for selected demand type (in form)
   const { data: lotsForType = [], isLoading: lotsLoading } = useDeliveryLots(formData.demand_type_id || undefined);
@@ -1400,6 +1401,36 @@ export default function DeliveriesPage() {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+
+  const toggleType = (id: string) =>
+    setExpandedTypes((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  // Quantidade total de uma entrega (soma dos itens de lote; senão, o campo direto).
+  const deliveryTotalQty = (d: any): number => {
+    const items = (d.delivery_items ?? []) as any[];
+    if (items.length > 0) return items.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+    return Number(d.quantity) || 0;
+  };
+
+  // Realizadas agrupadas por título (tipo de entrega) — cards de resumo clicáveis.
+  const completedByType = useMemo(() => {
+    if (tab !== 'completed') return [] as { id: string; name: string; deliveries: any[] }[];
+    const groups = new Map<string, { name: string; deliveries: any[] }>();
+    (filtered as any[]).forEach((d) => {
+      const key = d.demand_type_id || '__none__';
+      const name = d.demand_types?.name || 'Sem tipo';
+      const g = groups.get(key) ?? { name, deliveries: [] };
+      g.deliveries.push(d);
+      groups.set(key, g);
+    });
+    return Array.from(groups.entries())
+      .map(([id, g]) => ({ id, ...g }))
+      .sort((a, b) => b.deliveries.length - a.deliveries.length || a.name.localeCompare(b.name, 'pt-BR'));
+  }, [filtered, tab]);
 
   // Agrupa as entregas (filtradas) por lote. Uma entrega em vários lotes aparece
   // em cada grupo; sem itens de lote → "Sem lote específico".
@@ -1685,8 +1716,78 @@ export default function DeliveriesPage() {
               </p>
             </div>
           ) : tab === 'completed' ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map(renderDeliveryCard)}
+            /* Realizadas agrupadas por título (tipo) — cards de resumo clicáveis */
+            <div className="space-y-3">
+              {completedByType.map((group) => {
+                const isOpen = expandedTypes.has(group.id);
+                const pessoas = new Set(group.deliveries.map((d) => d.producer_id)).size;
+                const total = group.deliveries.reduce((s, d) => s + deliveryTotalQty(d), 0);
+                const assentSet = new Set<string>();
+                group.deliveries.forEach((d) => {
+                  const n = d.settlements?.name || d.producers?.settlements?.name;
+                  if (n) assentSet.add(n);
+                });
+                const color = getTypeColor(group.deliveries[0]?.demand_type_id, deliveryDemandTypes);
+                return (
+                  <div key={group.id} className="rounded-xl border bg-card overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => toggleType(group.id)}
+                      className="w-full flex items-start justify-between gap-3 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', color.dot)} />
+                          <span className="font-semibold text-sm truncate">{group.name}</span>
+                          <Badge variant="secondary" className="shrink-0 bg-success/10 text-success border-success/20">
+                            {group.deliveries.length} realizada{group.deliveries.length !== 1 ? 's' : ''}
+                          </Badge>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 pl-6 text-xs">
+                          <span className="inline-flex items-center gap-1 text-muted-foreground">
+                            <User className="h-3 w-3" />
+                            <span className="font-medium text-foreground">{pessoas}</span> {pessoas === 1 ? 'pessoa' : 'pessoas'}
+                          </span>
+                          {total > 0 && (
+                            <span className="inline-flex items-center gap-1 text-emerald-700">
+                              <Package className="h-3 w-3" />
+                              <span className="font-semibold">{fmtQty(total)}</span> entregues
+                            </span>
+                          )}
+                          {assentSet.size > 0 && (
+                            <span className="inline-flex items-center gap-1 text-muted-foreground">
+                              <MapPin className="h-3 w-3" />
+                              <span className="font-medium text-foreground">{assentSet.size}</span>{' '}
+                              {assentSet.size === 1 ? 'assentamento' : 'assentamentos'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronDown
+                        className={cn('h-4 w-4 text-muted-foreground shrink-0 mt-0.5 transition-transform', isOpen && 'rotate-180')}
+                      />
+                    </button>
+                    {isOpen && (
+                      <div className="border-t bg-muted/20">
+                        <div className="flex justify-end px-3 pt-3">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5"
+                            onClick={() => exportLotContacts(group.name, group.deliveries)}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            Exportar contatos (WhatsApp)
+                          </Button>
+                        </div>
+                        <div className="p-3 grid gap-3 sm:grid-cols-2">
+                          {group.deliveries.map(renderDeliveryCard)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             /* Pendentes agrupadas por lote — cards de resumo clicáveis */
