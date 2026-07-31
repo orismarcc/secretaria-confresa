@@ -27,7 +27,7 @@ import { format, parseISO, startOfMonth, subMonths, differenceInCalendarMonths }
 import { ptBR } from 'date-fns/locale';
 import {
   TrendingUp, TrendingDown, Minus, MapPin, ClipboardList, Tractor, Users2, Package, Layers,
-  FileDown, Truck, Stethoscope, Fuel, Clock, Timer, CalendarRange, Wrench,
+  FileDown, Truck, Stethoscope, Fuel, Clock, Timer, CalendarRange, Wrench, DollarSign,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getPatrulhaIds, getDemandIdsByCategory, getDemandIdsByNameSubstring } from '@/lib/analyticsUtils';
@@ -36,6 +36,8 @@ import { useMaintenances, maintenanceMinutes, formatDuration } from '@/hooks/use
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import logoTransparent from '@/assets/logo-transparent.png';
+
+const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 // ─── Custom Recharts tooltip ─────────────────────────────────────────────────
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -152,6 +154,14 @@ export default function AnalyticsPage() {
     const list = Object.values(byMachine).sort((a, b) => b.minutes - a.minutes || b.count - a.count);
     return { list, totalMinutes, totalCount };
   }, [maintenances]);
+
+  // ── Arrecadação de DAMs (soma apenas das pagas com valor) ────────────────────
+  const damArrecadado = useMemo(() => {
+    const paid = (services as any[]).filter((s) => s.dam_paid && s.status !== 'cancelled');
+    const total = paid.reduce((sum, s) => sum + (Number(s.dam_value) || 0), 0);
+    const comValor = paid.filter((s) => Number(s.dam_value) > 0).length;
+    return { total, count: paid.length, comValor };
+  }, [services]);
 
   const isLoading = servicesLoading || settlementsLoading || demandTypesLoading;
 
@@ -780,6 +790,24 @@ export default function AnalyticsPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Arrecadação de DAMs */}
+          <Card className="overflow-hidden bg-gradient-to-br from-success/10 via-emerald-500/5 to-background border-success/20">
+            <CardContent className="p-4 sm:p-6 flex items-center gap-3 sm:gap-4">
+              <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-br from-success to-emerald-600 shadow-lg shadow-success/30 shrink-0">
+                <DollarSign className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                  Arrecadação de DAMs
+                </p>
+                <p className="text-2xl sm:text-4xl font-black text-foreground">{fmtBRL(damArrecadado.total)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Total arrecadado · {damArrecadado.comValor} de {damArrecadado.count} DAM(s) paga(s) com valor
+                </p>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* ── Seletor de período global ───────────────────────────────── */}
           <div className="flex items-center justify-between flex-wrap gap-3">

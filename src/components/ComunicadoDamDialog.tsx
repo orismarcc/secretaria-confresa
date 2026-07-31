@@ -12,6 +12,8 @@ import { Label } from '@/components/ui/label';
 import { FileText, FileDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNextComunicadoNumber, useIncrementComunicadoNumber } from '@/hooks/useSupabaseData';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   gerarComunicadoDam,
   formatHoras,
@@ -25,6 +27,10 @@ export interface ComunicadoSource {
   tipo: string;
   horas: number;
   litros: number;
+  /** Atendimento de origem — para gravar o valor e marcar a DAM como emitida. */
+  serviceId?: string;
+  /** Data de emissão já existente (para não reiniciar o prazo ao reemitir). */
+  damIssuedAt?: string | null;
 }
 
 interface ComunicadoDamDialogProps {
@@ -40,6 +46,7 @@ function parseNum(v: string): number {
 
 export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDamDialogProps) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { data: proximoNumero } = useNextComunicadoNumber();
   const incrementNumero = useIncrementComunicadoNumber();
   const [valorLitro, setValorLitro] = useState('');
@@ -79,7 +86,30 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
         valorUpfm: upfmNum,
       };
       await gerarComunicadoDam(dados);
-      toast({ title: `Comunicado Nº ${numero} gerado!` });
+
+      // Grava o valor no atendimento e marca a DAM como emitida (pendente).
+      // Só entra na soma de arrecadado quando for marcada como paga.
+      if (source.serviceId) {
+        const hoje = new Date().toISOString().slice(0, 10);
+        const { error } = await supabase
+          .from('services')
+          .update({
+            dam_value: total,
+            dam_issued: true,
+            dam_issued_at: source.damIssuedAt || hoje,
+          })
+          .eq('id', source.serviceId);
+        if (error) throw error;
+        queryClient.invalidateQueries({ queryKey: ['services'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard_stats'] });
+      }
+
+      toast({
+        title: `Comunicado Nº ${numero} gerado!`,
+        description: source.serviceId
+          ? `DAM emitida (pendente) — valor de ${fmtBRL(total)} registrado.`
+          : undefined,
+      });
       onOpenChange(false);
     } catch (e: any) {
       toast({ title: 'Erro ao gerar comunicado', description: e.message, variant: 'destructive' });

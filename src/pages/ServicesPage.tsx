@@ -462,6 +462,8 @@ export default function ServicesPage() {
       tipo: dt?.name || service.demand_types?.name || '',
       horas: Number(service.worked_hours) || 0,
       litros: Number(service.fuel_liters) || 0,
+      serviceId: service.id,
+      damIssuedAt: service.dam_issued_at ?? null,
     });
     setComunicadoOpen(true);
   };

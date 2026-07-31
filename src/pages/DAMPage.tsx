@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
+  DollarSign,
   FileText,
   User,
   MapPin,
@@ -103,9 +104,14 @@ export default function DAMPage() {
   const stats = useMemo(() => {
     const overdue = damServices.filter(s => getDamStatus(s) === 'overdue').length;
     const pending = damServices.filter(s => getDamStatus(s) === 'pending').length;
-    const paid    = damServices.filter(s => getDamStatus(s) === 'paid').length;
-    return { total: damServices.length, overdue, pending, paid };
+    const paidList = damServices.filter(s => getDamStatus(s) === 'paid');
+    // Arrecadado = soma do valor apenas das DAMs pagas
+    const arrecadado = paidList.reduce((sum, s) => sum + (Number(s.dam_value) || 0), 0);
+    const paidComValor = paidList.filter(s => Number(s.dam_value) > 0).length;
+    return { total: damServices.length, overdue, pending, paid: paidList.length, arrecadado, paidComValor };
   }, [damServices]);
+
+  const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   // Filtered + searched
   const filtered = useMemo(() => {
@@ -198,6 +204,24 @@ export default function DAMPage() {
         title="DAMs"
         description="Controle de Documentos de Arrecadação Municipal"
       />
+
+      {/* ── Total arrecadado ────────────────────────────────────────────── */}
+      <Card className="mb-4 overflow-hidden bg-gradient-to-br from-success/10 via-emerald-500/5 to-background border-success/20">
+        <CardContent className="p-4 sm:p-6 flex items-center gap-4">
+          <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-br from-success to-emerald-600 shadow-lg shadow-success/30 shrink-0">
+            <DollarSign className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">
+              Total arrecadado em DAMs
+            </p>
+            <p className="text-2xl sm:text-4xl font-black text-foreground">{fmtBRL(stats.arrecadado)}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {stats.paidComValor} de {stats.paid} DAM(s) paga(s) com valor registrado
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* ── Stats Cards ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-6">
