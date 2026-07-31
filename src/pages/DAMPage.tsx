@@ -93,6 +93,12 @@ export default function DAMPage() {
   const [payDate, setPayDate] = useState('');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptUploading, setReceiptUploading] = useState(false);
+  const [payValue, setPayValue] = useState('');
+
+  // Editar valor da DAM
+  const [valueDialogOpen, setValueDialogOpen] = useState(false);
+  const [valueService, setValueService] = useState<any | null>(null);
+  const [valueInput, setValueInput] = useState('');
 
   // Filter only services with DAM issued (exclui cancelados — não se cobra DAM de atendimento cancelado)
   const damServices = useMemo(() =>
@@ -149,11 +155,34 @@ export default function DAMPage() {
     return data?.signedUrl ?? null;
   }
 
+  // Converte "1.234,56" ou "1234.56" em número.
+  const parseNum = (v: string): number => {
+    const n = parseFloat(String(v).replace(/\./g, '').replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+  };
+  const fmtInput = (v: number | null | undefined): string =>
+    v != null ? Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+
   const openPayDialog = (s: any) => {
     setPayingService(s);
     setPayDate(format(new Date(), 'yyyy-MM-dd'));
     setReceiptFile(null);
+    setPayValue(fmtInput(s.dam_value));
     setPayDialogOpen(true);
+  };
+
+  const openValueDialog = (s: any) => {
+    setValueService(s);
+    setValueInput(fmtInput(s.dam_value));
+    setValueDialogOpen(true);
+  };
+
+  const handleSaveValue = () => {
+    if (!valueService) return;
+    const parsed = parseNum(valueInput);
+    updateService.mutate({ id: valueService.id, dam_value: parsed > 0 ? parsed : null });
+    setValueService(null);
+    setValueDialogOpen(false);
   };
 
   const handleMarkPaid = async () => {
@@ -164,11 +193,13 @@ export default function DAMPage() {
       if (receiptFile) {
         receiptUrl = await uploadReceipt(receiptFile, payingService.id);
       }
+      const parsedValue = parseNum(payValue);
       updateService.mutate({
         id: payingService.id,
         dam_paid: true,
         dam_paid_at: payDate || null,
         ...(receiptUrl ? { dam_receipt_url: receiptUrl } : {}),
+        ...(payValue.trim() ? { dam_value: parsedValue > 0 ? parsedValue : null } : {}),
       });
       setPayingService(null);
       setPayDialogOpen(false);
@@ -443,6 +474,24 @@ export default function DAMPage() {
                     </div>
                   )}
 
+                  {status === 'paid' && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <DollarSign className="h-3.5 w-3.5 shrink-0 text-success" />
+                      {s.dam_value != null ? (
+                        <span className="font-semibold text-success">{fmtBRL(Number(s.dam_value))}</span>
+                      ) : (
+                        <span className="text-muted-foreground italic">Sem valor</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => openValueDialog(s)}
+                        className="ml-auto text-xs text-primary hover:underline font-medium"
+                      >
+                        {s.dam_value != null ? 'editar' : 'adicionar valor'}
+                      </button>
+                    </div>
+                  )}
+
                   {settlementName && (
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <MapPin className="h-3.5 w-3.5 shrink-0" />
@@ -526,6 +575,17 @@ export default function DAMPage() {
               />
             </div>
             <div className="space-y-1.5">
+              <Label htmlFor="pay-value">Valor pago (R$) — opcional</Label>
+              <Input
+                id="pay-value"
+                value={payValue}
+                onChange={e => setPayValue(e.target.value)}
+                placeholder="0,00"
+                inputMode="decimal"
+              />
+              <p className="text-xs text-muted-foreground">Entra no total arrecadado. Pode ser preenchido/editado depois.</p>
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="receipt-file">Comprovante de Pagamento (opcional)</Label>
               <div className="flex items-center gap-2">
                 <Input
@@ -565,6 +625,50 @@ export default function DAMPage() {
                   Confirmar Pagamento
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Editar valor da DAM */}
+      <Dialog open={valueDialogOpen} onOpenChange={setValueDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Valor da DAM</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {valueService && (
+              <p className="text-sm text-muted-foreground">
+                Produtor:{' '}
+                <strong className="text-foreground">
+                  {producers.find(p => p.id === valueService.producer_id)?.name ||
+                   valueService.producers?.name || '—'}
+                </strong>
+              </p>
+            )}
+            <div className="space-y-1.5">
+              <Label htmlFor="dam-value">Valor pago (R$)</Label>
+              <Input
+                id="dam-value"
+                value={valueInput}
+                onChange={e => setValueInput(e.target.value)}
+                placeholder="0,00"
+                inputMode="decimal"
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">
+                Entra imediatamente no total arrecadado. Deixe vazio (ou 0) para remover o valor.
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setValueDialogOpen(false)}>Cancelar</Button>
+            <Button
+              className="bg-success hover:bg-success/90 text-white"
+              onClick={handleSaveValue}
+              disabled={updateService.isPending}
+            >
+              Salvar
             </Button>
           </DialogFooter>
         </DialogContent>
