@@ -87,16 +87,15 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
       };
       await gerarComunicadoDam(dados);
 
-      // Grava o valor no atendimento e marca a DAM como emitida (pendente).
-      // Só entra na soma de arrecadado quando for marcada como paga.
+      // Grava o valor no atendimento e sinaliza "Comunicado emitido" — estado
+      // distinto de DAM pendente e DAM paga. Reemitir sobrescreve o valor (o
+      // último comunicado prevalece). Só entra no arrecadado quando for paga.
       if (source.serviceId) {
-        const hoje = new Date().toISOString().slice(0, 10);
         const { error } = await supabase
           .from('services')
           .update({
             dam_value: total,
-            dam_issued: true,
-            dam_issued_at: source.damIssuedAt || hoje,
+            comunicado_emitido: true,
           })
           .eq('id', source.serviceId);
         if (error) throw error;
@@ -107,7 +106,7 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
       toast({
         title: `Comunicado Nº ${numero} gerado!`,
         description: source.serviceId
-          ? `DAM emitida (pendente) — valor de ${fmtBRL(total)} registrado.`
+          ? `Comunicado emitido — valor de ${fmtBRL(total)} registrado.`
           : undefined,
       });
       onOpenChange(false);

@@ -53,6 +53,8 @@ interface PatrimonyItem {
   image_url_3?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  chassis?: string | null;
+  notes?: string | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -197,6 +199,8 @@ export default function PatrimonyPage() {
         image_url_3: data.image_url_3,
         latitude: data.latitude,
         longitude: data.longitude,
+        chassis: data.chassis,
+        notes: data.notes,
       },
       {
         onSuccess: async (created: any) => {
@@ -242,6 +246,8 @@ export default function PatrimonyPage() {
       image_url_3: data.image_url_3,
       latitude: data.latitude,
       longitude: data.longitude,
+      chassis: data.chassis,
+      notes: data.notes,
     });
     // Sync detail sheet if open on the same item
     if (detailItem?.id === editingItem.id) {

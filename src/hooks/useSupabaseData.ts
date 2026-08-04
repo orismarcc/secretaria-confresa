@@ -1206,6 +1206,8 @@ export function useCreatePatrimony() {
       image_url_3?: string | null;
       latitude?: number | null;
       longitude?: number | null;
+      chassis?: string | null;
+      notes?: string | null;
     }) => {
       const { data, error } = await supabase.from('patrimony').insert(item).select().single();
       if (error) throw error;

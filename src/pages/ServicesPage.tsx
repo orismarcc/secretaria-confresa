@@ -127,6 +127,7 @@ interface DbService {
   dam_issued_at?: string | null;
   dam_paid_at?: string | null;
   dam_receipt_url?: string | null;
+  comunicado_emitido?: boolean | null;
   limestone_quantity?: number | null;
   input_quantity?: number | null;
   fuel_liters?: number | null;
@@ -582,21 +583,23 @@ export default function ServicesPage() {
         return (
           <div className="flex flex-col gap-0.5">
             <span className="font-medium">{producer?.name || s.producers?.name || 'N/A'}</span>
-            {overdue && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 rounded px-1.5 py-0.5 w-fit">
-                ⚠ DAM em atraso
-              </span>
-            )}
-            {s.dam_issued && !s.dam_paid && !overdue && (
-              <span className="inline-flex items-center gap-1 text-[10px] text-warning bg-warning/10 rounded px-1.5 py-0.5 w-fit">
-                DAM pendente
-              </span>
-            )}
-            {s.dam_issued && s.dam_paid && (
+            {s.dam_paid ? (
               <span className="inline-flex items-center gap-1 text-[10px] text-success bg-success/10 rounded px-1.5 py-0.5 w-fit">
                 DAM paga
               </span>
-            )}
+            ) : overdue ? (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 rounded px-1.5 py-0.5 w-fit">
+                ⚠ DAM em atraso
+              </span>
+            ) : s.dam_issued ? (
+              <span className="inline-flex items-center gap-1 text-[10px] text-warning bg-warning/10 rounded px-1.5 py-0.5 w-fit">
+                DAM pendente
+              </span>
+            ) : s.comunicado_emitido ? (
+              <span className="inline-flex items-center gap-1 text-[10px] text-blue-700 bg-blue-500/10 rounded px-1.5 py-0.5 w-fit">
+                Comunicado emitido
+              </span>
+            ) : null}
           </div>
         );
       },

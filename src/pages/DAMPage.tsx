@@ -23,6 +23,7 @@ import {
   CheckCircle2,
   Clock,
   DollarSign,
+  Megaphone,
   FileText,
   User,
   MapPin,
@@ -52,11 +53,13 @@ function parseDamDate(raw: string | null | undefined): Date | null {
   return new Date(raw + 'T12:00:00');
 }
 
-type DamStatus = 'overdue' | 'pending' | 'paid';
+type DamStatus = 'overdue' | 'pending' | 'comunicado' | 'paid';
 
 function getDamStatus(s: any): DamStatus {
   if (s.dam_paid) return 'paid';
   if (isDamOverdue(s.dam_issued_at, s.dam_paid)) return 'overdue';
+  if (s.dam_issued) return 'pending';
+  if (s.comunicado_emitido) return 'comunicado';
   return 'pending';
 }
 
@@ -68,13 +71,14 @@ function getDaysElapsed(s: any): number | null {
 
 // ─── component ───────────────────────────────────────────────────────────────
 
-type TabValue = 'all' | 'pending' | 'overdue' | 'paid';
+type TabValue = 'all' | 'pending' | 'overdue' | 'comunicado' | 'paid';
 
 const TAB_CONFIG: Record<TabValue, { label: string; icon: React.ElementType; className: string }> = {
-  all:     { label: 'Todas',    icon: FileText,      className: '' },
-  overdue: { label: 'Em Atraso', icon: AlertTriangle, className: 'text-destructive' },
-  pending: { label: 'Pendentes', icon: Clock,          className: 'text-warning' },
-  paid:    { label: 'Pagas',     icon: CheckCircle2,   className: 'text-success' },
+  all:        { label: 'Todas',      icon: FileText,      className: '' },
+  overdue:    { label: 'Em Atraso',  icon: AlertTriangle, className: 'text-destructive' },
+  pending:    { label: 'Pendentes',  icon: Clock,          className: 'text-warning' },
+  comunicado: { label: 'Comunicado', icon: Megaphone,      className: 'text-blue-600' },
+  paid:       { label: 'Pagas',      icon: CheckCircle2,   className: 'text-success' },
 };
 
 export default function DAMPage() {
@@ -102,7 +106,7 @@ export default function DAMPage() {
 
   // Filter only services with DAM issued (exclui cancelados — não se cobra DAM de atendimento cancelado)
   const damServices = useMemo(() =>
-    (services as any[]).filter(s => s.dam_issued && s.status !== 'cancelled'),
+    (services as any[]).filter(s => (s.dam_issued || s.comunicado_emitido || s.dam_paid) && s.status !== 'cancelled'),
     [services]
   );
 
@@ -110,11 +114,12 @@ export default function DAMPage() {
   const stats = useMemo(() => {
     const overdue = damServices.filter(s => getDamStatus(s) === 'overdue').length;
     const pending = damServices.filter(s => getDamStatus(s) === 'pending').length;
+    const comunicado = damServices.filter(s => getDamStatus(s) === 'comunicado').length;
     const paidList = damServices.filter(s => getDamStatus(s) === 'paid');
     // Arrecadado = soma do valor apenas das DAMs pagas
     const arrecadado = paidList.reduce((sum, s) => sum + (Number(s.dam_value) || 0), 0);
     const paidComValor = paidList.filter(s => Number(s.dam_value) > 0).length;
-    return { total: damServices.length, overdue, pending, paid: paidList.length, arrecadado, paidComValor };
+    return { total: damServices.length, overdue, pending, comunicado, paid: paidList.length, arrecadado, paidComValor };
   }, [damServices]);
 
   const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -132,7 +137,7 @@ export default function DAMPage() {
       })
       .sort((a: any, b: any) => {
         // Overdue first, then pending, then paid; within each group sort by issue date asc
-        const order: Record<DamStatus, number> = { overdue: 0, pending: 1, paid: 2 };
+        const order: Record<DamStatus, number> = { overdue: 0, pending: 1, comunicado: 2, paid: 3 };
         const sa = getDamStatus(a), sb = getDamStatus(b);
         if (order[sa] !== order[sb]) return order[sa] - order[sb];
         // Items without issue date sort to the end of their group (MAX_SAFE_INTEGER avoids NaN)
@@ -255,7 +260,7 @@ export default function DAMPage() {
       </Card>
 
       {/* ── Stats Cards ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 mb-6">
         <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setTab('all')}>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary/10">
@@ -288,6 +293,18 @@ export default function DAMPage() {
             <div>
               <p className="text-2xl font-bold leading-none text-warning">{stats.pending}</p>
               <p className="text-xs text-muted-foreground mt-0.5">Pendentes</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer hover:shadow-md transition-shadow border-blue-500/20" onClick={() => setTab('comunicado')}>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-500/10">
+              <Megaphone className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold leading-none text-blue-600">{stats.comunicado}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Comunicado emitido</p>
             </div>
           </CardContent>
         </Card>
@@ -344,6 +361,7 @@ export default function DAMPage() {
             const count = key === 'all' ? stats.total
               : key === 'overdue' ? stats.overdue
               : key === 'pending' ? stats.pending
+              : key === 'comunicado' ? stats.comunicado
               : stats.paid;
             return (
               <TabsTrigger key={key} value={key} className="gap-1.5">
@@ -352,6 +370,7 @@ export default function DAMPage() {
                 <span className={`px-1.5 py-0.5 rounded-full text-xs
                   ${key === 'overdue' ? 'bg-destructive/15 text-destructive' :
                     key === 'pending' ? 'bg-warning/15 text-warning' :
+                    key === 'comunicado' ? 'bg-blue-500/15 text-blue-600' :
                     key === 'paid'    ? 'bg-success/15 text-success' :
                     'bg-primary/15 text-primary'}`}>
                   {count}
@@ -379,6 +398,7 @@ export default function DAMPage() {
             {tab === 'all' ? 'Nenhuma DAM emitida' :
              tab === 'overdue' ? 'Nenhuma DAM em atraso' :
              tab === 'pending' ? 'Nenhuma DAM pendente' :
+             tab === 'comunicado' ? 'Nenhum comunicado emitido' :
              'Nenhuma DAM paga'}
           </p>
           {tab === 'all' && (
@@ -433,6 +453,12 @@ export default function DAMPage() {
                         Pendente
                       </span>
                     )}
+                    {status === 'comunicado' && (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-500/10 border border-blue-500/20 rounded-full px-2.5 py-1">
+                        <Megaphone className="h-3 w-3" />
+                        Comunicado emitido
+                      </span>
+                    )}
                     {status === 'paid' && (
                       <span className="inline-flex items-center gap-1 text-xs font-semibold text-success bg-success/10 border border-success/20 rounded-full px-2.5 py-1">
                         <CheckCircle2 className="h-3 w-3" />
@@ -474,9 +500,9 @@ export default function DAMPage() {
                     </div>
                   )}
 
-                  {status === 'paid' && (
+                  {(status === 'paid' || status === 'comunicado') && (
                     <div className="flex items-center gap-2 text-sm">
-                      <DollarSign className="h-3.5 w-3.5 shrink-0 text-success" />
+                      <DollarSign className={`h-3.5 w-3.5 shrink-0 ${status === 'paid' ? 'text-success' : 'text-blue-600'}`} />
                       {s.dam_value != null ? (
                         <span className="font-semibold text-success">{fmtBRL(Number(s.dam_value))}</span>
                       ) : (

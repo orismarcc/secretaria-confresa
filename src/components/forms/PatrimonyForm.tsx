@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
   Dialog,
@@ -33,6 +34,8 @@ export interface PatrimonyFormItem {
   image_url_3?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  chassis?: string | null;
+  notes?: string | null;
   // Operational (shown only on create)
   location?: string | null;
   responsible_name?: string | null;
@@ -54,6 +57,8 @@ export interface PatrimonyFormPayload {
   image_url_3: string | null;
   latitude: number | null;
   longitude: number | null;
+  chassis: string | null;
+  notes: string | null;
   // Only present for create
   location?: string | null;
   responsible_name?: string | null;
@@ -159,6 +164,8 @@ export function PatrimonyForm({ open, onOpenChange, item, onSubmit }: PatrimonyF
   const [acquisitionDate, setAcquisitionDate]     = useState('');
   const [writtenOff, setWrittenOff]               = useState(false);
   const [condition, setCondition]                 = useState<Condition | ''>('');
+  const [chassis, setChassis]                     = useState('');
+  const [notes, setNotes]                         = useState('');
 
   // GPS
   const [latitude, setLatitude]                   = useState('');
@@ -196,6 +203,8 @@ export function PatrimonyForm({ open, onOpenChange, item, onSubmit }: PatrimonyF
         setAcquisitionDate(item.acquisition_date ?? '');
         setWrittenOff(item.written_off ?? false);
         setCondition((item.condition ?? '') as Condition | '');
+        setChassis(item.chassis ?? '');
+        setNotes(item.notes ?? '');
         setImgSlots([
           { file: null, preview: null, existingUrl: item.image_url ?? null },
           { file: null, preview: null, existingUrl: item.image_url_2 ?? null },
@@ -211,6 +220,7 @@ export function PatrimonyForm({ open, onOpenChange, item, onSubmit }: PatrimonyF
         setName(''); setPatrimonyNumber(''); setPatrimonyNumberState('');
         setDescription(''); setValue(''); setCategory('');
         setAcquisitionDate(''); setWrittenOff(false); setCondition('');
+        setChassis(''); setNotes('');
         setLatitude(''); setLongitude('');
         setLocation(''); setResponsibleName(''); setResponsiblePhone('');
         setImgSlots([
@@ -278,6 +288,8 @@ export function PatrimonyForm({ open, onOpenChange, item, onSubmit }: PatrimonyF
         image_url_3: resolvedUrls[2],
         latitude: isNaN(parsedLat) ? null : parsedLat,
         longitude: isNaN(parsedLng) ? null : parsedLng,
+        chassis: category === 'Veículo' ? (chassis.trim() || null) : null,
+        notes: notes.trim() || null,
       };
 
       // CREATE-only: include initial operational state
@@ -402,6 +414,19 @@ export function PatrimonyForm({ open, onOpenChange, item, onSubmit }: PatrimonyF
             )}
           </div>
 
+          {/* ── Chassi (somente Veículo) ── */}
+          {category === 'Veículo' && (
+            <div className="space-y-2">
+              <Label htmlFor="pat-chassis">Chassi</Label>
+              <Input
+                id="pat-chassis"
+                value={chassis}
+                onChange={(e) => setChassis(e.target.value)}
+                placeholder="Opcional"
+              />
+            </div>
+          )}
+
           {/* ── Written-off (CREATE-only, pessimo condition) ── */}
           {!isEditing && condition === 'pessimo' && (
             <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2">
@@ -490,6 +515,19 @@ export function PatrimonyForm({ open, onOpenChange, item, onSubmit }: PatrimonyF
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Descrição do bem"
+            />
+          </div>
+
+          {/* ── Observações (todos os bens) ── */}
+          <div className="space-y-2">
+            <Label htmlFor="pat-notes">Observações</Label>
+            <Textarea
+              id="pat-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Observações gerais sobre o bem (opcional)"
+              rows={3}
+              className="resize-none"
             />
           </div>
 

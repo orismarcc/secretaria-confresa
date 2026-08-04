@@ -441,21 +441,23 @@ export function ProducerDetailSheet({
                             </p>
                           )}
                           {!isCancelled && <ServiceMeta s={s} />}
-                          {isDamOverdue(s) && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 rounded px-1.5 py-0.5 mt-1">
-                              ⚠ DAM em atraso
-                            </span>
-                          )}
-                          {s.dam_issued && !s.dam_paid && !isDamOverdue(s) && (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-warning bg-warning/10 rounded px-1.5 py-0.5 mt-1">
-                              DAM pendente
-                            </span>
-                          )}
-                          {s.dam_issued && s.dam_paid && (
+                          {s.dam_paid ? (
                             <span className="inline-flex items-center gap-1 text-[10px] text-success bg-success/10 rounded px-1.5 py-0.5 mt-1">
                               DAM paga
                             </span>
-                          )}
+                          ) : isDamOverdue(s) ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 rounded px-1.5 py-0.5 mt-1">
+                              ⚠ DAM em atraso
+                            </span>
+                          ) : s.dam_issued ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-warning bg-warning/10 rounded px-1.5 py-0.5 mt-1">
+                              DAM pendente
+                            </span>
+                          ) : s.comunicado_emitido ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-blue-700 bg-blue-500/10 rounded px-1.5 py-0.5 mt-1">
+                              Comunicado emitido
+                            </span>
+                          ) : null}
                         </div>
                         <div className="flex flex-col items-end gap-1.5 shrink-0">
                           <StatusBadge status={s.status as 'pending' | 'in_progress' | 'completed'} />
