@@ -6,6 +6,7 @@ import { SearchInput } from '@/components/SearchInput';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { DemandTypeForm, DEMAND_CATEGORIES } from '@/components/forms/DemandTypeForm';
+import { FuelControlCard } from '@/components/FuelControlCard';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Pencil, Trash2, Tractor, Package, Layers, Stethoscope, Truck } from 'lucide-react';
@@ -236,6 +237,9 @@ export default function DemandTypesPage() {
         {filtered.length === 0 && (
           <p className="text-center text-muted-foreground py-12">Nenhum tipo encontrado</p>
         )}
+
+        {/* ── Controle de combustível (à parte dos atendimentos) ── */}
+        <FuelControlCard />
       </div>
 
       <DemandTypeForm
