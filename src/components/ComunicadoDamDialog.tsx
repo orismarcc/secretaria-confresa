@@ -16,6 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   gerarComunicadoDam,
+  gerarComunicadoDamPdf,
   formatHoras,
   formatLitros,
   type ComunicadoData,
@@ -69,7 +70,7 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
   const combustivel = parseNum(valorLitro) * litros;
   const total = combustivel + upfmNum;
 
-  const handleGerar = async () => {
+  const handleGerar = async (formato: 'docx' | 'pdf') => {
     setGerando(true);
     try {
       // Consome o próximo número de forma atômica só ao gerar
@@ -85,7 +86,8 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
         valorCombustivel: combustivel,
         valorUpfm: upfmNum,
       };
-      await gerarComunicadoDam(dados);
+      if (formato === 'pdf') await gerarComunicadoDamPdf(dados);
+      else await gerarComunicadoDam(dados);
 
       // Grava o valor no atendimento e sinaliza "Comunicado emitido" — estado
       // distinto de DAM pendente e DAM paga. Reemitir sobrescreve o valor (o
@@ -197,12 +199,18 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
           </div>
         </div>
 
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleGerar} disabled={gerando || combustivel <= 0}>
-            <FileDown className="h-4 w-4 mr-2" />
-            {gerando ? 'Gerando...' : 'Gerar Comunicado'}
-          </Button>
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={gerando}>Cancelar</Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => handleGerar('docx')} disabled={gerando || combustivel <= 0}>
+              <FileText className="h-4 w-4 mr-2" />
+              {gerando ? 'Gerando...' : 'Gerar DOC'}
+            </Button>
+            <Button onClick={() => handleGerar('pdf')} disabled={gerando || combustivel <= 0}>
+              <FileDown className="h-4 w-4 mr-2" />
+              {gerando ? 'Gerando...' : 'Gerar PDF'}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
