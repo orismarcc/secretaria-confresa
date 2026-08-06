@@ -333,6 +333,7 @@ export default function AnalyticsPage() {
     const gradeIds = getOperationIds('grade', () => getDemandIdsByNameSubstring(demandTypes as any[], 'grade'));
     const pcIds = getOperationIds('pc', () => new Set((demandTypes as any[]).filter(d => d.name?.toLowerCase().includes(' pc') || d.name?.toLowerCase() === 'pc').map((d: any) => d.id)));
     const paCarregadeiraIds = getOperationIds('pa_carregadeira', () => getDemandIdsByNameSubstring(demandTypes as any[], 'carregadeira'));
+    const rocadeiraIds = getOperationIds('rocadeira', () => getDemandIdsByNameSubstring(demandTypes as any[], 'roçadeira'));
     const now = new Date();
 
     const countCompletedInMonth = (ids: Set<string>, monthKey: string) =>
@@ -351,6 +352,7 @@ export default function AnalyticsPage() {
         grade: countCompletedInMonth(gradeIds, monthKey),
         pc: countCompletedInMonth(pcIds, monthKey),
         paCarregadeira: countCompletedInMonth(paCarregadeiraIds, monthKey),
+        rocadeira: countCompletedInMonth(rocadeiraIds, monthKey),
       };
     });
   }, [services, demandTypes, monthsCount, getOperationIds]);
@@ -973,6 +975,10 @@ export default function AnalyticsPage() {
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
+                <p className="text-xs text-muted-foreground mt-2 px-1 leading-relaxed">
+                  Quantidade de atendimentos <strong>concluídos</strong> em cada mês (pela data de finalização).
+                  Mostra o volume de serviços efetivamente entregues ao produtor ao longo do período.
+                </p>
               </CardContent>
             </Card>
 
@@ -1040,7 +1046,7 @@ export default function AnalyticsPage() {
               <CardTitle className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-secondary/20"><Layers className="h-5 w-5 text-secondary" /></div>
                 <div>
-                  <span className="text-lg">Comparativo: Grade vs PC vs Pá Carregadeira</span>
+                  <span className="text-lg">Comparativo: Grade vs PC vs Pá Carregadeira vs Roçadeira</span>
                   <p className="text-sm font-normal text-muted-foreground">Atendimentos finalizados por tipo de operação — {periodLabel.toLowerCase()}</p>
                 </div>
               </CardTitle>
@@ -1057,6 +1063,7 @@ export default function AnalyticsPage() {
                     <Bar dataKey="grade" name="Grade" fill="hsl(113 38% 26%)" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="pc" name="PC" fill="hsl(280 70% 55%)" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="paCarregadeira" name="Pá Carregadeira" fill="hsl(32 95% 44%)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="rocadeira" name="Roçadeira" fill="hsl(175 70% 38%)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

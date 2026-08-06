@@ -174,6 +174,7 @@ export default function ServicesPage() {
   const [dateTo, setDateTo] = useState<string>('');
   // Ordenação: 'default' (preferência proximo/DAM) ou por data de cadastro
   const [sortBy, setSortBy] = useState<'default' | 'created_desc' | 'created_asc' | 'dam_paid_desc' | 'dam_paid_asc'>('default');
+  const [damFilter, setDamFilter] = useState<'all' | 'paid' | 'pending' | 'comunicado'>('all');
   const [currentPage, setCurrentPage] = useState(1);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -218,7 +219,7 @@ export default function ServicesPage() {
   // Reset to page 1 when any filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter, demandTypeFilter, categoryFilter, settlementFilter, dateFrom, dateTo, sortBy]);
+  }, [search, statusFilter, demandTypeFilter, categoryFilter, settlementFilter, dateFrom, dateTo, sortBy, damFilter]);
 
   // Realtime subscription
   useEffect(() => {
@@ -252,8 +253,13 @@ export default function ServicesPage() {
     const sDate = s.scheduled_date?.substring(0, 10) ?? '';
     const matchesDateFrom = !dateFrom || sDate >= dateFrom;
     const matchesDateTo   = !dateTo   || sDate <= dateTo;
-    return matchesSearch && matchesDemandType && matchesCategory && matchesStatus && matchesSettlement && matchesDateFrom && matchesDateTo;
-  }), [services, producers, demandTypes, search, demandTypeFilter, categoryFilter, statusFilter, settlementFilter, dateFrom, dateTo]);
+    const matchesDam =
+      damFilter === 'all' ? true
+      : damFilter === 'paid' ? !!s.dam_paid
+      : damFilter === 'pending' ? (!!s.dam_issued && !s.dam_paid)
+      : /* comunicado */ (!!s.comunicado_emitido && !s.dam_issued && !s.dam_paid);
+    return matchesSearch && matchesDemandType && matchesCategory && matchesStatus && matchesSettlement && matchesDateFrom && matchesDateTo && matchesDam;
+  }), [services, producers, demandTypes, search, demandTypeFilter, categoryFilter, statusFilter, settlementFilter, dateFrom, dateTo, damFilter]);
 
   const sortedServices = useMemo(() => [...filteredServices].sort((a: DbService, b: DbService) => {
     // Ordenação explícita por data de cadastro (sobrepõe a ordem padrão, mantendo os filtros)
@@ -846,6 +852,19 @@ export default function ServicesPage() {
             </SelectContent>
           </Select>
 
+          {/* Filtro por situação da DAM */}
+          <Select value={damFilter} onValueChange={(v) => { setDamFilter(v as typeof damFilter); setCurrentPage(1); }}>
+            <SelectTrigger className="w-[140px] sm:w-[160px]">
+              <SelectValue placeholder="DAM" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">DAM: todas</SelectItem>
+              <SelectItem value="paid">DAM paga</SelectItem>
+              <SelectItem value="pending">DAM pendente</SelectItem>
+              <SelectItem value="comunicado">Comunicado emitido</SelectItem>
+            </SelectContent>
+          </Select>
+
           {/* Date from */}
           <div className="flex items-center gap-1">
             <Label className="text-xs text-muted-foreground shrink-0">De</Label>
@@ -869,7 +888,7 @@ export default function ServicesPage() {
           </div>
 
           {/* Clear filters button — only when something is active */}
-          {(demandTypeFilter !== 'all' || categoryFilter !== 'all' || settlementFilter !== 'all' || dateFrom || dateTo) && (
+          {(demandTypeFilter !== 'all' || categoryFilter !== 'all' || settlementFilter !== 'all' || dateFrom || dateTo || damFilter !== 'all') && (
             <Button
               variant="ghost"
               size="sm"
@@ -879,6 +898,7 @@ export default function ServicesPage() {
                 setSettlementFilter('all');
                 setDateFrom('');
                 setDateTo('');
+                setDamFilter('all');
                 setCurrentPage(1);
               }}
               className="gap-1 text-muted-foreground"
