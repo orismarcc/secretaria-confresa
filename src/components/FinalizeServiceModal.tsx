@@ -42,6 +42,7 @@ export function FinalizeServiceModal({
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [capturedCoords, setCapturedCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [completionNotes, setCompletionNotes] = useState('');
+  const [odometerKm, setOdometerKm] = useState('');
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
@@ -80,6 +81,7 @@ export function FinalizeServiceModal({
       setPhotoPreview(null);
       setCapturedCoords(null);
       setCompletionNotes('');
+      setOdometerKm('');
       setUploadError(null);
       setShowCamera(false);
       
@@ -205,17 +207,24 @@ export function FinalizeServiceModal({
         });
       } else {
         photoStoragePath = filename;
-
-        // Record in DB — failure logged but doesn't block finalization
-        await supabase.from('service_photos').insert({
-          service_id: service.id,
-          storage_path: filename,
-          latitude: capturedCoords?.latitude,
-          longitude: capturedCoords?.longitude,
-          captured_at: new Date().toISOString(),
-          event_type: 'finish',
-        });
       }
+    }
+
+    // Registra o evento de finalização (foto opcional + km do odômetro).
+    const parsedKm = (() => {
+      const n = parseFloat(odometerKm.replace(/\./g, '').replace(',', '.'));
+      return isNaN(n) ? null : n;
+    })();
+    if (photoStoragePath || parsedKm != null) {
+      await supabase.from('service_photos').insert({
+        service_id: service.id,
+        storage_path: photoStoragePath ?? null,
+        odometer_km: parsedKm,
+        latitude: capturedCoords?.latitude,
+        longitude: capturedCoords?.longitude,
+        captured_at: new Date().toISOString(),
+        event_type: 'finish',
+      });
     }
 
     onFinalize({
@@ -485,6 +494,17 @@ export function FinalizeServiceModal({
                   </p>
                 )}
               </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="odometer_km">Km do odômetro (opcional)</Label>
+              <Input
+                id="odometer_km"
+                value={odometerKm}
+                onChange={(e) => setOdometerKm(e.target.value)}
+                placeholder="Ex.: 12360"
+                inputMode="decimal"
+              />
+            </div>
 
             <div className="space-y-1">
               <Label htmlFor="completion_notes">Notas de finalização (opcional)</Label>

@@ -167,16 +167,30 @@ function OperatorCardBody({
         </div>
       </div>
 
-      {/* Linha do tempo dos eventos (início / pausa / retomada) */}
+      {/* Linha do tempo dos eventos (início / pausa / retomada) com miniatura e km */}
       {inProgress && events.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 mb-3">
-          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           {events.map((e) => {
             const cfg = EVENT_TL[(e.event_type as string) || ''] ?? { label: e.event_type, cls: 'bg-muted' };
+            const km = e.odometer_km != null ? Number(e.odometer_km).toLocaleString('pt-BR') : null;
             return (
-              <span key={e.id} className={cn('inline-flex items-center gap-1 text-[11px] rounded-full px-2 py-0.5 font-medium', cfg.cls)}>
-                {cfg.label} {format(new Date(e.captured_at.replace(' ', 'T')), 'HH:mm')}
-              </span>
+              <div key={e.id} className="inline-flex items-center gap-1.5 rounded-lg border bg-card pr-2">
+                {e.signed_url ? (
+                  <a href={e.signed_url} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                    <img src={e.signed_url} alt="Odômetro" className="h-9 w-9 rounded-l-lg object-cover" />
+                  </a>
+                ) : (
+                  <span className={cn('h-9 w-1.5 rounded-l-lg', cfg.cls)} />
+                )}
+                <div className="leading-tight py-0.5">
+                  <span className={cn('text-[11px] font-semibold px-1.5 py-0.5 rounded-full', cfg.cls)}>{cfg.label}</span>
+                  <div className="text-[10px] text-muted-foreground mt-0.5 pl-0.5">
+                    {format(new Date(e.captured_at.replace(' ', 'T')), 'HH:mm')}
+                    {km != null && <span className="font-medium text-foreground"> · {km} km</span>}
+                  </div>
+                </div>
+              </div>
             );
           })}
         </div>
