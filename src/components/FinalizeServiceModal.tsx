@@ -213,6 +213,7 @@ export function FinalizeServiceModal({
           latitude: capturedCoords?.latitude,
           longitude: capturedCoords?.longitude,
           captured_at: new Date().toISOString(),
+          event_type: 'finish',
         });
       }
     }

@@ -9,6 +9,9 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { OnlineIndicator } from '@/components/ConnectionStatus';
 import { FinalizeServiceModal } from '@/components/FinalizeServiceModal';
+import { EventPhotoModal } from '@/components/EventPhotoModal';
+import { useServiceEvents, isPaused as computeIsPaused, type ServiceEvent } from '@/hooks/useServiceEvents';
+import { Pause, Play, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -16,7 +19,8 @@ import {
   useSettlements,
   useLocations,
   useUpdateService,
-  useUpdateServicePositions
+  useUpdateServicePositions,
+  useOperatorDemandTypes,
 } from '@/hooks/useSupabaseData';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -71,10 +75,21 @@ interface OperatorCardBodyProps {
   service: DbService;
   settlementName: string;
   locationName: string;
-  onStart: (id: string) => void;
+  onStart: (service: DbService) => void;
   onFinalize: (service: DbService) => void;
+  onPause: (service: DbService) => void;
+  onResume: (service: DbService) => void;
+  paused: boolean;
+  events: ServiceEvent[];
   isPending: boolean;
 }
+
+const EVENT_TL: Record<string, { label: string; cls: string }> = {
+  start:  { label: 'Início',   cls: 'text-emerald-700 bg-emerald-500/10' },
+  pause:  { label: 'Pausa',    cls: 'text-amber-700 bg-amber-500/10' },
+  resume: { label: 'Retomada', cls: 'text-blue-700 bg-blue-500/10' },
+  finish: { label: 'Fim',      cls: 'text-primary bg-primary/10' },
+};
 
 function OperatorCardBody({
   service,
@@ -82,10 +97,15 @@ function OperatorCardBody({
   locationName,
   onStart,
   onFinalize,
+  onPause,
+  onResume,
+  paused,
+  events,
   isPending,
 }: OperatorCardBodyProps) {
   const canStart = service.status === 'pending' || service.status === 'proximo';
   const canFinalize = service.status === 'in_progress' || service.status === 'proximo';
+  const inProgress = service.status === 'in_progress';
 
   return (
     <div className="flex-1">
@@ -96,6 +116,11 @@ function OperatorCardBody({
         </div>
         <div className="flex flex-col items-end gap-1">
           <StatusBadge status={service.status as 'pending' | 'in_progress' | 'completed'} />
+          {paused && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-500/15 border border-amber-300 rounded-full px-2 py-0.5">
+              <Pause className="h-3 w-3" /> Pausado
+            </span>
+          )}
           {service.status === 'in_progress' && service.profiles?.name && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <User className="h-3 w-3" />
@@ -142,6 +167,21 @@ function OperatorCardBody({
         </div>
       </div>
 
+      {/* Linha do tempo dos eventos (início / pausa / retomada) */}
+      {inProgress && events.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 mb-3">
+          <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+          {events.map((e) => {
+            const cfg = EVENT_TL[(e.event_type as string) || ''] ?? { label: e.event_type, cls: 'bg-muted' };
+            return (
+              <span key={e.id} className={cn('inline-flex items-center gap-1 text-[11px] rounded-full px-2 py-0.5 font-medium', cfg.cls)}>
+                {cfg.label} {format(new Date(e.captured_at.replace(' ', 'T')), 'HH:mm')}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
       <div className="flex gap-2">
         {service.producers?.latitude && service.producers?.longitude && (
           <Button variant="outline" size="sm" className="gap-1.5" asChild>
@@ -160,13 +200,20 @@ function OperatorCardBody({
           </Button>
         )}
         {canStart && (
-          <Button
-            className="flex-1"
-            onClick={() => onStart(service.id)}
-            disabled={isPending}
-          >
+          <Button className="flex-1" onClick={() => onStart(service)} disabled={isPending}>
             Iniciar
           </Button>
+        )}
+        {inProgress && (
+          paused ? (
+            <Button className="flex-1" onClick={() => onResume(service)} disabled={isPending}>
+              <Play className="h-4 w-4 mr-1.5" /> Retomar
+            </Button>
+          ) : (
+            <Button variant="outline" className="flex-1 border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => onPause(service)} disabled={isPending}>
+              <Pause className="h-4 w-4 mr-1.5" /> Pausar
+            </Button>
+          )
         )}
         {canFinalize && (
           <Button
@@ -248,9 +295,20 @@ export default function OperatorPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   
-  const { data: pendingServicesRaw = [], isLoading } = usePendingServices();
+  const { data: pendingServicesRaw = [], isLoading: servicesLoading } = usePendingServices();
+  const { data: allowedDemandTypeIds = [], isLoading: dtLoading } = useOperatorDemandTypes(user?.id);
   const { data: settlements = [] } = useSettlements();
   const { data: locations = [] } = useLocations();
+
+  const isLoading = servicesLoading || dtLoading;
+
+  // Restringe aos tipos de serviço permitidos ao operador.
+  // Lista vazia = acesso a todos os tipos (retrocompatível).
+  const visibleServices = useMemo(() => {
+    if (allowedDemandTypeIds.length === 0) return pendingServicesRaw;
+    const allowed = new Set(allowedDemandTypeIds);
+    return (pendingServicesRaw as DbService[]).filter((s) => allowed.has(s.demand_type_id));
+  }, [pendingServicesRaw, allowedDemandTypeIds]);
   const updateService = useUpdateService();
   const updatePositions = useUpdateServicePositions();
   const syncPendingPhotos = useSyncPendingPhotos();
@@ -258,6 +316,9 @@ export default function OperatorPage() {
 
   const [selectedService, setSelectedService] = useState<DbService | null>(null);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
+  const [eventModal, setEventModal] = useState<{ open: boolean; service: DbService | null; type: 'start' | 'pause' | 'resume' }>({
+    open: false, service: null, type: 'start',
+  });
 
   // Auto-sync pending offline photos when reconnected
   useEffect(() => {
@@ -287,19 +348,23 @@ export default function OperatorPage() {
 
   // Sort all non-completed services by position
   const sortedServices = useMemo(() => {
-    return [...pendingServicesRaw].sort((a, b) => {
+    return [...visibleServices].sort((a, b) => {
       const posA = (a as DbService).position ?? 999999;
       const posB = (b as DbService).position ?? 999999;
       if (posA !== posB) return posA - posB;
       return new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime();
     });
-  }, [pendingServicesRaw]);
+  }, [visibleServices]);
 
   // Split into sections
   const inProgressServices = useMemo(
     () => sortedServices.filter((s) => s.status === 'in_progress'),
     [sortedServices],
   );
+
+  // Eventos (fotos início/pausa/retomada) dos atendimentos em execução.
+  const inProgressIds = useMemo(() => inProgressServices.map((s) => s.id), [inProgressServices]);
+  const { data: eventsMap = {} } = useServiceEvents(inProgressIds);
   const nextServices = useMemo(
     () =>
       sortedServices
@@ -330,12 +395,20 @@ export default function OperatorPage() {
     };
   }, [queryClient]);
 
-  const handleStartService = (id: string) => {
-    updateService.mutate({
-      id,
-      status: 'in_progress',
-      operator_id: user?.id,
-    });
+  const openEvent = (service: DbService, type: 'start' | 'pause' | 'resume') =>
+    setEventModal({ open: true, service, type });
+
+  const handleStartService = (service: DbService) => openEvent(service, 'start');
+  const handlePause = (service: DbService) => openEvent(service, 'pause');
+  const handleResume = (service: DbService) => openEvent(service, 'resume');
+
+  // Após registrar a foto do evento: no "início" também move para "em execução".
+  const handleEventSuccess = () => {
+    const { service, type } = eventModal;
+    if (type === 'start' && service) {
+      updateService.mutate({ id: service.id, status: 'in_progress', operator_id: user?.id });
+    }
+    queryClient.invalidateQueries({ queryKey: ['services', 'pending'] });
   };
 
   const handleOpenFinalize = (service: DbService) => {
@@ -480,6 +553,10 @@ export default function OperatorPage() {
                       locationName={service.producers?.location_name || location?.name || service.locations?.name || 'N/A'}
                       onStart={handleStartService}
                       onFinalize={handleOpenFinalize}
+                      onPause={handlePause}
+                      onResume={handleResume}
+                      paused={computeIsPaused(eventsMap[service.id])}
+                      events={eventsMap[service.id] ?? []}
                       isPending={updateService.isPending}
                     />
                   );
@@ -522,6 +599,10 @@ export default function OperatorPage() {
                           locationName={service.producers?.location_name || location?.name || service.locations?.name || 'N/A'}
                           onStart={handleStartService}
                           onFinalize={handleOpenFinalize}
+                          onPause={handlePause}
+                          onResume={handleResume}
+                          paused={false}
+                          events={[]}
                           isPending={updateService.isPending}
                         />
                       );
@@ -539,6 +620,16 @@ export default function OperatorPage() {
         onOpenChange={setShowFinalizeModal}
         service={mapServiceForModal(selectedService)}
         onFinalize={handleFinalize}
+      />
+
+      <EventPhotoModal
+        open={eventModal.open}
+        onOpenChange={(o) => setEventModal((m) => ({ ...m, open: o }))}
+        eventType={eventModal.type}
+        serviceId={eventModal.service?.id ?? null}
+        producerName={eventModal.service?.producers?.name}
+        demandName={eventModal.service?.demand_types?.name}
+        onSuccess={handleEventSuccess}
       />
     </AppLayout>
   );
