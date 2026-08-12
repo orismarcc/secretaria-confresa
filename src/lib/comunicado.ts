@@ -257,7 +257,7 @@ export async function gerarComunicadoDamPdf(dados: ComunicadoData): Promise<void
   labeled('Quantidade estimada de combustível:', formatLitros(dados.litros));
   y += 4;
   para(
-    'Informamos que o produtor rural deverá recolher a taxa correspondente a 1 (uma) Unidade Padrão Fiscal Municipal (UPFM), conforme cotação vigente na data, sem acréscimo dos valores referentes ao combustível necessário, pois o produtor detém na propriedade a quantidade necessária para o serviço, considerando o limite de até 6 (seis) horas para a execução dos serviços, conforme disposto abaixo:',
+    'Informamos que o produtor rural deverá recolher a taxa correspondente a 1 (uma) Unidade Padrão Fiscal Municipal (UPFM), conforme cotação vigente na data, acrescida dos valores referentes ao combustível necessário, considerando o limite de até 6 (seis) horas para a execução dos serviços, conforme disposto abaixo:',
     { justify: true, gap: 8 },
   );
   para(`Combustível: R$ ${formatBRLNumber(dados.valorCombustivel)} (${valorPorExtenso(dados.valorCombustivel)});`, { gap: 4 });
