@@ -30,7 +30,7 @@ import {
   FileDown, Truck, Stethoscope, Fuel, Clock, Timer, CalendarRange, Wrench, DollarSign,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getPatrulhaIds, getDemandIdsByCategory, getDemandIdsByNameSubstring } from '@/lib/analyticsUtils';
+import { getPatrulhaIds, getDemandIdsByCategory, getDemandIdsByNameSubstring, serviceExerciseYear, deliveryExerciseYear, dateYear } from '@/lib/analyticsUtils';
 import { ReportsCenter } from '@/components/ReportsCenter';
 import { useMaintenances, maintenanceMinutes, formatDuration } from '@/hooks/useMaintenanceData';
 import jsPDF from 'jspdf';
@@ -137,12 +137,45 @@ export default function AnalyticsPage() {
   const { data: producers = [] } = useProducers();
   const { data: maintenances = [] } = useMaintenances();
 
+  // ── Exercício (ano) — indicadores/rankings mostram o ano vigente por padrão ───
+  const CURRENT_YEAR = new Date().getFullYear();
+  const [exercicio, setExercicio] = useState<string>(String(CURRENT_YEAR)); // 'all' ou ano
+
+  /** Anos presentes nos dados (desc), sempre incluindo o exercício atual. */
+  const availableYears = useMemo(() => {
+    const set = new Set<number>();
+    (services as any[]).forEach((s) => { const y = serviceExerciseYear(s); if (y) set.add(y); });
+    set.add(CURRENT_YEAR);
+    return Array.from(set).sort((a, b) => b - a);
+  }, [services, CURRENT_YEAR]);
+
+  /** Atendimentos do exercício selecionado (base dos indicadores e rankings). */
+  const scopedServices = useMemo(
+    () => (exercicio === 'all'
+      ? (services as any[])
+      : (services as any[]).filter((s) => serviceExerciseYear(s) === Number(exercicio))),
+    [services, exercicio],
+  );
+  const scopedDeliveries = useMemo(
+    () => (exercicio === 'all'
+      ? (deliveries as any[])
+      : (deliveries as any[]).filter((d) => deliveryExerciseYear(d) === Number(exercicio))),
+    [deliveries, exercicio],
+  );
+  const scopedMaintenances = useMemo(
+    () => (exercicio === 'all'
+      ? (maintenances as any[])
+      : (maintenances as any[]).filter((m) => dateYear(m.started_at) === Number(exercicio))),
+    [maintenances, exercicio],
+  );
+  const exercicioLabel = exercicio === 'all' ? 'Todos os exercícios' : `Exercício ${exercicio}`;
+
   // ── Manutenções de maquinários (tempo e ocorrências por maquinário) ──────────
   const maintenanceStats = useMemo(() => {
     const byMachine: Record<string, { name: string; count: number; minutes: number }> = {};
     let totalMinutes = 0;
     let totalCount = 0;
-    (maintenances as any[]).forEach((m) => {
+    scopedMaintenances.forEach((m) => {
       const key = m.machinery_id;
       if (!byMachine[key]) byMachine[key] = { name: m.machinery?.name || 'Maquinário', count: 0, minutes: 0 };
       byMachine[key].count++;
@@ -153,15 +186,15 @@ export default function AnalyticsPage() {
     });
     const list = Object.values(byMachine).sort((a, b) => b.minutes - a.minutes || b.count - a.count);
     return { list, totalMinutes, totalCount };
-  }, [maintenances]);
+  }, [scopedMaintenances]);
 
   // ── Arrecadação de DAMs (soma apenas das pagas com valor) ────────────────────
   const damArrecadado = useMemo(() => {
-    const paid = (services as any[]).filter((s) => s.dam_paid && s.status !== 'cancelled');
+    const paid = scopedServices.filter((s) => s.dam_paid && s.status !== 'cancelled');
     const total = paid.reduce((sum, s) => sum + (Number(s.dam_value) || 0), 0);
     const comValor = paid.filter((s) => Number(s.dam_value) > 0).length;
     return { total, count: paid.length, comValor };
-  }, [services]);
+  }, [scopedServices]);
 
   const isLoading = servicesLoading || settlementsLoading || demandTypesLoading;
 
@@ -215,12 +248,12 @@ export default function AnalyticsPage() {
   // M-03: use shared helper
   const patrulhaCount = useMemo(() => {
     const ids = getPatrulhaIds(demandTypes as any[]);
-    return (services as any[]).filter(s => s.status === 'completed' && ids.has(s.demand_type_id)).length;
-  }, [services, demandTypes]);
+    return scopedServices.filter(s => s.status === 'completed' && ids.has(s.demand_type_id)).length;
+  }, [scopedServices, demandTypes]);
 
   const entregasCount = useMemo(() =>
-    (deliveries as any[]).filter((d: any) => d.status === 'completed').length,
-    [deliveries]
+    scopedDeliveries.filter((d: any) => d.status === 'completed').length,
+    [scopedDeliveries]
   );
 
   /**
@@ -229,7 +262,7 @@ export default function AnalyticsPage() {
    * somamos os itens quando existem, senão o campo direto — sem dupla contagem.
    */
   const entregasTotalQty = useMemo(() =>
-    (deliveries as any[])
+    scopedDeliveries
       .filter((d: any) => d.status === 'completed')
       .reduce((sum: number, d: any) => {
         const items = (d.delivery_items ?? []) as any[];
@@ -238,41 +271,41 @@ export default function AnalyticsPage() {
         }
         return sum + (Number(d.quantity) || 0);
       }, 0),
-    [deliveries]
+    [scopedDeliveries]
   );
 
   const calcarioIds = useMemo(() => getDemandIdsByCategory(demandTypes as any[], ['calcario']), [demandTypes]);
 
   const calcarioCount = useMemo(() =>
-    (services as any[]).filter(s => s.status === 'completed' && calcarioIds.has(s.demand_type_id)).length,
-    [services, calcarioIds]
+    scopedServices.filter(s => s.status === 'completed' && calcarioIds.has(s.demand_type_id)).length,
+    [scopedServices, calcarioIds]
   );
 
   const calcarioTotalTons = useMemo(() =>
-    (services as any[])
+    scopedServices
       .filter(s => s.status === 'completed' && calcarioIds.has(s.demand_type_id))
       .reduce((sum: number, s: any) => sum + (Number(s.limestone_quantity) || 0), 0),
-    [services, calcarioIds]
+    [scopedServices, calcarioIds]
   );
 
   const insumosIds = useMemo(() => getDemandIdsByCategory(demandTypes as any[], ['logistica_insumos']), [demandTypes]);
 
   const insumosCount = useMemo(() =>
-    (services as any[]).filter(s => s.status === 'completed' && insumosIds.has(s.demand_type_id)).length,
-    [services, insumosIds]
+    scopedServices.filter(s => s.status === 'completed' && insumosIds.has(s.demand_type_id)).length,
+    [scopedServices, insumosIds]
   );
 
   const insumosTotalTons = useMemo(() =>
-    (services as any[])
+    scopedServices
       .filter(s => s.status === 'completed' && insumosIds.has(s.demand_type_id))
       .reduce((sum: number, s: any) => sum + (Number(s.input_quantity) || 0), 0),
-    [services, insumosIds]
+    [scopedServices, insumosIds]
   );
 
   const assistenciaTecnicaCount = useMemo(() => {
     const ids = getDemandIdsByCategory(demandTypes as any[], ['assistencia_tecnica']);
-    return (services as any[]).filter(s => s.status === 'completed' && ids.has(s.demand_type_id)).length;
-  }, [services, demandTypes]);
+    return scopedServices.filter(s => s.status === 'completed' && ids.has(s.demand_type_id)).length;
+  }, [scopedServices, demandTypes]);
 
   // ── Operation-type ids (estável; fallback por nome p/ tipos antigos sem o campo) ──
   const getOperationIds = useMemo(() => {
@@ -287,23 +320,26 @@ export default function AnalyticsPage() {
   // ── Monthly charts ──────────────────────────────────────────────────────────
   const monthlyData = useMemo(() => {
     const now = new Date();
+    const registeredIn = (monthKey: string) => (services as any[]).filter(s => {
+      const d = parseISO((s.created_at || s.scheduled_date).replace(' ', 'T'));
+      return format(startOfMonth(d), 'yyyy-MM') === monthKey;
+    }).length;
+    const completedIn = (monthKey: string) => (services as any[]).filter(s => {
+      if (s.status !== 'completed' || !s.completed_at) return false;
+      const d = parseISO(s.completed_at.replace(' ', 'T'));
+      return format(startOfMonth(d), 'yyyy-MM') === monthKey;
+    }).length;
     return Array.from({ length: monthsCount }, (_, i) => {
       const monthDate = subMonths(now, monthsCount - 1 - i);
       const monthKey = format(startOfMonth(monthDate), 'yyyy-MM');
+      const prevKey = format(startOfMonth(subMonths(monthDate, 12)), 'yyyy-MM'); // exercício anterior
       const monthLabel = format(monthDate, 'MMM/yy', { locale: ptBR });
-      const registered = (services as any[]).filter(s => {
-        const d = parseISO((s.created_at || s.scheduled_date).replace(' ', 'T'));
-        return format(startOfMonth(d), 'yyyy-MM') === monthKey;
-      }).length;
-      const completed = (services as any[]).filter(s => {
-        if (s.status !== 'completed' || !s.completed_at) return false;
-        const d = parseISO(s.completed_at.replace(' ', 'T'));
-        return format(startOfMonth(d), 'yyyy-MM') === monthKey;
-      }).length;
       return {
         month: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
-        cadastrados: registered,
-        finalizados: completed,
+        cadastrados: registeredIn(monthKey),
+        finalizados: completedIn(monthKey),
+        cadastradosAnterior: registeredIn(prevKey),
+        finalizadosAnterior: completedIn(prevKey),
       };
     });
   }, [services, monthsCount]);
@@ -311,20 +347,22 @@ export default function AnalyticsPage() {
   // ── Hectares trabalhados por mês (todos os atendimentos finalizados c/ área) ──
   const monthlyAreaData = useMemo(() => {
     const now = new Date();
+    const hectaresIn = (monthKey: string) => (services as any[])
+      .filter(s => {
+        if (s.status !== 'completed' || !s.completed_at || !s.worked_area) return false;
+        const d = parseISO(s.completed_at.replace(' ', 'T'));
+        return format(startOfMonth(d), 'yyyy-MM') === monthKey;
+      })
+      .reduce((acc, s) => acc + (Number(s.worked_area) || 0), 0);
     return Array.from({ length: monthsCount }, (_, i) => {
       const monthDate = subMonths(now, monthsCount - 1 - i);
       const monthKey = format(startOfMonth(monthDate), 'yyyy-MM');
+      const prevKey = format(startOfMonth(subMonths(monthDate, 12)), 'yyyy-MM'); // exercício anterior
       const monthLabel = format(monthDate, 'MMM/yy', { locale: ptBR });
-      const hectares = (services as any[])
-        .filter(s => {
-          if (s.status !== 'completed' || !s.completed_at || !s.worked_area) return false;
-          const d = parseISO(s.completed_at.replace(' ', 'T'));
-          return format(startOfMonth(d), 'yyyy-MM') === monthKey;
-        })
-        .reduce((acc, s) => acc + (Number(s.worked_area) || 0), 0);
       return {
         month: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
-        hectares: Math.round(hectares * 100) / 100,
+        hectares: Math.round(hectaresIn(monthKey) * 100) / 100,
+        hectaresAnterior: Math.round(hectaresIn(prevKey) * 100) / 100,
       };
     });
   }, [services, monthsCount]);
@@ -424,7 +462,7 @@ export default function AnalyticsPage() {
   const rankedSettlements = useMemo(() => {
     const patrulhaIds = getPatrulhaIds(demandTypes as any[]);
     // Only completed services count toward the ranking
-    const completedServices = (services as any[]).filter(s => s.status === 'completed');
+    const completedServices = scopedServices.filter(s => s.status === 'completed');
     const stats: Record<string, { name: string; count: number; patrulha: number }> = {};
 
     completedServices.forEach(s => {
@@ -445,7 +483,7 @@ export default function AnalyticsPage() {
         producersCount: (producers as any[]).filter((p: any) => p.settlement_id === id).length,
       }))
       .sort((a, b) => b.count - a.count);
-  }, [services, settlements, demandTypes, producers]);
+  }, [scopedServices, settlements, demandTypes, producers]);
 
   const topSettlements = useMemo(() => rankedSettlements.slice(0, 5), [rankedSettlements]);
   const [allSettlementsOpen, setAllSettlementsOpen] = useState(false);
@@ -453,7 +491,7 @@ export default function AnalyticsPage() {
   const topDemandTypes = useMemo(() => {
     const counts: Record<string, { name: string; count: number }> = {};
     // Only completed services
-    (services as any[]).filter(s => s.status === 'completed').forEach(s => {
+    scopedServices.filter(s => s.status === 'completed').forEach(s => {
       if (!s.demand_type_id) return;
       const name =
         (demandTypes as any[]).find(d => d.id === s.demand_type_id)?.name ||
@@ -463,13 +501,13 @@ export default function AnalyticsPage() {
       counts[s.demand_type_id].count++;
     });
     return Object.values(counts).sort((a, b) => b.count - a.count).slice(0, 3);
-  }, [services, demandTypes]);
+  }, [scopedServices, demandTypes]);
 
   // ── Operator productivity ───────────────────────────────────────────────────
   const operatorStats = useMemo(() => {
     const stats: Record<string, { name: string; completed: number; totalArea: number; totalFuel: number; totalHours: number }> = {};
     (operators as any[]).forEach(op => { stats[op.id] = { name: op.name, completed: 0, totalArea: 0, totalFuel: 0, totalHours: 0 }; });
-    (services as any[]).forEach(s => {
+    scopedServices.forEach(s => {
       if (s.status === 'completed' && s.operator_id && stats[s.operator_id]) {
         stats[s.operator_id].completed++;
         stats[s.operator_id].totalArea  += Number(s.worked_area  || 0);
@@ -478,16 +516,16 @@ export default function AnalyticsPage() {
       }
     });
     return Object.values(stats).filter(op => op.completed > 0).sort((a, b) => b.completed - a.completed).slice(0, 5);
-  }, [services, operators]);
+  }, [scopedServices, operators]);
 
   // M-11+M-03: operation_type estável com fallback por nome
   const totalWorkedArea = useMemo(() => {
     const gradeIds = getOperationIds('grade', () => getDemandIdsByNameSubstring(demandTypes as any[], 'grade'));
     if (gradeIds.size === 0) return 0;
-    return (services as any[])
+    return scopedServices
       .filter(s => s.status === 'completed' && gradeIds.has(s.demand_type_id) && s.worked_area)
       .reduce((acc, s) => acc + (Number(s.worked_area) || 0), 0);
-  }, [services, demandTypes, getOperationIds]);
+  }, [scopedServices, demandTypes, getOperationIds]);
 
   const patrulhaInsumosIds = useMemo(
     () => getDemandIdsByCategory(demandTypes as any[], ['patrulha_mecanizada', 'logistica_insumos']),
@@ -496,18 +534,18 @@ export default function AnalyticsPage() {
 
   /** Total fuel consumed (L) — all completed patrulha_mecanizada + logistica_insumos */
   const totalFuelLiters = useMemo(() =>
-    (services as any[])
+    scopedServices
       .filter(s => s.status === 'completed' && patrulhaInsumosIds.has(s.demand_type_id) && s.fuel_liters)
       .reduce((acc, s) => acc + (Number(s.fuel_liters) || 0), 0),
-    [services, patrulhaInsumosIds],
+    [scopedServices, patrulhaInsumosIds],
   );
 
   /** Total worked hours (h) — all completed patrulha_mecanizada + logistica_insumos */
   const totalWorkedHours = useMemo(() =>
-    (services as any[])
+    scopedServices
       .filter(s => s.status === 'completed' && patrulhaInsumosIds.has(s.demand_type_id) && s.worked_hours)
       .reduce((acc, s) => acc + (Number(s.worked_hours) || 0), 0),
-    [services, patrulhaInsumosIds],
+    [scopedServices, patrulhaInsumosIds],
   );
 
   // ── PDF export grouped by assentamento ─────────────────────────────────────
@@ -537,8 +575,8 @@ export default function AnalyticsPage() {
       doc.line(14, headerH, pageWidth - 14, headerH);
       doc.setTextColor(0);
 
-      // Group ONLY completed services by settlement
-      const completedOnly = (services as any[]).filter(s => s.status === 'completed');
+      // Group ONLY completed services by settlement (respeita o exercício selecionado)
+      const completedOnly = scopedServices.filter(s => s.status === 'completed');
       const grouped: Record<string, { settlementId: string; settlementName: string; rows: any[] }> = {};
       completedOnly.forEach(s => {
         const key = s.settlement_id || '__none__';
@@ -621,6 +659,28 @@ export default function AnalyticsPage() {
   return (
     <AppLayout>
       <PageHeader title="Análise Gráfica" description="Estatísticas e métricas do sistema" />
+
+      {/* ── Seletor de Exercício (ano) — governa indicadores e rankings ───────── */}
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <CalendarRange className="h-4 w-4" />
+          <span>
+            Indicadores e rankings do <strong className="text-foreground">{exercicioLabel}</strong>
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground shrink-0">Exercício</Label>
+          <Select value={exercicio} onValueChange={setExercicio}>
+            <SelectTrigger className="h-9 w-[150px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {availableYears.map((y) => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+              <SelectItem value="all">Todos os anos</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
       {/* Category quick-access cards */}
       <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 mb-6">
@@ -966,12 +1026,18 @@ export default function AnalyticsPage() {
                           <stop offset="5%" stopColor="hsl(142 71% 45%)" stopOpacity={0.4} />
                           <stop offset="95%" stopColor="hsl(142 71% 45%)" stopOpacity={0} />
                         </linearGradient>
+                        <linearGradient id="gradientAnterior" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0.18} />
+                          <stop offset="95%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0} />
+                        </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                       <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} axisLine={{ stroke: 'hsl(var(--border))' }} />
                       <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} axisLine={{ stroke: 'hsl(var(--border))' }} allowDecimals={false} />
                       <Tooltip content={<CustomTooltip />} />
-                      <Area type="monotone" dataKey="finalizados" name="Finalizados" stroke="hsl(142 71% 45%)" strokeWidth={3} fill="url(#gradientFinalizados)" />
+                      <Legend wrapperStyle={{ paddingTop: '8px' }} formatter={(v) => <span className="text-foreground text-xs">{v}</span>} />
+                      <Area type="monotone" dataKey="finalizadosAnterior" name="Exercício anterior" stroke="hsl(var(--muted-foreground))" strokeWidth={2} strokeDasharray="5 4" fill="url(#gradientAnterior)" />
+                      <Area type="monotone" dataKey="finalizados" name="Exercício atual" stroke="hsl(142 71% 45%)" strokeWidth={3} fill="url(#gradientFinalizados)" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -995,12 +1061,14 @@ export default function AnalyticsPage() {
               <CardContent className="pt-4 sm:pt-6 px-2 sm:px-6">
                 <div className="h-[220px] sm:h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={monthlyData}>
+                    <BarChart data={monthlyData} barCategoryGap="20%">
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                       <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} axisLine={{ stroke: 'hsl(var(--border))' }} />
                       <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} axisLine={{ stroke: 'hsl(var(--border))' }} allowDecimals={false} />
                       <Tooltip content={<CustomTooltip />} />
-                      <Bar dataKey="cadastrados" name="Cadastrados" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+                      <Legend wrapperStyle={{ paddingTop: '8px' }} formatter={(v) => <span className="text-foreground text-xs">{v}</span>} />
+                      <Bar dataKey="cadastradosAnterior" name="Exercício anterior" fill="hsl(var(--muted-foreground))" fillOpacity={0.35} radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="cadastrados" name="Exercício atual" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -1028,12 +1096,18 @@ export default function AnalyticsPage() {
                         <stop offset="5%" stopColor="hsl(32 95% 44%)" stopOpacity={0.4} />
                         <stop offset="95%" stopColor="hsl(32 95% 44%)" stopOpacity={0} />
                       </linearGradient>
+                      <linearGradient id="gradientHectaresAnterior" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0.18} />
+                        <stop offset="95%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0} />
+                      </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="month" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} axisLine={{ stroke: 'hsl(var(--border))' }} />
                     <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} axisLine={{ stroke: 'hsl(var(--border))' }} width={42} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Area type="monotone" dataKey="hectares" name="Hectares" stroke="hsl(32 95% 44%)" strokeWidth={3} fill="url(#gradientHectares)" />
+                    <Legend wrapperStyle={{ paddingTop: '8px' }} formatter={(v) => <span className="text-foreground text-xs">{v}</span>} />
+                    <Area type="monotone" dataKey="hectaresAnterior" name="Exercício anterior" stroke="hsl(var(--muted-foreground))" strokeWidth={2} strokeDasharray="5 4" fill="url(#gradientHectaresAnterior)" />
+                    <Area type="monotone" dataKey="hectares" name="Exercício atual" stroke="hsl(32 95% 44%)" strokeWidth={3} fill="url(#gradientHectares)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>

@@ -12,6 +12,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { serviceExerciseYear } from '@/lib/analyticsUtils';
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -73,15 +77,35 @@ export default function DashboardPage() {
     [maintenances],
   );
 
-  // Estatísticas de atendimentos derivadas do cache de useServices (sem refetch)
+  // ── Exercício (ano) — os cards refletem o ano vigente por padrão ─────────────
+  const CURRENT_YEAR = new Date().getFullYear();
+  const [exercicio, setExercicio] = useState<string>(String(CURRENT_YEAR)); // 'all' ou ano
+
+  const availableYears = useMemo(() => {
+    const set = new Set<number>();
+    (services as any[]).forEach((s) => { const y = serviceExerciseYear(s); if (y) set.add(y); });
+    set.add(CURRENT_YEAR);
+    return Array.from(set).sort((a, b) => b - a);
+  }, [services, CURRENT_YEAR]);
+
+  /** Atendimentos do exercício selecionado (base dos cards e da taxa de conclusão). */
+  const scopedServices = useMemo(
+    () => (exercicio === 'all'
+      ? (services as any[])
+      : (services as any[]).filter((s: any) => serviceExerciseYear(s) === Number(exercicio))),
+    [services, exercicio],
+  );
+
+  // Estatísticas de atendimentos derivadas do cache de useServices (sem refetch).
+  // Contagens de atendimentos seguem o exercício; produtores continua somando tudo.
   const stats = useMemo(() => ({
-    totalServices: services.length,
-    pendingServices: services.filter((s: any) => s.status === 'pending').length,
-    inProgressServices: services.filter((s: any) => s.status === 'in_progress').length,
-    completedServices: services.filter((s: any) => s.status === 'completed').length,
-    proximoServices: services.filter((s: any) => s.status === 'proximo').length,
+    totalServices: scopedServices.length,
+    pendingServices: scopedServices.filter((s: any) => s.status === 'pending').length,
+    inProgressServices: scopedServices.filter((s: any) => s.status === 'in_progress').length,
+    completedServices: scopedServices.filter((s: any) => s.status === 'completed').length,
+    proximoServices: scopedServices.filter((s: any) => s.status === 'proximo').length,
     totalProducers: producerStats?.totalProducers ?? 0,
-  }), [services, producerStats]);
+  }), [scopedServices, producerStats]);
   const updatePositions = useUpdateServicePositions();
   const updateService = useUpdateService();
 
@@ -223,6 +247,22 @@ export default function DashboardPage() {
   return (
     <AppLayout>
       <PageHeader title="Dashboard" description="Visão geral do sistema" />
+
+      {/* ── Seletor de Exercício (ano) ──────────────────────────────── */}
+      <div className="flex items-center justify-end gap-2 mb-3">
+        <Label className="text-xs text-muted-foreground shrink-0">
+          Atendimentos do exercício
+        </Label>
+        <Select value={exercicio} onValueChange={setExercicio}>
+          <SelectTrigger className="h-9 w-[140px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {availableYears.map((y) => (
+              <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+            ))}
+            <SelectItem value="all">Todos os anos</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       {/* ── Stats row (4 cards) ─────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 mb-6">

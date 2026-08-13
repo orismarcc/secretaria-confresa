@@ -43,6 +43,38 @@ export function getDemandIdsByNameSubstring(
   );
 }
 
+// ─── Exercício (ano) helpers ──────────────────────────────────────────────────
+
+/**
+ * Ano-exercício de um atendimento. Usa a data de finalização quando o serviço
+ * está finalizado (é quando o atendimento foi de fato realizado); caso contrário
+ * cai para a data agendada e, por último, a de cadastro. Retorna null se não houver
+ * data válida.
+ */
+export function serviceExerciseYear(s: any): number | null {
+  const raw = s?.status === 'completed' && s?.completed_at
+    ? s.completed_at
+    : (s?.scheduled_date || s?.created_at);
+  if (!raw) return null;
+  const d = new Date(String(raw).replace(' ', 'T'));
+  return isNaN(d.getTime()) ? null : d.getFullYear();
+}
+
+/** Ano-exercício de uma entrega (finalização → período programado → cadastro). */
+export function deliveryExerciseYear(d: any): number | null {
+  const raw = d?.completed_at || d?.delivery_date_end || d?.delivery_date_start || d?.created_at;
+  if (!raw) return null;
+  const dt = new Date(String(raw).replace(' ', 'T'));
+  return isNaN(dt.getTime()) ? null : dt.getFullYear();
+}
+
+/** Ano de uma data genérica (ex.: manutenção via started_at). */
+export function dateYear(raw: any): number | null {
+  if (!raw) return null;
+  const d = new Date(String(raw).replace(' ', 'T'));
+  return isNaN(d.getTime()) ? null : d.getFullYear();
+}
+
 // ─── Settlement stats ─────────────────────────────────────────────────────────
 
 export interface SettlementStat {
