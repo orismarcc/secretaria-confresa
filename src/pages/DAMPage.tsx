@@ -147,6 +147,22 @@ export default function DAMPage() {
       });
   }, [damServices, tab, search, producers, demandTypes]);
 
+  // Agrupa os cards por tipo de atendimento (Grade, PC, Pá Carregadeira, …) para
+  // um ambiente mais limpo. Ordena grupos por quantidade (desc) e depois por nome.
+  const groupedByType = useMemo(() => {
+    const groups = new Map<string, any[]>();
+    filtered.forEach((s: any) => {
+      const name =
+        demandTypes.find(d => d.id === s.demand_type_id)?.name ||
+        s.demand_types?.name ||
+        'Sem tipo';
+      if (!groups.has(name)) groups.set(name, []);
+      groups.get(name)!.push(s);
+    });
+    return Array.from(groups, ([name, items]) => ({ name, items }))
+      .sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name, 'pt-BR'));
+  }, [filtered, demandTypes]);
+
   async function uploadReceipt(file: File, serviceId: string): Promise<string | null> {
     const ext = file.name.split('.').pop() ?? 'pdf';
     const path = `${serviceId}/${Date.now()}.${ext}`;
@@ -408,8 +424,18 @@ export default function DAMPage() {
           )}
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((s: any) => {
+        <div className="space-y-6">
+          {groupedByType.map((group) => (
+            <section key={group.name}>
+              <div className="flex items-center gap-2 mb-3">
+                <h3 className="text-sm font-bold uppercase tracking-wide text-foreground">{group.name}</h3>
+                <span className="text-xs font-semibold bg-muted text-muted-foreground rounded-full px-2 py-0.5">
+                  {group.items.length}
+                </span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {group.items.map((s: any) => {
             const status = getDamStatus(s);
             const daysElapsed = getDaysElapsed(s);
             const producer = producers.find(p => p.id === s.producer_id);
@@ -570,8 +596,11 @@ export default function DAMPage() {
                   </Button>
                 )}
               </div>
-            );
-          })}
+                );
+                })}
+              </div>
+            </section>
+          ))}
         </div>
       )}
 
