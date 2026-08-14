@@ -682,6 +682,42 @@ export default function ServicesPage() {
     s.status === 'completed' || s.status === 'cancelled'
   ).length;
 
+  // Contagem por categoria — respeita a aba (Ativos/Arquivados) e TODOS os filtros
+  // da página, exceto o próprio filtro de categoria (assim mostra a distribuição
+  // completa e permite clicar para filtrar). Exclui "Entregas" (tratada em outra tela).
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    (services as DbService[]).forEach((s) => {
+      const dt = demandTypes.find(d => d.id === s.demand_type_id);
+      const cat = (dt as any)?.category as string | undefined;
+      if (!cat || cat === 'entregas') return;
+      const producer = producers.find(p => p.id === s.producer_id);
+      const matchesSearch =
+        textIncludes(producer?.name, search) ||
+        producer?.cpf?.includes(search) ||
+        textIncludes(s.producers?.name, search) ||
+        phoneMatches((producer as any)?.phone, search) ||
+        phoneMatches(s.producers?.phone, search);
+      const matchesDemandType = demandTypeFilter === 'all' || s.demand_type_id === demandTypeFilter;
+      const matchesStatus = statusFilter === 'active'
+        ? s.status === 'pending' || s.status === 'in_progress' || s.status === 'proximo'
+        : s.status === 'completed' || s.status === 'cancelled';
+      const matchesSettlement = settlementFilter === 'all' || s.settlement_id === settlementFilter;
+      const sDate = s.scheduled_date?.substring(0, 10) ?? '';
+      const matchesDateFrom = !dateFrom || sDate >= dateFrom;
+      const matchesDateTo = !dateTo || sDate <= dateTo;
+      const matchesDam =
+        damFilter === 'all' ? true
+        : damFilter === 'paid' ? !!s.dam_paid
+        : damFilter === 'pending' ? (!!s.dam_issued && !s.dam_paid)
+        : (!!s.comunicado_emitido && !s.dam_issued && !s.dam_paid);
+      if (matchesSearch && matchesDemandType && matchesStatus && matchesSettlement && matchesDateFrom && matchesDateTo && matchesDam) {
+        counts[cat] = (counts[cat] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [services, producers, demandTypes, search, demandTypeFilter, statusFilter, settlementFilter, dateFrom, dateTo, damFilter]);
+
   // ── detail view data ──────────────────────────────────────────────────────
 
   const detailProducerFull = detailService ? producers.find(p => p.id === detailService.producer_id) : null;
@@ -798,6 +834,31 @@ export default function ServicesPage() {
           </TabsTrigger>
         </TabsList>
       </Tabs>
+
+      {/* ── Contagem por categoria (clicável — filtra por categoria) ──────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-4">
+        {DEMAND_CATEGORIES.filter(c => c.value !== 'entregas').map((cat) => {
+          const active = categoryFilter === cat.value;
+          return (
+            <button
+              key={cat.value}
+              type="button"
+              onClick={() => { setCategoryFilter(active ? 'all' : cat.value); setCurrentPage(1); }}
+              className={`rounded-lg border p-2.5 text-left transition-colors ${
+                active
+                  ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                  : 'bg-card hover:bg-muted/50'
+              }`}
+              title={`Filtrar por ${cat.label}`}
+            >
+              <p className={`text-xl font-bold leading-none tabular-nums ${active ? 'text-primary' : 'text-foreground'}`}>
+                {categoryCounts[cat.value] || 0}
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-1 leading-tight line-clamp-2">{cat.label}</p>
+            </button>
+          );
+        })}
+      </div>
 
       {/* ── Filters ──────────────────────────────────────────────────────── */}
       <div className="space-y-2 mb-4">
