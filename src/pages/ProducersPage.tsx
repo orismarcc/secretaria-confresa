@@ -21,6 +21,7 @@ import {
   useProducers,
   useSettlements,
   useLocations,
+  useGlebas,
   useDemandTypes,
   useCreateProducer,
   useUpdateProducer,
@@ -34,6 +35,7 @@ interface DbProducer {
   cpf: string;
   phone?: string | null;
   settlement_id?: string | null;
+  gleba_id?: string | null;
   location_id?: string | null;
   location_name?: string | null;
   property_name?: string | null;
@@ -45,6 +47,7 @@ interface DbProducer {
   created_at?: string | null;
   settlements?: { name: string } | null;
   locations?: { name: string } | null;
+  glebas?: { name: string } | null;
   producer_demands?: { demand_type_id: string }[] | null;
 }
 
@@ -52,6 +55,7 @@ export default function ProducersPage() {
   const { data: producers = [], isLoading: producersLoading } = useProducers();
   const { data: settlements = [] } = useSettlements();
   const { data: locations = [] } = useLocations();
+  const { data: glebas = [] } = useGlebas();
   const { data: demandTypes = [] } = useDemandTypes();
   const createProducer = useCreateProducer();
   const updateProducer = useUpdateProducer();
@@ -122,6 +126,7 @@ export default function ProducersPage() {
       cpf: data.cpf,
       phone: data.phone,
       settlement_id: data.settlementId,
+      gleba_id: data.glebaId || null,
       location_name: data.locationName ? (data.locationName as string).toUpperCase() : undefined,
       latitude: data.latitude ? parseFloat(data.latitude) : null,
       longitude: data.longitude ? parseFloat(data.longitude) : null,
@@ -138,6 +143,7 @@ export default function ProducersPage() {
         cpf: data.cpf,
         phone: data.phone,
         settlement_id: data.settlementId,
+        gleba_id: data.glebaId || null,
         location_name: data.locationName ? (data.locationName as string).toUpperCase() : undefined,
         latitude: data.latitude ? parseFloat(data.latitude) : null,
         longitude: data.longitude ? parseFloat(data.longitude) : null,
@@ -196,6 +202,8 @@ export default function ProducersPage() {
       cpf: p.cpf,
       phone: p.phone || '',
       settlementId: p.settlement_id || '',
+      glebaId: p.gleba_id || '',
+      glebaName: p.glebas?.name || '',
       locationId: p.location_id || '',
       locationName: p.location_name || p.locations?.name || '',
       demandTypeIds,
@@ -394,6 +402,7 @@ export default function ProducersPage() {
         producer={mapProducerForDisplay(editingProducer)}
         settlements={mappedSettlements}
         locations={mappedLocations}
+        glebas={(glebas as any[]).map((g) => ({ id: g.id, name: g.name, settlementId: g.settlement_id }))}
         onSubmit={editingProducer ? handleEdit : handleCreate}
       />
 

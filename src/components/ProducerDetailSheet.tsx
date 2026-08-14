@@ -272,6 +272,16 @@ export function ProducerDetailSheet({
               </div>
             </div>
 
+            {(producer as any).glebaName && (
+              <div className="flex items-start gap-3">
+                <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Gleba</p>
+                  <p className="font-medium">{(producer as any).glebaName}</p>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-start gap-3">
               <Home className="h-5 w-5 text-muted-foreground mt-0.5" />
               <div>

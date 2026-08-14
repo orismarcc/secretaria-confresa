@@ -46,6 +46,7 @@ const producerSchema = z.object({
     .refine(isValidDocument, 'CPF ou CNPJ inválido (dígitos verificadores incorretos)'),
   phone: z.string().min(10, 'Telefone inválido').max(15, 'Telefone inválido'),
   settlementId: z.string().min(1, 'Selecione um assentamento'),
+  glebaId: z.string().optional(),
   locationName: z.string().optional(),
   latitude: z.string().optional(),
   longitude: z.string().optional(),
@@ -54,22 +55,30 @@ const producerSchema = z.object({
 
 type ProducerFormData = z.infer<typeof producerSchema>;
 
+interface GlebaOption {
+  id: string;
+  name: string;
+  settlementId: string;
+}
+
 interface ProducerFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   producer?: Producer | null;
   settlements: Settlement[];
   locations: Location[];
+  glebas?: GlebaOption[];
   onSubmit: (data: ProducerFormData) => void;
 }
 
-export function ProducerForm({ 
-  open, 
-  onOpenChange, 
-  producer, 
-  settlements, 
-  locations, 
-  onSubmit 
+export function ProducerForm({
+  open,
+  onOpenChange,
+  producer,
+  settlements,
+  locations,
+  glebas = [],
+  onSubmit
 }: ProducerFormProps) {
   // Tipo de documento: detectado pelo nº de dígitos (14 = CNPJ, senão CPF)
   const [docType, setDocType] = useState<DocType>('cpf');
@@ -81,6 +90,7 @@ export function ProducerForm({
       cpf: producer?.cpf || '',
       phone: producer?.phone || '',
       settlementId: producer?.settlementId || '',
+      glebaId: (producer as any)?.glebaId || '',
       locationName: producer?.locationName?.toUpperCase() || '',
       latitude: (producer as any)?.latitude?.toString() || '',
       longitude: (producer as any)?.longitude?.toString() || '',
@@ -96,6 +106,7 @@ export function ProducerForm({
         cpf: producer.cpf,
         phone: producer.phone,
         settlementId: producer.settlementId,
+        glebaId: (producer as any)?.glebaId || '',
         locationName: producer.locationName?.toUpperCase() || '',
         latitude: (producer as any)?.latitude?.toString() || '',
         longitude: (producer as any)?.longitude?.toString() || '',
@@ -108,6 +119,7 @@ export function ProducerForm({
         cpf: '',
         phone: '',
         settlementId: '',
+        glebaId: '',
         locationName: '',
         latitude: '',
         longitude: '',
@@ -115,6 +127,18 @@ export function ProducerForm({
       });
     }
   }, [producer, form]);
+
+  // Glebas do assentamento selecionado (a gleba é sempre ligada ao assentamento)
+  const selectedSettlementId = form.watch('settlementId');
+  const settlementGlebas = glebas.filter((g) => g.settlementId === selectedSettlementId);
+
+  // Ao trocar de assentamento, limpa a gleba se ela não pertencer ao novo assentamento
+  useEffect(() => {
+    const current = form.getValues('glebaId');
+    if (current && !glebas.some((g) => g.id === current && g.settlementId === selectedSettlementId)) {
+      form.setValue('glebaId', '');
+    }
+  }, [selectedSettlementId, glebas, form]);
 
   const handleSubmit = (data: ProducerFormData) => {
     onSubmit(data);
@@ -234,6 +258,41 @@ export function ProducerForm({
                       <SelectContent>
                         {settlements.map((s) => (
                           <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="glebaId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Gleba (opcional)</FormLabel>
+                    <Select
+                      value={field.value || undefined}
+                      onValueChange={(v) => field.onChange(v === 'none' ? '' : v)}
+                      disabled={!selectedSettlementId || settlementGlebas.length === 0}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={
+                              !selectedSettlementId
+                                ? 'Selecione o assentamento primeiro'
+                                : settlementGlebas.length === 0
+                                ? 'Nenhuma gleba neste assentamento'
+                                : 'Selecione a gleba'
+                            }
+                          />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">Nenhuma</SelectItem>
+                        {settlementGlebas.map((g) => (
+                          <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

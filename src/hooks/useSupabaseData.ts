@@ -428,7 +428,7 @@ export function useProducers() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('producers')
-        .select('*, settlements(name), locations(name), producer_demands(demand_type_id)')
+        .select('*, settlements(name), locations(name), glebas(name), producer_demands(demand_type_id)')
         .order('name');
       if (error) throw error;
       return data;
@@ -463,6 +463,7 @@ export function useCreateProducer() {
       cpf: string;
       phone?: string;
       settlement_id?: string;
+      gleba_id?: string | null;
       location_id?: string;
       location_name?: string;
       property_name?: string;
