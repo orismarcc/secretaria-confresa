@@ -37,6 +37,7 @@ import { isDamOverdue as checkDamOverdue } from '@/lib/damUtils';
 import {
   Plus, Pencil, Trash2, Archive, CheckCircle, Eye,
   FileDown, FileSpreadsheet, ChevronLeft, ChevronRight, X, XCircle,
+  Tractor, Truck, Scissors, Shovel, Stethoscope, Layers, Package, Wrench,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -67,6 +68,19 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 
 const ITEMS_PER_PAGE = 10;
+
+// Estilo (ícone + cor) dos cards de contagem — por operation_type (patrulha) ou categoria.
+const BUCKET_STYLE: Record<string, { icon: React.ElementType; cls: string }> = {
+  grade:                   { icon: Tractor,     cls: 'bg-amber-500/10 text-amber-600' },
+  pc:                      { icon: Shovel,      cls: 'bg-violet-500/10 text-violet-600' },
+  pa_carregadeira:         { icon: Truck,       cls: 'bg-orange-500/10 text-orange-600' },
+  rocadeira:               { icon: Scissors,    cls: 'bg-teal-500/10 text-teal-600' },
+  assistencia_tecnica:     { icon: Stethoscope, cls: 'bg-emerald-500/10 text-emerald-600' },
+  calcario:                { icon: Layers,      cls: 'bg-stone-500/10 text-stone-600' },
+  logistica_insumos:       { icon: Package,     cls: 'bg-purple-500/10 text-purple-600' },
+  implementos_equipamentos:{ icon: Wrench,      cls: 'bg-blue-500/10 text-blue-600' },
+  _default:                { icon: Wrench,      cls: 'bg-slate-500/10 text-slate-600' },
+};
 
 // Helper: parse a Supabase date/timestamp string to a local-safe Date
 function parseSupabaseDate(raw: string | null | undefined): Date | null {
@@ -682,41 +696,68 @@ export default function ServicesPage() {
     s.status === 'completed' || s.status === 'cancelled'
   ).length;
 
-  // Contagem por categoria — respeita a aba (Ativos/Arquivados) e TODOS os filtros
-  // da página, exceto o próprio filtro de categoria (assim mostra a distribuição
-  // completa e permite clicar para filtrar). Exclui "Entregas" (tratada em outra tela).
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    (services as DbService[]).forEach((s) => {
-      const dt = demandTypes.find(d => d.id === s.demand_type_id);
-      const cat = (dt as any)?.category as string | undefined;
-      if (!cat || cat === 'entregas') return;
-      const producer = producers.find(p => p.id === s.producer_id);
-      const matchesSearch =
-        textIncludes(producer?.name, search) ||
-        producer?.cpf?.includes(search) ||
-        textIncludes(s.producers?.name, search) ||
-        phoneMatches((producer as any)?.phone, search) ||
-        phoneMatches(s.producers?.phone, search);
-      const matchesDemandType = demandTypeFilter === 'all' || s.demand_type_id === demandTypeFilter;
-      const matchesStatus = statusFilter === 'active'
-        ? s.status === 'pending' || s.status === 'in_progress' || s.status === 'proximo'
-        : s.status === 'completed' || s.status === 'cancelled';
-      const matchesSettlement = settlementFilter === 'all' || s.settlement_id === settlementFilter;
-      const sDate = s.scheduled_date?.substring(0, 10) ?? '';
-      const matchesDateFrom = !dateFrom || sDate >= dateFrom;
-      const matchesDateTo = !dateTo || sDate <= dateTo;
-      const matchesDam =
-        damFilter === 'all' ? true
-        : damFilter === 'paid' ? !!s.dam_paid
-        : damFilter === 'pending' ? (!!s.dam_issued && !s.dam_paid)
-        : (!!s.comunicado_emitido && !s.dam_issued && !s.dam_paid);
-      if (matchesSearch && matchesDemandType && matchesStatus && matchesSettlement && matchesDateFrom && matchesDateTo && matchesDam) {
-        counts[cat] = (counts[cat] || 0) + 1;
-      }
-    });
-    return counts;
-  }, [services, producers, demandTypes, search, demandTypeFilter, statusFilter, settlementFilter, dateFrom, dateTo, damFilter]);
+  // Base para os cards de contagem — respeita a aba (Ativos/Arquivados) e TODOS os
+  // filtros da página, EXCETO os de tipo e categoria (assim os cards mostram sempre
+  // a distribuição completa e permitem clicar para filtrar). Exclui "Entregas".
+  const catOfType = useMemo(
+    () => new Map(demandTypes.map(d => [d.id, (d as any).category as string | undefined])),
+    [demandTypes],
+  );
+  const countBase = useMemo(() => (services as DbService[]).filter((s) => {
+    const cat = catOfType.get(s.demand_type_id);
+    if (cat === 'entregas') return false;
+    const producer = producers.find(p => p.id === s.producer_id);
+    const matchesSearch =
+      textIncludes(producer?.name, search) ||
+      producer?.cpf?.includes(search) ||
+      textIncludes(s.producers?.name, search) ||
+      phoneMatches((producer as any)?.phone, search) ||
+      phoneMatches(s.producers?.phone, search);
+    const matchesStatus = statusFilter === 'active'
+      ? s.status === 'pending' || s.status === 'in_progress' || s.status === 'proximo'
+      : s.status === 'completed' || s.status === 'cancelled';
+    const matchesSettlement = settlementFilter === 'all' || s.settlement_id === settlementFilter;
+    const sDate = s.scheduled_date?.substring(0, 10) ?? '';
+    const matchesDateFrom = !dateFrom || sDate >= dateFrom;
+    const matchesDateTo = !dateTo || sDate <= dateTo;
+    const matchesDam =
+      damFilter === 'all' ? true
+      : damFilter === 'paid' ? !!s.dam_paid
+      : damFilter === 'pending' ? (!!s.dam_issued && !s.dam_paid)
+      : (!!s.comunicado_emitido && !s.dam_issued && !s.dam_paid);
+    return matchesSearch && matchesStatus && matchesSettlement && matchesDateFrom && matchesDateTo && matchesDam;
+  }), [services, producers, catOfType, search, statusFilter, settlementFilter, dateFrom, dateTo, damFilter]);
+
+  // Cards: subdivide Patrulha Mecanizada por tipo de operação (Grade, PC, Pá
+  // Carregadeira, Roçadeira, …) e mantém as demais categorias como um card cada.
+  const OP_ORDER = ['grade', 'pc', 'pa_carregadeira', 'rocadeira'];
+  const categoryBuckets = useMemo(() => {
+    const patrulha = demandTypes
+      .filter(d => (d as any).category === 'patrulha_mecanizada')
+      .map(d => ({
+        key: `dt:${d.id}`,
+        label: d.name,
+        styleKey: (d as any).operation_type || '_default',
+        count: countBase.filter(s => s.demand_type_id === d.id).length,
+        isType: true as const,
+        id: d.id,
+      }))
+      .sort((a, b) => {
+        const ia = OP_ORDER.indexOf(a.styleKey), ib = OP_ORDER.indexOf(b.styleKey);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.label.localeCompare(b.label, 'pt-BR');
+      });
+    const others = DEMAND_CATEGORIES
+      .filter(c => c.value !== 'entregas' && c.value !== 'patrulha_mecanizada')
+      .map(c => ({
+        key: `cat:${c.value}`,
+        label: c.label,
+        styleKey: c.value,
+        count: countBase.filter(s => catOfType.get(s.demand_type_id) === c.value).length,
+        isType: false as const,
+        value: c.value,
+      }));
+    return [...patrulha, ...others];
+  }, [demandTypes, countBase, catOfType]);
 
   // ── detail view data ──────────────────────────────────────────────────────
 
@@ -835,26 +876,43 @@ export default function ServicesPage() {
         </TabsList>
       </Tabs>
 
-      {/* ── Contagem por categoria (clicável — filtra por categoria) ──────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 mb-4">
-        {DEMAND_CATEGORIES.filter(c => c.value !== 'entregas').map((cat) => {
-          const active = categoryFilter === cat.value;
+      {/* ── Contagem por tipo/categoria (clicável — filtra) ───────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 mb-4">
+        {categoryBuckets.map((b) => {
+          const style = BUCKET_STYLE[b.styleKey] || BUCKET_STYLE._default;
+          const Icon = style.icon;
+          const active = b.isType ? demandTypeFilter === b.id : categoryFilter === b.value;
           return (
             <button
-              key={cat.value}
+              key={b.key}
               type="button"
-              onClick={() => { setCategoryFilter(active ? 'all' : cat.value); setCurrentPage(1); }}
-              className={`rounded-lg border p-2.5 text-left transition-colors ${
+              onClick={() => {
+                if (b.isType) {
+                  setDemandTypeFilter(active ? 'all' : b.id);
+                  setCategoryFilter('all');
+                } else {
+                  setCategoryFilter(active ? 'all' : b.value);
+                  setDemandTypeFilter('all');
+                }
+                setCurrentPage(1);
+              }}
+              className={`group relative flex items-center gap-2.5 rounded-xl border p-2.5 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm ${
                 active
-                  ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
-                  : 'bg-card hover:bg-muted/50'
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary/30 shadow-sm'
+                  : 'bg-card hover:bg-muted/40'
               }`}
-              title={`Filtrar por ${cat.label}`}
+              title={`Filtrar por ${b.label}`}
             >
-              <p className={`text-xl font-bold leading-none tabular-nums ${active ? 'text-primary' : 'text-foreground'}`}>
-                {categoryCounts[cat.value] || 0}
-              </p>
-              <p className="text-[11px] text-muted-foreground mt-1 leading-tight line-clamp-2">{cat.label}</p>
+              <div className={`shrink-0 p-2 rounded-lg ${style.cls}`}>
+                <Icon className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <p className={`text-xl font-black leading-none tabular-nums ${active ? 'text-primary' : 'text-foreground'}`}>
+                  {b.count}
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-tight line-clamp-2">{b.label}</p>
+              </div>
+              {active && <X className="absolute top-1.5 right-1.5 h-3 w-3 text-primary/60" />}
             </button>
           );
         })}
