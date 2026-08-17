@@ -34,6 +34,7 @@ import {
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { isDamOverdue as checkDamOverdue } from '@/lib/damUtils';
+import { serviceExerciseYear } from '@/lib/analyticsUtils';
 import {
   Plus, Pencil, Trash2, Archive, CheckCircle, Eye,
   FileDown, FileSpreadsheet, ChevronLeft, ChevronRight, X, XCircle,
@@ -179,6 +180,9 @@ export default function ServicesPage() {
     searchParams.get('tab') === 'archived' ? 'archived' : 'active'
   );
   const [demandTypeFilter, setDemandTypeFilter] = useState<string>('all');
+  // Filtro global de exercício (ano) — padrão sempre o ano atual
+  const CURRENT_YEAR = new Date().getFullYear();
+  const [yearFilter, setYearFilter] = useState<string>(String(CURRENT_YEAR)); // 'all' ou ano
   // Categoria via URL (?category=calcario) — usado pelos cards da página de Análise
   const [categoryFilter, setCategoryFilter] = useState<string>(
     searchParams.get('category') || 'all'
@@ -226,6 +230,9 @@ export default function ServicesPage() {
         setStatusFilter(
           found.status === 'completed' || found.status === 'cancelled' ? 'archived' : 'active'
         );
+        // Alinha o filtro de ano ao exercício do serviço para a lista de fundo bater
+        const y = serviceExerciseYear(found);
+        if (y) setYearFilter(String(y));
       }
     }
   }, [searchParams, services]);
@@ -233,7 +240,7 @@ export default function ServicesPage() {
   // Reset to page 1 when any filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter, demandTypeFilter, categoryFilter, settlementFilter, dateFrom, dateTo, sortBy, damFilter]);
+  }, [search, statusFilter, demandTypeFilter, categoryFilter, settlementFilter, dateFrom, dateTo, sortBy, damFilter, yearFilter]);
 
   // Realtime subscription
   useEffect(() => {
@@ -246,9 +253,19 @@ export default function ServicesPage() {
     return () => { supabase.removeChannel(channel); };
   }, [queryClient]);
 
+  // Anos presentes nos atendimentos (desc), sempre incluindo o ano atual
+  const availableYears = useMemo(() => {
+    const set = new Set<number>();
+    (services as DbService[]).forEach((s) => { const y = serviceExerciseYear(s); if (y) set.add(y); });
+    set.add(CURRENT_YEAR);
+    return Array.from(set).sort((a, b) => b - a);
+  }, [services, CURRENT_YEAR]);
+
   const filteredServices = useMemo(() => services.filter((s: DbService) => {
     const dt = demandTypes.find(d => d.id === s.demand_type_id);
     if ((dt as any)?.category === 'entregas') return false;
+    const matchesYear = yearFilter === 'all' || serviceExerciseYear(s) === Number(yearFilter);
+    if (!matchesYear) return false;
     const producer = producers.find(p => p.id === s.producer_id);
     const matchesSearch =
       textIncludes(producer?.name, search) ||
@@ -273,7 +290,7 @@ export default function ServicesPage() {
       : damFilter === 'pending' ? (!!s.dam_issued && !s.dam_paid)
       : /* comunicado */ (!!s.comunicado_emitido && !s.dam_issued && !s.dam_paid);
     return matchesSearch && matchesDemandType && matchesCategory && matchesStatus && matchesSettlement && matchesDateFrom && matchesDateTo && matchesDam;
-  }), [services, producers, demandTypes, search, demandTypeFilter, categoryFilter, statusFilter, settlementFilter, dateFrom, dateTo, damFilter]);
+  }), [services, producers, demandTypes, search, demandTypeFilter, categoryFilter, statusFilter, settlementFilter, dateFrom, dateTo, damFilter, yearFilter]);
 
   const sortedServices = useMemo(() => [...filteredServices].sort((a: DbService, b: DbService) => {
     // Ordenação explícita por data de cadastro (sobrepõe a ordem padrão, mantendo os filtros)
@@ -689,11 +706,13 @@ export default function ServicesPage() {
 
   // ── counts ────────────────────────────────────────────────────────────────
 
+  // Contagens das abas respeitam o filtro global de ano (mas não o de status/tab)
+  const inYear = (s: DbService) => yearFilter === 'all' || serviceExerciseYear(s) === Number(yearFilter);
   const activeCount = services.filter((s: DbService) =>
-    s.status === 'pending' || s.status === 'in_progress' || s.status === 'proximo'
+    inYear(s) && (s.status === 'pending' || s.status === 'in_progress' || s.status === 'proximo')
   ).length;
   const archivedCount = services.filter((s: DbService) =>
-    s.status === 'completed' || s.status === 'cancelled'
+    inYear(s) && (s.status === 'completed' || s.status === 'cancelled')
   ).length;
 
   // Base para os cards de contagem — respeita a aba (Ativos/Arquivados) e TODOS os
@@ -706,6 +725,7 @@ export default function ServicesPage() {
   const countBase = useMemo(() => (services as DbService[]).filter((s) => {
     const cat = catOfType.get(s.demand_type_id);
     if (cat === 'entregas') return false;
+    if (yearFilter !== 'all' && serviceExerciseYear(s) !== Number(yearFilter)) return false;
     const producer = producers.find(p => p.id === s.producer_id);
     const matchesSearch =
       textIncludes(producer?.name, search) ||
@@ -726,7 +746,7 @@ export default function ServicesPage() {
       : damFilter === 'pending' ? (!!s.dam_issued && !s.dam_paid)
       : (!!s.comunicado_emitido && !s.dam_issued && !s.dam_paid);
     return matchesSearch && matchesStatus && matchesSettlement && matchesDateFrom && matchesDateTo && matchesDam;
-  }), [services, producers, catOfType, search, statusFilter, settlementFilter, dateFrom, dateTo, damFilter]);
+  }), [services, producers, catOfType, search, statusFilter, settlementFilter, dateFrom, dateTo, damFilter, yearFilter]);
 
   // Cards: subdivide Patrulha Mecanizada por tipo de operação (Grade, PC, Pá
   // Carregadeira, Roçadeira, …) e mantém as demais categorias como um card cada.
@@ -864,17 +884,33 @@ export default function ServicesPage() {
         </Button>
       </div>
 
-      <Tabs value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }} className="mb-4">
-        <TabsList>
-          <TabsTrigger value="active" className="gap-2">
-            Ativos <span className="bg-primary/20 text-primary px-2 py-0.5 rounded-full text-xs">{activeCount}</span>
-          </TabsTrigger>
-          <TabsTrigger value="archived" className="gap-2">
-            <Archive className="h-4 w-4" />
-            Arquivados <span className="bg-muted px-2 py-0.5 rounded-full text-xs">{archivedCount}</span>
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+        <Tabs value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
+          <TabsList>
+            <TabsTrigger value="active" className="gap-2">
+              Ativos <span className="bg-primary/20 text-primary px-2 py-0.5 rounded-full text-xs">{activeCount}</span>
+            </TabsTrigger>
+            <TabsTrigger value="archived" className="gap-2">
+              <Archive className="h-4 w-4" />
+              Arquivados <span className="bg-muted px-2 py-0.5 rounded-full text-xs">{archivedCount}</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {/* Filtro global de exercício (ano) — padrão: ano atual */}
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground shrink-0">Exercício</Label>
+          <Select value={yearFilter} onValueChange={(v) => { setYearFilter(v); setCurrentPage(1); }}>
+            <SelectTrigger className="h-9 w-[130px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {availableYears.map((y) => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+              <SelectItem value="all">Todos os anos</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
       {/* ── Contagem por tipo/categoria (clicável — filtra) ───────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 mb-4">
