@@ -901,6 +901,61 @@ export function useSetOperatorDemandTypes() {
   });
 }
 
+// Maquinário(s) que o operador utiliza. Vários por operador.
+export function useOperatorMachinery(operatorId: string | undefined) {
+  return useQuery({
+    queryKey: ['operator_machinery', operatorId],
+    queryFn: async () => {
+      if (!operatorId) return [] as string[];
+      const { data, error } = await supabase
+        .from('operator_machinery')
+        .select('machinery_id')
+        .eq('operator_id', operatorId);
+      if (error) throw error;
+      return (data ?? []).map((r: any) => r.machinery_id as string);
+    },
+    enabled: !!operatorId,
+  });
+}
+
+export function useSetOperatorMachinery() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ operatorId, machineryIds }: { operatorId: string; machineryIds: string[] }) => {
+      const { data: existing } = await supabase
+        .from('operator_machinery')
+        .select('machinery_id')
+        .eq('operator_id', operatorId);
+
+      const { error: delErr } = await supabase
+        .from('operator_machinery')
+        .delete()
+        .eq('operator_id', operatorId);
+      if (delErr) throw delErr;
+
+      if (machineryIds.length > 0) {
+        const rows = machineryIds.map((id) => ({ operator_id: operatorId, machinery_id: id }));
+        const { error: insErr } = await supabase.from('operator_machinery').insert(rows);
+        if (insErr) {
+          if (existing && existing.length > 0) {
+            await supabase.from('operator_machinery').insert(
+              existing.map((e: any) => ({ operator_id: operatorId, machinery_id: e.machinery_id })),
+            );
+          }
+          throw insErr;
+        }
+      }
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['operator_machinery', variables.operatorId] });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao salvar maquinário do operador', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
 export function useServicesByProducer(producerId: string | undefined) {
   return useQuery({
     queryKey: ['services', 'producer', producerId],

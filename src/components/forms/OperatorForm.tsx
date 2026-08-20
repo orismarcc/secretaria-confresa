@@ -2,8 +2,14 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
 import { z } from 'zod';
+
+export interface OperatorDemandTypeOption {
+  id: string;
+  name: string;
+}
 
 const createSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
@@ -19,20 +25,60 @@ const editSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
 });
 
+interface OperatorMachineryOption {
+  id: string;
+  name: string;
+}
+
 interface OperatorFormProps {
   defaultValues?: { name: string; email?: string };
-  onSubmit: (data: { name: string; email: string; password: string } | { name: string }) => Promise<void>;
+  onSubmit: (
+    data:
+      | { name: string; email: string; password: string; demandTypeIds: string[]; machineryIds: string[] }
+      | { name: string; demandTypeIds: string[]; machineryIds: string[] }
+  ) => Promise<void>;
   onCancel: () => void;
   isLoading: boolean;
   mode: 'create' | 'edit';
+  /** Tipos de serviço disponíveis para conceder acesso */
+  demandTypes?: OperatorDemandTypeOption[];
+  /** Tipos já atribuídos ao operador (modo edição) */
+  initialDemandTypeIds?: string[];
+  /** Maquinários disponíveis para vincular ao operador */
+  machinery?: OperatorMachineryOption[];
+  /** Maquinários já vinculados ao operador (modo edição) */
+  initialMachineryIds?: string[];
 }
 
-export function OperatorForm({ defaultValues, onSubmit, onCancel, isLoading, mode }: OperatorFormProps) {
+export function OperatorForm({
+  defaultValues,
+  onSubmit,
+  onCancel,
+  isLoading,
+  mode,
+  demandTypes = [],
+  initialDemandTypeIds = [],
+  machinery = [],
+  initialMachineryIds = [],
+}: OperatorFormProps) {
   const [name, setName] = useState(defaultValues?.name || '');
   const [email, setEmail] = useState(defaultValues?.email || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [demandTypeIds, setDemandTypeIds] = useState<string[]>(initialDemandTypeIds);
+  const [machineryIds, setMachineryIds] = useState<string[]>(initialMachineryIds);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const toggleDemandType = (id: string) => {
+    setDemandTypeIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
+  const toggleMachinery = (id: string) => {
+    setMachineryIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,7 +94,7 @@ export function OperatorForm({ defaultValues, onSubmit, onCancel, isLoading, mod
         setErrors(fieldErrors);
         return;
       }
-      await onSubmit({ name, email, password });
+      await onSubmit({ name, email, password, demandTypeIds, machineryIds });
     } else {
       const result = editSchema.safeParse({ name });
       if (!result.success) {
@@ -59,7 +105,7 @@ export function OperatorForm({ defaultValues, onSubmit, onCancel, isLoading, mod
         setErrors(fieldErrors);
         return;
       }
-      await onSubmit({ name });
+      await onSubmit({ name, demandTypeIds, machineryIds });
     }
   };
 
@@ -125,6 +171,62 @@ export function OperatorForm({ defaultValues, onSubmit, onCancel, isLoading, mod
           <Label>Email</Label>
           <Input value={defaultValues.email} disabled className="bg-muted" />
           <p className="text-xs text-muted-foreground">O email não pode ser alterado</p>
+        </div>
+      )}
+
+      {/* Tipos de serviço que o operador pode atender */}
+      {demandTypes.length > 0 && (
+        <div className="space-y-2">
+          <Label>Tipos de serviço com acesso</Label>
+          <div className="max-h-44 overflow-y-auto rounded-md border p-2 space-y-1.5">
+            {demandTypes.map((dt) => (
+              <label
+                key={dt.id}
+                htmlFor={`dt-${dt.id}`}
+                className="flex items-center gap-2.5 px-1.5 py-1 rounded hover:bg-muted/50 cursor-pointer"
+              >
+                <Checkbox
+                  id={`dt-${dt.id}`}
+                  checked={demandTypeIds.includes(dt.id)}
+                  onCheckedChange={() => toggleDemandType(dt.id)}
+                />
+                <span className="text-sm">{dt.name}</span>
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {demandTypeIds.length === 0
+              ? 'Nenhum selecionado — o operador terá acesso a todos os tipos.'
+              : `${demandTypeIds.length} tipo(s) selecionado(s). O operador só verá esses no login.`}
+          </p>
+        </div>
+      )}
+
+      {/* Veículo(s)/maquinário(s) que o operador utiliza */}
+      {machinery.length > 0 && (
+        <div className="space-y-2">
+          <Label>Veículo / Maquinário utilizado</Label>
+          <div className="max-h-44 overflow-y-auto rounded-md border p-2 space-y-1.5">
+            {machinery.map((m) => (
+              <label
+                key={m.id}
+                htmlFor={`mach-${m.id}`}
+                className="flex items-center gap-2.5 px-1.5 py-1 rounded hover:bg-muted/50 cursor-pointer"
+              >
+                <Checkbox
+                  id={`mach-${m.id}`}
+                  checked={machineryIds.includes(m.id)}
+                  onCheckedChange={() => toggleMachinery(m.id)}
+                />
+                <span className="text-sm">{m.name}</span>
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {machineryIds.length === 0
+              ? 'Opcional — registre o(s) maquinário(s) que este operador utiliza.'
+              : `${machineryIds.length} maquinário(s) vinculado(s).`}
+          </p>
         </div>
       )}
 

@@ -30,10 +30,15 @@ import {
   useDeleteResponsibleTechnician,
   useServices,
   useDemandTypes,
+  useOperatorDemandTypes,
+  useSetOperatorDemandTypes,
+  useMachinery,
+  useOperatorMachinery,
+  useSetOperatorMachinery,
 } from '@/hooks/useSupabaseData';
 import {
   Plus, Pencil, Trash2, UserCog, BarChart3, CheckCircle,
-  ClipboardList, HardHat, User, Briefcase, FileText,
+  ClipboardList, HardHat, User, Briefcase, FileText, Loader2,
 } from 'lucide-react';
 import {
   formatDocument,
@@ -157,10 +162,35 @@ export default function OperatorsPage() {
   const { data: operators, isLoading: opLoading } = useOperators();
   const { data: services = [] } = useServices();
   const { data: demandTypes = [] } = useDemandTypes();
+  const { data: machinery = [] } = useMachinery();
   const createOperator = useCreateOperator();
   const updateOperator = useUpdateOperator();
   const deleteOperator = useDeleteOperator();
   const toggleStatus = useToggleOperatorStatus();
+  const setOperatorDemandTypes = useSetOperatorDemandTypes();
+  const setOperatorMachinery = useSetOperatorMachinery();
+
+  // Tipos de serviço ofertáveis a operadores (exclui Entregas — fluxo próprio)
+  const operatorDemandTypeOptions = useMemo(
+    () => (demandTypes as any[])
+      .filter(d => (d.is_active ?? true) && (d as any).category !== 'entregas')
+      .map(d => ({ id: d.id, name: d.name })),
+    [demandTypes],
+  );
+
+  // Maquinários ofertáveis (ativos)
+  const operatorMachineryOptions = useMemo(
+    () => (machinery as any[])
+      .filter((m) => m.is_active ?? true)
+      .map((m) => ({ id: m.id, name: m.name })),
+    [machinery],
+  );
+
+  // Acessos e maquinários já atribuídos ao operador em edição
+  const { data: editingOperatorDemandTypeIds = [], isLoading: editingDtLoading } =
+    useOperatorDemandTypes(editingOperator?.id);
+  const { data: editingOperatorMachineryIds = [], isLoading: editingMachLoading } =
+    useOperatorMachinery(editingOperator?.id);
 
   // ── Technicians state ──────────────────────────────────────────────────────
   const [techFormOpen, setTechFormOpen] = useState(false);
@@ -195,14 +225,29 @@ export default function OperatorsPage() {
     operatorMetricsMap[operatorId] ?? { total: 0, byDemandType: [] };
 
   // ── Operator helpers ───────────────────────────────────────────────────────
-  const handleCreate = async (data: { name: string; email: string; password: string }) => {
-    await createOperator.mutateAsync(data);
+  const handleCreate = async (
+    data: { name: string; email: string; password: string; demandTypeIds: string[]; machineryIds: string[] }
+  ) => {
+    const { demandTypeIds, machineryIds, ...operatorData } = data;
+    const newUser = await createOperator.mutateAsync(operatorData);
+    if (newUser?.id) {
+      await setOperatorDemandTypes.mutateAsync({ operatorId: newUser.id, demandTypeIds });
+      await setOperatorMachinery.mutateAsync({ operatorId: newUser.id, machineryIds });
+    }
     setIsFormOpen(false);
   };
 
-  const handleUpdate = async (data: { name: string }) => {
+  const handleUpdate = async (data: { name: string; demandTypeIds: string[]; machineryIds: string[] }) => {
     if (editingOperator) {
       await updateOperator.mutateAsync({ userId: editingOperator.id, name: data.name });
+      await setOperatorDemandTypes.mutateAsync({
+        operatorId: editingOperator.id,
+        demandTypeIds: data.demandTypeIds,
+      });
+      await setOperatorMachinery.mutateAsync({
+        operatorId: editingOperator.id,
+        machineryIds: data.machineryIds,
+      });
       setEditingOperator(null);
     }
   };
@@ -486,8 +531,10 @@ export default function OperatorsPage() {
           <OperatorForm
             onSubmit={handleCreate}
             onCancel={() => setIsFormOpen(false)}
-            isLoading={createOperator.isPending}
+            isLoading={createOperator.isPending || setOperatorDemandTypes.isPending || setOperatorMachinery.isPending}
             mode="create"
+            demandTypes={operatorDemandTypeOptions}
+            machinery={operatorMachineryOptions}
           />
         </DialogContent>
       </Dialog>
@@ -496,13 +543,24 @@ export default function OperatorsPage() {
         <DialogContent>
           <DialogHeader><DialogTitle>Editar Operador</DialogTitle></DialogHeader>
           {editingOperator && (
-            <OperatorForm
-              defaultValues={{ name: editingOperator.name, email: editingOperator.email }}
-              onSubmit={handleUpdate}
-              onCancel={() => setEditingOperator(null)}
-              isLoading={updateOperator.isPending}
-              mode="edit"
-            />
+            (editingDtLoading || editingMachLoading) ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <OperatorForm
+                key={editingOperator.id}
+                defaultValues={{ name: editingOperator.name, email: editingOperator.email }}
+                onSubmit={handleUpdate}
+                onCancel={() => setEditingOperator(null)}
+                isLoading={updateOperator.isPending || setOperatorDemandTypes.isPending || setOperatorMachinery.isPending}
+                mode="edit"
+                demandTypes={operatorDemandTypeOptions}
+                initialDemandTypeIds={editingOperatorDemandTypeIds}
+                machinery={operatorMachineryOptions}
+                initialMachineryIds={editingOperatorMachineryIds}
+              />
+            )
           )}
         </DialogContent>
       </Dialog>

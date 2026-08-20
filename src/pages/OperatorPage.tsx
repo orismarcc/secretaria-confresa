@@ -247,13 +247,14 @@ export default function OperatorPage() {
 
   const isLoading = servicesLoading || dtLoading;
 
-  // Restringe aos tipos de serviço permitidos ao operador.
-  // Lista vazia = acesso a todos os tipos (retrocompatível).
+  // Mostra apenas os atendimentos atribuídos a este operador (operator_id).
+  // Ainda respeita a restrição por tipo de serviço, se houver (lista vazia = todos os tipos).
   const visibleServices = useMemo(() => {
-    if (allowedDemandTypeIds.length === 0) return pendingServicesRaw;
+    const mine = (pendingServicesRaw as DbService[]).filter((s) => s.operator_id === user?.id);
+    if (allowedDemandTypeIds.length === 0) return mine;
     const allowed = new Set(allowedDemandTypeIds);
-    return (pendingServicesRaw as DbService[]).filter((s) => allowed.has(s.demand_type_id));
-  }, [pendingServicesRaw, allowedDemandTypeIds]);
+    return mine.filter((s) => allowed.has(s.demand_type_id));
+  }, [pendingServicesRaw, allowedDemandTypeIds, user?.id]);
 
   const updatePositions = useUpdateServicePositions();
   const syncActions = useSyncOperatorActions();
