@@ -60,6 +60,8 @@ const serviceSchema = z.object({
   inputQuantity: z.coerce.number().min(0).optional(),
   fuelLiters: z.coerce.number().min(0).optional(),
   workedHours: z.coerce.number().min(0).optional(),
+  distanceKm: z.coerce.number().min(0).optional(),
+  fuelConsumptionPerKm: z.coerce.number().min(0).optional(),
   responsibleTechnicianId: z.string().optional(),
 });
 
@@ -106,6 +108,8 @@ interface ServiceFormProps {
     inputQuantity?: number;
     fuelLiters?: number;
     workedHours?: number;
+    distanceKm?: number;
+    fuelConsumptionPerKm?: number;
     damPaidAt?: string;
     responsibleTechnicianId?: string;
   } | null;
@@ -119,6 +123,7 @@ interface ServiceFormProps {
     isActive: boolean;
     createdAt: Date;
     category?: string | null;
+    chargesFuelByDistance?: boolean | null;
   }>;
   operators?: OperatorOption[];
   machinery?: MachineryOption[];
@@ -318,6 +323,8 @@ export function ServiceForm({
       inputQuantity: 0,
       fuelLiters: 0,
       workedHours: 0,
+      distanceKm: 0,
+      fuelConsumptionPerKm: 0,
       responsibleTechnicianId: '',
     },
   });
@@ -336,7 +343,19 @@ export function ServiceForm({
   const isPatrulhaOrLogistica =
     selectedDemandType?.category === 'patrulha_mecanizada' ||
     selectedDemandType?.category === 'logistica_insumos';
+  // Tipos que cobram combustível por distância (ex.: caminhão do calcário à
+  // disposição da secretaria): litros = distância (km) × consumo médio (L/km).
+  const chargesFuel = !!selectedDemandType?.chargesFuelByDistance;
+  const watchedDistance = Number(form.watch('distanceKm')) || 0;
+  const watchedConsumption = Number(form.watch('fuelConsumptionPerKm')) || 0;
+  const computedLiters = chargesFuel ? Math.round(watchedDistance * watchedConsumption * 100) / 100 : 0;
   const selectedProducer = producers.find((p) => p.id === selectedProducerId);
+
+  // Mantém fuel_liters sincronizado com o cálculo (para a DAM já vir preenchida).
+  useEffect(() => {
+    if (chargesFuel) form.setValue('fuelLiters', computedLiters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chargesFuel, computedLiters]);
 
   useEffect(() => {
     if (service) {
@@ -363,6 +382,8 @@ export function ServiceForm({
         inputQuantity: service.inputQuantity || 0,
         fuelLiters: service.fuelLiters || 0,
         workedHours: service.workedHours || 0,
+        distanceKm: service.distanceKm || 0,
+        fuelConsumptionPerKm: service.fuelConsumptionPerKm || 0,
         responsibleTechnicianId: service.responsibleTechnicianId || '',
       });
       setDamReceiptFile(null);
@@ -389,6 +410,8 @@ export function ServiceForm({
         inputQuantity: 0,
         fuelLiters: 0,
         workedHours: 0,
+        distanceKm: 0,
+        fuelConsumptionPerKm: 0,
         responsibleTechnicianId: '',
       });
       setDamReceiptFile(null);
@@ -776,6 +799,47 @@ export function ServiceForm({
                     </FormItem>
                   )}
                 />
+              )}
+
+              {/* Combustível por distância — tipos "com combustível" (ex.: caminhão do calcário) */}
+              {chargesFuel && (
+                <>
+                  <FormField
+                    control={form.control}
+                    name="distanceKm"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Distância a percorrer (km)</FormLabel>
+                        <FormControl>
+                          <DecimalInput value={field.value ?? 0} onChange={field.onChange} placeholder="0,00" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="fuelConsumptionPerKm"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Consumo médio do veículo (L/km)</FormLabel>
+                        <FormControl>
+                          <DecimalInput value={field.value ?? 0} onChange={field.onChange} placeholder="0,00" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>Litros a consumir (calculado)</FormLabel>
+                    <div className="flex items-center h-10 px-3 rounded-md border bg-muted/40 text-sm font-semibold">
+                      {computedLiters.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Distância × consumo médio. Vai preenchido na emissão da DAM (você informa só o valor por litro).
+                    </p>
+                  </FormItem>
+                </>
               )}
 
               {/* Fuel & Hours — Patrulha Mecanizada and Logística de Insumos */}

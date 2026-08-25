@@ -147,6 +147,8 @@ interface DbService {
   input_quantity?: number | null;
   fuel_liters?: number | null;
   worked_hours?: number | null;
+  distance_km?: number | null;
+  fuel_consumption_per_km?: number | null;
   responsible_technician_id?: string | null;
   producers?: { name: string; phone?: string | null; location_name?: string | null; latitude?: number | null; longitude?: number | null } | null;
   demand_types?: { name: string } | null;
@@ -385,6 +387,8 @@ export default function ServicesPage() {
       ...(data.inputQuantity ? { input_quantity: data.inputQuantity } : {}),
       fuel_liters: data.fuelLiters || null,
       worked_hours: data.workedHours || null,
+      distance_km: data.distanceKm || null,
+      fuel_consumption_per_km: data.fuelConsumptionPerKm || null,
       responsible_technician_id: data.responsibleTechnicianId && data.responsibleTechnicianId !== 'none' ? data.responsibleTechnicianId : null,
     });
     setFormOpen(false);
@@ -438,6 +442,8 @@ export default function ServicesPage() {
       input_quantity: data.inputQuantity || null,
       fuel_liters: data.fuelLiters || null,
       worked_hours: data.workedHours || null,
+      distance_km: data.distanceKm || null,
+      fuel_consumption_per_km: data.fuelConsumptionPerKm || null,
       responsible_technician_id: data.responsibleTechnicianId && data.responsibleTechnicianId !== 'none' ? data.responsibleTechnicianId : null,
     });
     setEditingService(null);
@@ -565,6 +571,8 @@ export default function ServicesPage() {
       inputQuantity: s.input_quantity || 0,
       fuelLiters: s.fuel_liters || 0,
       workedHours: s.worked_hours || 0,
+      distanceKm: s.distance_km || 0,
+      fuelConsumptionPerKm: s.fuel_consumption_per_km || 0,
       damPaidAt: s.dam_paid_at || '',
       responsibleTechnicianId: s.responsible_technician_id || '',
     };
@@ -602,6 +610,7 @@ export default function ServicesPage() {
     isActive: d.is_active ?? true,
     createdAt: new Date(d.created_at || Date.now()),
     category: (d as any).category || null,
+    chargesFuelByDistance: (d as any).charges_fuel_by_distance ?? false,
   }));
 
   // ── columns ───────────────────────────────────────────────────────────────
