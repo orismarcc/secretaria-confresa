@@ -352,10 +352,14 @@ export function ServiceForm({
   const selectedProducer = producers.find((p) => p.id === selectedProducerId);
 
   // Mantém fuel_liters sincronizado com o cálculo (para a DAM já vir preenchida).
+  // Só sobrescreve quando distância E consumo estão preenchidos — assim, ao editar
+  // um atendimento antigo (sem esses campos), o valor de litros existente é preservado.
   useEffect(() => {
-    if (chargesFuel) form.setValue('fuelLiters', computedLiters);
+    if (chargesFuel && watchedDistance > 0 && watchedConsumption > 0) {
+      form.setValue('fuelLiters', computedLiters);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chargesFuel, computedLiters]);
+  }, [chargesFuel, computedLiters, watchedDistance, watchedConsumption]);
 
   useEffect(() => {
     if (service) {
@@ -842,8 +846,8 @@ export function ServiceForm({
                 </>
               )}
 
-              {/* Fuel & Hours — Patrulha Mecanizada and Logística de Insumos */}
-              {isPatrulhaOrLogistica && (
+              {/* Fuel & Hours manuais — Patrulha/Insumos, exceto quando cobra combustível por distância */}
+              {isPatrulhaOrLogistica && !chargesFuel && (
                 <>
                   <FormField
                     control={form.control}
