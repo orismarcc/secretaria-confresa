@@ -4,6 +4,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { StatsCard } from '@/components/StatsCard';
 import {
   ClipboardList, Clock, Loader2, CheckCircle2, Users, CalendarCheck, PlayCircle, Wrench,
+  ChevronDown, ChevronRight, User, CalendarClock,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -62,6 +63,7 @@ import {
 } from '@dnd-kit/sortable';
 import { SortableServiceItem } from '@/components/SortableServiceItem';
 import { useMaintenances } from '@/hooks/useMaintenanceData';
+import { useOperators } from '@/hooks/useOperatorData';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -70,6 +72,17 @@ export default function DashboardPage() {
   const { data: producerStats, isLoading: statsLoading } = useDashboardStats();
   const { data: services = [], isLoading: servicesLoading } = useServices();
   const { data: maintenances = [] } = useMaintenances();
+  const { data: operators = [] } = useOperators();
+
+  // Próximos atendimentos expandidos por operador (clique para expandir)
+  const [expandedOps, setExpandedOps] = useState<Set<string>>(new Set());
+  const toggleOp = useCallback((key: string) => {
+    setExpandedOps((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }, []);
 
   // Maquinários atualmente em manutenção (sem data de fim)
   const ongoingMaintenances = useMemo(
@@ -208,6 +221,39 @@ export default function DashboardPage() {
       });
   }, [services]);
 
+  // Agrupa os "próximos" por operador. Dentro de cada operador, atendimentos com
+  // agendamento (appointment_date) têm prioridade por data; os demais seguem a
+  // ordem manual (posição).
+  const proximoGroups = useMemo(() => {
+    const opName = new Map((operators as any[]).map((o) => [o.id, o.name] as const));
+    const groups = new Map<string, { key: string; name: string; items: any[]; agendados: number }>();
+    for (const s of proximoServices as any[]) {
+      const key = s.operator_id || '__none__';
+      const name = s.operator_id ? (opName.get(s.operator_id) || 'Operador') : 'Sem operador';
+      if (!groups.has(key)) groups.set(key, { key, name, items: [], agendados: 0 });
+      const g = groups.get(key)!;
+      g.items.push(s);
+      if (s.appointment_date) g.agendados++;
+    }
+    const apptTime = (s: any) => (s.appointment_date ? new Date(String(s.appointment_date).replace(' ', 'T')).getTime() : null);
+    for (const g of groups.values()) {
+      g.items.sort((a, b) => {
+        const ta = apptTime(a), tb = apptTime(b);
+        if (ta != null && tb != null && ta !== tb) return ta - tb; // agendados: por data (prioridade)
+        if (ta != null && tb == null) return -1;                   // agendado antes do não-agendado
+        if (ta == null && tb != null) return 1;
+        const pa = a.position ?? 999999, pb = b.position ?? 999999; // demais: ordem manual
+        if (pa !== pb) return pa - pb;
+        return new Date(a.scheduled_date + 'T12:00:00').getTime() - new Date(b.scheduled_date + 'T12:00:00').getTime();
+      });
+    }
+    return Array.from(groups.values()).sort((a, b) => {
+      if (a.key === '__none__') return 1;
+      if (b.key === '__none__') return -1;
+      return a.name.localeCompare(b.name, 'pt-BR');
+    });
+  }, [proximoServices, operators]);
+
   // Services currently in_progress, sorted by most recent update
   const inProgressServices = useMemo(() => {
     return services
@@ -219,17 +265,18 @@ export default function DashboardPage() {
       });
   }, [services]);
 
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
+  // Drag-and-drop dentro de um operador: reordena e persiste as posições do grupo.
+  const handleGroupDragEnd = useCallback((items: any[]) => (event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
-      const oldIndex = proximoServices.findIndex(s => s.id === active.id);
-      const newIndex = proximoServices.findIndex(s => s.id === over.id);
+      const oldIndex = items.findIndex((s) => s.id === active.id);
+      const newIndex = items.findIndex((s) => s.id === over.id);
       if (oldIndex !== -1 && newIndex !== -1) {
-        const reordered = arrayMove(proximoServices, oldIndex, newIndex);
+        const reordered = arrayMove(items, oldIndex, newIndex);
         updatePositions.mutate(reordered.map((s, idx) => ({ id: s.id, position: idx + 1 })));
       }
     }
-  }, [proximoServices, updatePositions]);
+  }, [updatePositions]);
 
   const isLoading = statsLoading || servicesLoading;
 
@@ -333,32 +380,64 @@ export default function DashboardPage() {
                 </p>
               </div>
             ) : (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={proximoServices.map(s => s.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="space-y-1.5 sm:space-y-2 max-h-[260px] sm:max-h-[380px] overflow-y-auto pr-0.5 sm:pr-1">
-                    {proximoServices.map(service => (
-                      <SortableServiceItem
-                        key={service.id}
-                        service={service}
-                        producerName={(service as any).producers?.name || 'N/A'}
-                        demandTypeName={(service as any).demand_types?.name || 'N/A'}
-                        variant="proximos"
-                        onView={() => openDetail(service)}
-                        onChangeStatus={quickChangeStatus}
-                        onFinalize={() => openFinalizeDialog(service)}
-                        onCancelStatus={() => openCancelDialog(service)}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
+              <div className="space-y-2 max-h-[280px] sm:max-h-[440px] overflow-y-auto pr-0.5 sm:pr-1">
+                {proximoGroups.map((g) => {
+                  const isOpen = expandedOps.has(g.key);
+                  return (
+                    <div key={g.key} className="rounded-lg border bg-card">
+                      <button
+                        type="button"
+                        onClick={() => toggleOp(g.key)}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 text-left hover:bg-muted/40 rounded-lg"
+                      >
+                        {isOpen
+                          ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
+                        <User className="h-4 w-4 shrink-0 text-violet-600" />
+                        <span className="font-medium text-sm truncate flex-1">{g.name}</span>
+                        {g.agendados > 0 && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-700 bg-blue-500/10 rounded-full px-1.5 py-0.5">
+                            <CalendarClock className="h-3 w-3" /> {g.agendados}
+                          </span>
+                        )}
+                        <span className="text-[10px] bg-violet-100 text-violet-700 dark:bg-violet-950/50 px-1.5 py-0.5 rounded-full">
+                          {g.items.length}
+                        </span>
+                      </button>
+                      {isOpen && (
+                        <div className="px-2 pb-2 pt-0.5">
+                          <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={handleGroupDragEnd(g.items)}
+                          >
+                            <SortableContext
+                              items={g.items.map((s) => s.id)}
+                              strategy={verticalListSortingStrategy}
+                            >
+                              <div className="space-y-1.5">
+                                {g.items.map((service) => (
+                                  <SortableServiceItem
+                                    key={service.id}
+                                    service={service}
+                                    producerName={(service as any).producers?.name || 'N/A'}
+                                    demandTypeName={(service as any).demand_types?.name || 'N/A'}
+                                    variant="proximos"
+                                    onView={() => openDetail(service)}
+                                    onChangeStatus={quickChangeStatus}
+                                    onFinalize={() => openFinalizeDialog(service)}
+                                    onCancelStatus={() => openCancelDialog(service)}
+                                  />
+                                ))}
+                              </div>
+                            </SortableContext>
+                          </DndContext>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </CardContent>
         </Card>
