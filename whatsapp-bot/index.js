@@ -22,6 +22,7 @@ const {
   DisconnectReason,
   fetchLatestBaileysVersion,
 } = require('@whiskeysockets/baileys');
+const { renderGroupImage } = require('./imageRender');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -146,15 +147,11 @@ async function sendDaily(sock) {
     return null;
   };
 
+  const ordered = [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
   for (const r of recipients) {
     if (!r.phone) continue;
-    let text;
-    if (r.all) {
-      text = formatAll(groups);
-    } else {
-      const g = findByName(r.match || r.name);
-      text = g ? formatGroup(g) : `🌾 Sem atendimentos em aberto para *${r.match || r.name || 'você'}* hoje.`;
-    }
+
     // Resolve o JID real no WhatsApp (trata o "9" extra dos celulares BR).
     let jid = jidFromPhone(r.phone);
     try {
@@ -168,13 +165,26 @@ async function sendDaily(sock) {
     } catch (e) {
       console.error(`[aviso] não resolvi ${r.phone} (${e.message}); tentando assim mesmo.`);
     }
-    try {
-      await sock.sendMessage(jid, { text });
-      console.log(`[ok] ${r.match || r.name || r.phone} -> ${jid}`);
-    } catch (e) {
-      console.error(`[erro] ${r.phone}: ${e.message}`);
+
+    // Quais operadores enviar: all => todos com conteúdo; senão => o operador do destinatário.
+    let toSend;
+    if (r.all) {
+      toSend = ordered.filter((g) => g.exec.length || g.proximos.length);
+    } else {
+      const g = findByName(r.match || r.name);
+      toSend = [g || { name: r.match || r.name || 'Operador', exec: [], proximos: [] }];
     }
-    await new Promise((res) => setTimeout(res, 2500)); // pausa entre envios
+
+    for (const g of toSend) {
+      try {
+        const img = await renderGroupImage(g);
+        await sock.sendMessage(jid, { image: img });
+        console.log(`[ok] ${r.match || r.name || r.phone} <- ${g.name} (${jid})`);
+      } catch (e) {
+        console.error(`[erro] imagem ${g.name} -> ${r.phone}: ${e.message}`);
+      }
+      await new Promise((res) => setTimeout(res, 2500)); // pausa entre envios
+    }
   }
 }
 
