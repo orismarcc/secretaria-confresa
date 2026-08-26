@@ -6,6 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node index.js",
+    "once": "node index.js --once",
     "test-now": "node index.js --now"
   },
   "dependencies": {

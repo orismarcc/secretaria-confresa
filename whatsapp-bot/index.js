@@ -30,6 +30,9 @@ const TIMEZONE = process.env.TIMEZONE || 'America/Cuiaba';
 const RECIPIENTS_FILE = process.env.RECIPIENTS_FILE || path.join(__dirname, 'recipients.json');
 // Número da secretaria (só dígitos: 55 DDD número) para parear por CÓDIGO em vez de QR.
 const PAIR_PHONE = process.env.PAIR_PHONE || '';
+// Modo "enviar uma vez": conecta, envia o resumo e encerra (ideal para rodar ao
+// ligar o PC de manhã, sem precisar ficar 24/7). Ative com --once ou RUN_MODE=once.
+const ONCE = process.argv.includes('--once') || process.env.RUN_MODE === 'once';
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('Faltam SUPABASE_URL e/ou SUPABASE_SERVICE_ROLE_KEY no .env');
@@ -190,6 +193,25 @@ async function connect() {
 
 async function main() {
   await connect();
+
+  // Modo "uma vez": espera conectar, envia e encerra.
+  if (ONCE) {
+    const started = Date.now();
+    const t = setInterval(async () => {
+      if (ready && sock) {
+        clearInterval(t);
+        console.log('Conectado. Enviando resumo (modo único)...');
+        await sendDaily(sock).catch((e) => console.error('Falha no envio:', e.message));
+        console.log('Concluído. Encerrando.');
+        setTimeout(() => process.exit(0), 1500);
+      } else if (Date.now() - started > 120000) {
+        clearInterval(t);
+        console.error('Não conectou em 2 min. Se for a 1ª vez, faça o pareamento com "npm start".');
+        process.exit(1);
+      }
+    }, 1000);
+    return;
+  }
 
   const [hh, mm] = SEND_AT.split(':');
   cron.schedule(`${Number(mm)} ${Number(hh)} * * *`, () => {

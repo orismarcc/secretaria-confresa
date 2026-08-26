@@ -57,14 +57,35 @@ npm run test-now
 Envia o resumo imediatamente para todos do `recipients.json` (bom para conferir
 o formato antes de deixar no automático).
 
-## Deixar rodando 24/7 (recomendado: PM2)
+## Duas formas de rodar (escolha uma)
+
+Você **não precisa** deixar o PC ligado 24/7. A sessão do WhatsApp fica salva em
+`auth/`, então dá para desligar à noite e ligar de manhã **sem escanear de novo**.
+
+### Opção 1 — Ligar o PC de manhã e enviar uma vez (mais simples) ✅
+O bot conecta, envia o resumo e **fecha**. Basta o PC estar ligado na hora.
+```bash
+npm run once
+```
+Para ser automático ao ligar o PC (Windows), agende no **Agendador de Tarefas**:
+- Ação: `Iniciar um programa` → programa `node`, argumentos `index.js --once`,
+  "Iniciar em" = a pasta `whatsapp-bot`.
+- Disparador: `Ao fazer logon` (ou num horário fixo, ex.: 07:05).
+Assim: você chega, liga o PC, o bot conecta e manda a mensagem sozinho.
+
+### Opção 2 — Deixar rodando o dia todo (envia no horário SEND_AT)
+Fica no ar e dispara sozinho todo dia no horário definido. Precisa do PC ligado
+naquele horário.
 ```bash
 npm install -g pm2
 pm2 start index.js --name whatsapp-bot
 pm2 save
-pm2 startup      # segue as instruções para iniciar junto com o sistema
+pm2 startup      # inicia junto com o sistema
 ```
 Logs: `pm2 logs whatsapp-bot`.
+
+> Dica: na Opção 1 o `SEND_AT` é ignorado (envia assim que conecta). Na Opção 2
+> ele é o horário do disparo diário.
 
 ## Como funciona / configuração
 - **Horário:** `SEND_AT` (ex.: `07:00`) e `TIMEZONE` (ex.: `America/Cuiaba`) no `.env`.
