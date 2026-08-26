@@ -15,6 +15,7 @@ interface ServiceData {
   status: string;
   scheduled_date: string;
   appointment_date?: string | null;
+  worked_hours?: number | null;
   producers?: { name: string } | null;
   demand_types?: { name: string } | null;
 }
@@ -117,7 +118,12 @@ export function SortableServiceItem({
         {/* Content */}
         <div className="flex-1 min-w-0">
           <p className="font-medium text-xs sm:text-sm truncate leading-tight">{producerName}</p>
-          <p className="text-[10px] text-muted-foreground truncate hidden sm:block">{demandTypeName}</p>
+          <p className="text-[10px] text-muted-foreground truncate hidden sm:block">
+            {demandTypeName}
+            {(Number(service.worked_hours) || 0) > 0 && (
+              <span className="ml-1 text-blue-600 font-medium">· {Number(service.worked_hours).toLocaleString('pt-BR')}h</span>
+            )}
+          </p>
           {hasAppointment && isToday && (
             <span className="text-[9px] sm:text-[10px] font-semibold text-primary uppercase tracking-wide">Hoje</span>
           )}

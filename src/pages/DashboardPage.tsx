@@ -124,13 +124,6 @@ export default function DashboardPage() {
     totalProducers: producerStats?.totalProducers ?? 0,
   }), [scopedServices, producerStats]);
 
-  // Horas dos atendimentos em aberto no dashboard (próximos + em execução).
-  const openHoras = useMemo(
-    () => (services as any[])
-      .filter((s) => s.status === 'in_progress' || s.status === 'proximo')
-      .reduce((sum: number, s: any) => sum + (Number(s.worked_hours) || 0), 0),
-    [services],
-  );
   const updatePositions = useUpdateServicePositions();
   const updateService = useUpdateService();
 
@@ -534,6 +527,9 @@ export default function DashboardPage() {
                         </p>
                         <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
                           {service.demand_types?.name || 'N/A'}
+                          {(Number((service as any).worked_hours) || 0) > 0 && (
+                            <span className="ml-1 text-blue-600 font-medium">· {Number((service as any).worked_hours).toLocaleString('pt-BR')}h</span>
+                          )}
                         </p>
                         <p className="text-[10px] sm:text-xs text-violet-600 font-medium mt-0.5 flex items-center gap-1 truncate">
                           <User className="h-3 w-3 shrink-0" />
@@ -574,21 +570,6 @@ export default function DashboardPage() {
                 <p className="text-2xl sm:text-4xl font-bold leading-none">{stats?.totalProducers || 0}</p>
                 <p className="text-[10px] sm:text-sm text-muted-foreground leading-tight mt-0.5">
                   produtores<span className="hidden sm:inline"> cadastrados</span>
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 sm:gap-4">
-              <div className="p-2 sm:p-4 rounded-xl bg-blue-500/10 shrink-0">
-                <Clock className="h-5 w-5 sm:h-8 sm:w-8 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl sm:text-4xl font-bold leading-none">
-                  {openHoras.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}
-                  <span className="text-base sm:text-xl font-medium text-muted-foreground"> h</span>
-                </p>
-                <p className="text-[10px] sm:text-sm text-muted-foreground leading-tight mt-0.5">
-                  horas<span className="hidden sm:inline"> (próximos + em execução)</span>
                 </p>
               </div>
             </div>
