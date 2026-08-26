@@ -150,9 +150,22 @@ async function sendDaily(sock) {
       const g = findByName(r.match || r.name);
       text = g ? formatGroup(g) : `🌾 Sem atendimentos em aberto para *${r.match || r.name || 'você'}* hoje.`;
     }
+    // Resolve o JID real no WhatsApp (trata o "9" extra dos celulares BR).
+    let jid = jidFromPhone(r.phone);
     try {
-      await sock.sendMessage(jidFromPhone(r.phone), { text });
-      console.log(`[ok] ${r.match || r.name || r.phone}`);
+      const found = await sock.onWhatsApp(onlyDigits(r.phone));
+      if (found && found[0] && found[0].exists) {
+        jid = found[0].jid;
+      } else {
+        console.error(`[erro] ${r.phone}: número não encontrado no WhatsApp`);
+        continue;
+      }
+    } catch (e) {
+      console.error(`[aviso] não resolvi ${r.phone} (${e.message}); tentando assim mesmo.`);
+    }
+    try {
+      await sock.sendMessage(jid, { text });
+      console.log(`[ok] ${r.match || r.name || r.phone} -> ${jid}`);
     } catch (e) {
       console.error(`[erro] ${r.phone}: ${e.message}`);
     }
