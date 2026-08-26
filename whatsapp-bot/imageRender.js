@@ -23,10 +23,20 @@ async function getLogo() {
 
 const fmtDate = (raw) => {
   if (!raw) return '';
-  const d = new Date(String(raw).replace(' ', 'T'));
+  let s = String(raw).replace(' ', 'T');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) s += 'T12:00:00'; // evita deslocar o dia por fuso
+  const d = new Date(s);
   return isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR');
 };
 const hStr = (h) => `${(Number(h) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}h`;
+const fmtPhone = (raw) => {
+  let d = String(raw || '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.startsWith('55') && d.length > 11) d = d.slice(2); // tira DDI
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return String(raw);
+};
 
 function ellipsize(ctx, text, maxW) {
   if (ctx.measureText(text).width <= maxW) return text;
@@ -39,7 +49,7 @@ async function renderGroupImage(g) {
   const W = 760;
   const pad = 28;
   const headerH = 100;
-  const rowH = 30;
+  const rowH = 48;
   const secTitleH = 40;
   const execN = Math.max(1, g.exec.length);
   const proxN = Math.max(1, g.proximos.length);
@@ -109,6 +119,11 @@ async function renderGroupImage(g) {
         let line = `${it.producer} — ${it.demand}`;
         if (isProx && it.appt) line += `  (${fmtDate(it.appt)})`;
         ctx.fillText(ellipsize(ctx, line, W - 2 * pad - 90), pad + 22, y);
+        // telefone do produtor (linha secundária)
+        const tel = fmtPhone(it.phone);
+        ctx.fillStyle = MUTED;
+        ctx.font = '13px Arial';
+        ctx.fillText(tel ? `Tel: ${tel}` : 'sem contato', pad + 22, y + 18);
         y += rowH;
       });
     }

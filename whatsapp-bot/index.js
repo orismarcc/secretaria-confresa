@@ -59,7 +59,9 @@ const onlyDigits = (s) => String(s || '').replace(/\D/g, '');
 const jidFromPhone = (phone) => `${onlyDigits(phone)}@s.whatsapp.net`;
 const fmtDate = (raw) => {
   if (!raw) return '';
-  const d = new Date(String(raw).replace(' ', 'T'));
+  let s = String(raw).replace(' ', 'T');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) s += 'T12:00:00'; // evita deslocar o dia por fuso
+  const d = new Date(s);
   return isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR');
 };
 
@@ -67,7 +69,7 @@ const fmtDate = (raw) => {
 async function buildGroups() {
   const { data: services, error } = await supabase
     .from('services')
-    .select('id, status, scheduled_date, appointment_date, operator_id, worked_hours, producers(name), demand_types(name)')
+    .select('id, status, scheduled_date, appointment_date, operator_id, worked_hours, producers(name, phone), demand_types(name)')
     .in('status', ['proximo', 'in_progress']);
   if (error) throw error;
 
@@ -81,6 +83,7 @@ async function buildGroups() {
     if (!groups.has(key)) groups.set(key, { name, proximos: [], exec: [] });
     const item = {
       producer: s.producers?.name || 'N/A',
+      phone: s.producers?.phone || '',
       demand: s.demand_types?.name || '',
       appt: s.appointment_date,
       sched: s.scheduled_date,
@@ -178,7 +181,7 @@ async function sendDaily(sock) {
     for (const g of toSend) {
       try {
         const img = await renderGroupImage(g);
-        await sock.sendMessage(jid, { image: img });
+        await sock.sendMessage(jid, { image: img, caption: `Atendimentos de ${g.name}` });
         console.log(`[ok] ${r.match || r.name || r.phone} <- ${g.name} (${jid})`);
       } catch (e) {
         console.error(`[erro] imagem ${g.name} -> ${r.phone}: ${e.message}`);
