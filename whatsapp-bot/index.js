@@ -28,6 +28,8 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SEND_AT = process.env.SEND_AT || '07:00';               // HH:MM (24h)
 const TIMEZONE = process.env.TIMEZONE || 'America/Cuiaba';
 const RECIPIENTS_FILE = process.env.RECIPIENTS_FILE || path.join(__dirname, 'recipients.json');
+// Número da secretaria (só dígitos: 55 DDD número) para parear por CÓDIGO em vez de QR.
+const PAIR_PHONE = process.env.PAIR_PHONE || '';
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('Faltam SUPABASE_URL e/ou SUPABASE_SERVICE_ROLE_KEY no .env');
@@ -150,10 +152,25 @@ async function connect() {
   const { version } = await fetchLatestBaileysVersion();
   sock = makeWASocket({ version, auth: state, logger: P({ level: 'silent' }) });
 
+  // Pareamento por CÓDIGO (opcional): se PAIR_PHONE estiver definido e ainda não
+  // houver sessão, gera um código de 8 dígitos para digitar no celular.
+  if (PAIR_PHONE && !sock.authState.creds.registered) {
+    setTimeout(async () => {
+      try {
+        const code = await sock.requestPairingCode(onlyDigits(PAIR_PHONE));
+        console.log(`\n🔑 Código de pareamento: ${code}`);
+        console.log('   No WhatsApp da secretaria: Aparelhos conectados → Conectar aparelho →');
+        console.log('   "Conectar com número de telefone" → digite este código.\n');
+      } catch (e) {
+        console.error('Falha ao gerar código de pareamento:', e.message);
+      }
+    }, 3000);
+  }
+
   sock.ev.on('creds.update', saveCreds);
   sock.ev.on('connection.update', (u) => {
     const { connection, lastDisconnect, qr } = u;
-    if (qr) {
+    if (qr && !PAIR_PHONE) {
       console.log('\n📲 Abra o WhatsApp no celular → Aparelhos conectados → Conectar aparelho e escaneie:\n');
       qrcode.generate(qr, { small: true });
     }

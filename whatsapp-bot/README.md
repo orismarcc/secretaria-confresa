@@ -27,14 +27,28 @@ No `.env`, use a **chave service_role** (a mesma do `.env.local` do projeto).
 Nos telefones, use o formato internacional só com dígitos: `55` + DDD + número
 (ex.: `5566999998888`).
 
-## Primeiro uso (parear o WhatsApp)
+## Primeiro uso — conectar o WhatsApp da secretaria (só 1 vez)
+Você conecta como um "aparelho vinculado" (igual WhatsApp Web). Use o **número
+da secretaria** (dedicado, não o pessoal). Duas formas:
+
+**A) Por QR Code** (mais simples se a máquina tem tela):
 ```bash
 npm start
 ```
-Aparecerá um **QR Code** no terminal. No celular: **WhatsApp → Configurações →
-Aparelhos conectados → Conectar aparelho** e escaneie. Depois disso a sessão
-fica salva na pasta `auth/` e não pede QR de novo (a menos que o WhatsApp
-desconecte — nesse caso apague `auth/` e escaneie outra vez).
+Aparece um QR no terminal. No celular com o WhatsApp da secretaria:
+**Configurações → Aparelhos conectados → Conectar aparelho** e escaneie.
+
+**B) Por código de 8 dígitos** (melhor em servidor sem tela / acesso remoto):
+No `.env`, defina `PAIR_PHONE=5566999998888` (número da secretaria, só dígitos) e:
+```bash
+npm start
+```
+O terminal mostra um **código de 8 dígitos**. No celular:
+**Aparelhos conectados → Conectar aparelho → "Conectar com número de telefone"**
+e digite o código.
+
+Depois de conectar, a sessão fica salva em `auth/` e **não pede de novo**. Se o
+WhatsApp desconectar (raro), apague a pasta `auth/` e refaça o pareamento.
 
 ## Testar o envio na hora
 ```bash
