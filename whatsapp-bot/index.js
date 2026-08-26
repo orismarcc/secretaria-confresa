@@ -66,7 +66,7 @@ const fmtDate = (raw) => {
 async function buildGroups() {
   const { data: services, error } = await supabase
     .from('services')
-    .select('id, status, scheduled_date, appointment_date, operator_id, producers(name), demand_types(name)')
+    .select('id, status, scheduled_date, appointment_date, operator_id, worked_hours, producers(name), demand_types(name)')
     .in('status', ['proximo', 'in_progress']);
   if (error) throw error;
 
@@ -83,6 +83,7 @@ async function buildGroups() {
       demand: s.demand_types?.name || '',
       appt: s.appointment_date,
       sched: s.scheduled_date,
+      hours: Number(s.worked_hours) || 0,
     };
     (s.status === 'proximo' ? groups.get(key).proximos : groups.get(key).exec).push(item);
   }
@@ -98,29 +99,37 @@ async function buildGroups() {
   return groups;
 }
 
+const somaHoras = (items) => items.reduce((s, it) => s + (Number(it.hours) || 0), 0);
+const fmtHoras = (h) => `${h.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} h`;
+const LEGENDA = '_Legenda: 🔵 em execução · 🟣 próximos_';
+
 function formatGroup(g) {
   const hoje = new Date().toLocaleDateString('pt-BR');
+  const horas = somaHoras([...g.exec, ...g.proximos]);
   let m = `🌾 *Atendimentos — ${g.name}*\n_${hoje}_\n`;
-  m += `\n🟣 *Próximos (${g.proximos.length})*\n`;
-  m += g.proximos.length
-    ? g.proximos.map((it, i) => `${i + 1}. ${it.producer} — ${it.demand}${it.appt ? ` 📅 ${fmtDate(it.appt)}` : ''}`).join('\n')
-    : '— nenhum —';
-  m += `\n\n🔵 *Em execução (${g.exec.length})*\n`;
+  m += `\n🔵 *Em execução (${g.exec.length})*\n`;
   m += g.exec.length
-    ? g.exec.map((it) => `• ${it.producer} — ${it.demand}`).join('\n')
+    ? g.exec.map((it) => `🔵 ${it.producer} — ${it.demand}`).join('\n')
     : '— nenhum —';
+  m += `\n\n🟣 *Próximos (${g.proximos.length})*\n`;
+  m += g.proximos.length
+    ? g.proximos.map((it) => `🟣 ${it.producer} — ${it.demand}${it.appt ? ` 📅 ${fmtDate(it.appt)}` : ''}`).join('\n')
+    : '— nenhum —';
+  m += `\n\n⏱️ *Total de horas:* ${fmtHoras(horas)}`;
+  m += `\n${LEGENDA}`;
   return m;
 }
 
 function formatAll(groups) {
   const hoje = new Date().toLocaleDateString('pt-BR');
-  let m = `🌾 *Resumo de atendimentos — ${hoje}*`;
+  let m = `🌾 *Resumo de atendimentos — ${hoje}*\n${LEGENDA}`;
   const ordered = [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   for (const g of ordered) {
     if (g.proximos.length === 0 && g.exec.length === 0) continue;
-    m += `\n\n*${g.name}*  🟣 ${g.proximos.length} · 🔵 ${g.exec.length}`;
-    g.proximos.forEach((it, i) => { m += `\n  ${i + 1}. ${it.producer} — ${it.demand}${it.appt ? ` 📅 ${fmtDate(it.appt)}` : ''}`; });
-    g.exec.forEach((it) => { m += `\n  ▶ ${it.producer} — ${it.demand}`; });
+    const horas = somaHoras([...g.exec, ...g.proximos]);
+    m += `\n\n*${g.name}*  🔵 ${g.exec.length} · 🟣 ${g.proximos.length} · ⏱️ ${fmtHoras(horas)}`;
+    g.exec.forEach((it) => { m += `\n  🔵 ${it.producer} — ${it.demand}`; });
+    g.proximos.forEach((it) => { m += `\n  🟣 ${it.producer} — ${it.demand}${it.appt ? ` 📅 ${fmtDate(it.appt)}` : ''}`; });
   }
   return m;
 }

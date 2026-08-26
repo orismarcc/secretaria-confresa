@@ -122,6 +122,10 @@ export default function DashboardPage() {
     completedServices: scopedServices.filter((s: any) => s.status === 'completed').length,
     proximoServices: scopedServices.filter((s: any) => s.status === 'proximo').length,
     totalProducers: producerStats?.totalProducers ?? 0,
+    // Horas trabalhadas (atendimentos finalizados no exercício)
+    totalHoras: scopedServices
+      .filter((s: any) => s.status === 'completed')
+      .reduce((sum: number, s: any) => sum + (Number(s.worked_hours) || 0), 0),
   }), [scopedServices, producerStats]);
   const updatePositions = useUpdateServicePositions();
   const updateService = useUpdateService();
@@ -566,6 +570,21 @@ export default function DashboardPage() {
                 <p className="text-2xl sm:text-4xl font-bold leading-none">{stats?.totalProducers || 0}</p>
                 <p className="text-[10px] sm:text-sm text-muted-foreground leading-tight mt-0.5">
                   produtores<span className="hidden sm:inline"> cadastrados</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 sm:gap-4">
+              <div className="p-2 sm:p-4 rounded-xl bg-blue-500/10 shrink-0">
+                <Clock className="h-5 w-5 sm:h-8 sm:w-8 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-2xl sm:text-4xl font-bold leading-none">
+                  {(stats?.totalHoras || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}
+                  <span className="text-base sm:text-xl font-medium text-muted-foreground"> h</span>
+                </p>
+                <p className="text-[10px] sm:text-sm text-muted-foreground leading-tight mt-0.5">
+                  horas trabalhadas<span className="hidden sm:inline"> (finalizados)</span>
                 </p>
               </div>
             </div>
