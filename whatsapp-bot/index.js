@@ -30,9 +30,23 @@ const TIMEZONE = process.env.TIMEZONE || 'America/Cuiaba';
 const RECIPIENTS_FILE = process.env.RECIPIENTS_FILE || path.join(__dirname, 'recipients.json');
 // Número da secretaria (só dígitos: 55 DDD número) para parear por CÓDIGO em vez de QR.
 const PAIR_PHONE = process.env.PAIR_PHONE || '';
-// Modo "enviar uma vez": conecta, envia o resumo e encerra (ideal para rodar ao
-// ligar o PC de manhã, sem precisar ficar 24/7). Ative com --once ou RUN_MODE=once.
+// Modo "enviar uma vez": conecta, envia o resumo e encerra (para testes/manual).
 const ONCE = process.argv.includes('--once') || process.env.RUN_MODE === 'once';
+// Modo "diário inteligente": garante 1 envio por dia — às SEND_AT (fuso TIMEZONE)
+// se o PC já estiver ligado, ou no 1º acesso depois desse horário. Não repete.
+const DAILY = process.argv.includes('--daily') || process.env.RUN_MODE === 'daily';
+const STATE_FILE = path.join(__dirname, 'state.json');
+
+function readState() { try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch { return {}; } }
+function writeState(s) { try { fs.writeFileSync(STATE_FILE, JSON.stringify(s)); } catch (e) { console.error('Não gravei state.json:', e.message); } }
+function nowInTZ(tz) {
+  const p = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date());
+  const g = (t) => p.find((x) => x.type === t).value;
+  const hh = Number(g('hour')) % 24;
+  return { date: `${g('year')}-${g('month')}-${g('day')}`, hh, mm: Number(g('minute')) };
+}
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('Faltam SUPABASE_URL e/ou SUPABASE_SERVICE_ROLE_KEY no .env');
@@ -191,27 +205,55 @@ async function connect() {
   });
 }
 
+// Espera conectar, envia e encerra (usado pelos modos --once e --daily).
+function sendOnceThenExit(onSent) {
+  const started = Date.now();
+  const t = setInterval(async () => {
+    if (ready && sock) {
+      clearInterval(t);
+      console.log('Conectado. Enviando resumo...');
+      await sendDaily(sock).catch((e) => console.error('Falha no envio:', e.message));
+      if (onSent) onSent();
+      console.log('Concluído. Encerrando.');
+      setTimeout(() => process.exit(0), 1500);
+    } else if (Date.now() - started > 180000) {
+      clearInterval(t);
+      console.error('Não conectou em 3 min. Se for a 1ª vez, faça o pareamento com "npm start".');
+      process.exit(1);
+    }
+  }, 1000);
+}
+
 async function main() {
   await connect();
 
-  // Modo "uma vez": espera conectar, envia e encerra.
-  if (ONCE) {
-    const started = Date.now();
-    const t = setInterval(async () => {
-      if (ready && sock) {
-        clearInterval(t);
-        console.log('Conectado. Enviando resumo (modo único)...');
-        await sendDaily(sock).catch((e) => console.error('Falha no envio:', e.message));
-        console.log('Concluído. Encerrando.');
-        setTimeout(() => process.exit(0), 1500);
-      } else if (Date.now() - started > 120000) {
-        clearInterval(t);
-        console.error('Não conectou em 2 min. Se for a 1ª vez, faça o pareamento com "npm start".');
-        process.exit(1);
-      }
-    }, 1000);
+  // Modo diário inteligente: 1 envio por dia, às SEND_AT ou no 1º acesso depois.
+  if (DAILY) {
+    const today = nowInTZ(TIMEZONE).date;
+    const state = readState();
+    if (state.lastSent === today) {
+      console.log(`Já enviei hoje (${today}). Nada a fazer.`);
+      setTimeout(() => process.exit(0), 800);
+      return;
+    }
+    const [sh, sm] = SEND_AT.split(':').map(Number);
+    const sendMin = sh * 60 + sm;
+    const now = nowInTZ(TIMEZONE);
+    const nowMin = now.hh * 60 + now.mm;
+    const fire = () => sendOnceThenExit(() => writeState({ lastSent: today }));
+    if (nowMin >= sendMin) {
+      console.log(`Agora são ${now.hh}:${String(now.mm).padStart(2, '0')} (${TIMEZONE}) — já passou de ${SEND_AT}; enviando ao conectar.`);
+      fire();
+    } else {
+      const wait = sendMin - nowMin;
+      console.log(`Aguardando até ${SEND_AT} (${TIMEZONE}) — ~${wait} min — para enviar...`);
+      setTimeout(fire, wait * 60 * 1000);
+    }
     return;
   }
+
+  // Modo "uma vez": espera conectar, envia e encerra.
+  if (ONCE) { sendOnceThenExit(); return; }
 
   const [hh, mm] = SEND_AT.split(':');
   cron.schedule(`${Number(mm)} ${Number(hh)} * * *`, () => {

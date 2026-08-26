@@ -1,5 +1,6 @@
 # Segredos e sessão do WhatsApp — nunca comitar
 .env
 recipients.json
+state.json
 auth/
 node_modules/

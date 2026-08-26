@@ -62,16 +62,23 @@ o formato antes de deixar no automático).
 Você **não precisa** deixar o PC ligado 24/7. A sessão do WhatsApp fica salva em
 `auth/`, então dá para desligar à noite e ligar de manhã **sem escanear de novo**.
 
-### Opção 1 — Ligar o PC de manhã e enviar uma vez (mais simples) ✅
-O bot conecta, envia o resumo e **fecha**. Basta o PC estar ligado na hora.
+### Opção 1 — 1 envio por dia às 7h (Brasília), ou no 1º acesso depois ✅ (recomendada)
+Modo **diário inteligente** (`--daily`): garante **um único** envio por dia.
+- Se o PC já estiver ligado às **07:00** (fuso `TIMEZONE`, use `America/Sao_Paulo`
+  para Brasília), envia nesse horário.
+- Se você chegar **depois das 7h** e ligar o PC, envia **assim que conectar**.
+- Se já enviou naquele dia, **não repete** (controla pela data em `state.json`).
 ```bash
-npm run once
+npm run daily
 ```
-Para ser automático ao ligar o PC (Windows), agende no **Agendador de Tarefas**:
-- Ação: `Iniciar um programa` → programa `node`, argumentos `index.js --once`,
-  "Iniciar em" = a pasta `whatsapp-bot`.
-- Disparador: `Ao fazer logon` (ou num horário fixo, ex.: 07:05).
-Assim: você chega, liga o PC, o bot conecta e manda a mensagem sozinho.
+Para automatizar ao ligar o PC (Windows) — **Agendador de Tarefas**:
+- Ação: `Iniciar um programa` → programa `node`, argumentos `index.js --daily`,
+  "Iniciar em (opcional)" = a pasta `whatsapp-bot` (caminho completo).
+- Disparador: **`Ao fazer logon`** (e, se quiser, também "Diariamente às 07:00"
+  para o caso do PC já estar ligado). Pode marcar "Repetir a cada 30 min por 8h"
+  para cobrir quedas — como não repete no mesmo dia, é seguro.
+
+Assim: você chega a qualquer hora, liga o PC, e o resumo é enviado uma vez.
 
 ### Opção 2 — Deixar rodando o dia todo (envia no horário SEND_AT)
 Fica no ar e dispara sozinho todo dia no horário definido. Precisa do PC ligado
