@@ -99,24 +99,21 @@ async function buildGroups() {
   return groups;
 }
 
-const somaHoras = (items) => items.reduce((s, it) => s + (Number(it.hours) || 0), 0);
-const fmtHoras = (h) => `${h.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} h`;
+const hLine = (h) => `${(Number(h) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}h`;
 const LEGENDA = '_Legenda: 🔵 em execução · 🟣 próximos_';
 
 function formatGroup(g) {
   const hoje = new Date().toLocaleDateString('pt-BR');
-  const horas = somaHoras([...g.exec, ...g.proximos]);
   let m = `🌾 *Atendimentos — ${g.name}*\n_${hoje}_\n`;
   m += `\n🔵 *Em execução (${g.exec.length})*\n`;
   m += g.exec.length
-    ? g.exec.map((it) => `🔵 ${it.producer} — ${it.demand}`).join('\n')
+    ? g.exec.map((it) => `🔵 ${it.producer} — ${it.demand} · ⏱️ ${hLine(it.hours)}`).join('\n')
     : '— nenhum —';
   m += `\n\n🟣 *Próximos (${g.proximos.length})*\n`;
   m += g.proximos.length
-    ? g.proximos.map((it) => `🟣 ${it.producer} — ${it.demand}${it.appt ? ` 📅 ${fmtDate(it.appt)}` : ''}`).join('\n')
+    ? g.proximos.map((it) => `🟣 ${it.producer} — ${it.demand}${it.appt ? ` 📅 ${fmtDate(it.appt)}` : ''} · ⏱️ ${hLine(it.hours)}`).join('\n')
     : '— nenhum —';
-  m += `\n\n⏱️ *Total de horas:* ${fmtHoras(horas)}`;
-  m += `\n${LEGENDA}`;
+  m += `\n\n${LEGENDA}`;
   return m;
 }
 
@@ -126,10 +123,9 @@ function formatAll(groups) {
   const ordered = [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   for (const g of ordered) {
     if (g.proximos.length === 0 && g.exec.length === 0) continue;
-    const horas = somaHoras([...g.exec, ...g.proximos]);
-    m += `\n\n*${g.name}*  🔵 ${g.exec.length} · 🟣 ${g.proximos.length} · ⏱️ ${fmtHoras(horas)}`;
-    g.exec.forEach((it) => { m += `\n  🔵 ${it.producer} — ${it.demand}`; });
-    g.proximos.forEach((it) => { m += `\n  🟣 ${it.producer} — ${it.demand}${it.appt ? ` 📅 ${fmtDate(it.appt)}` : ''}`; });
+    m += `\n\n*${g.name}*  🔵 ${g.exec.length} · 🟣 ${g.proximos.length}`;
+    g.exec.forEach((it) => { m += `\n  🔵 ${it.producer} — ${it.demand} · ⏱️ ${hLine(it.hours)}`; });
+    g.proximos.forEach((it) => { m += `\n  🟣 ${it.producer} — ${it.demand}${it.appt ? ` 📅 ${fmtDate(it.appt)}` : ''} · ⏱️ ${hLine(it.hours)}`; });
   }
   return m;
 }

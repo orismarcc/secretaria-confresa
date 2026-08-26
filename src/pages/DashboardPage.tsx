@@ -122,11 +122,15 @@ export default function DashboardPage() {
     completedServices: scopedServices.filter((s: any) => s.status === 'completed').length,
     proximoServices: scopedServices.filter((s: any) => s.status === 'proximo').length,
     totalProducers: producerStats?.totalProducers ?? 0,
-    // Horas trabalhadas (atendimentos finalizados no exercício)
-    totalHoras: scopedServices
-      .filter((s: any) => s.status === 'completed')
-      .reduce((sum: number, s: any) => sum + (Number(s.worked_hours) || 0), 0),
   }), [scopedServices, producerStats]);
+
+  // Horas dos atendimentos em aberto no dashboard (próximos + em execução).
+  const openHoras = useMemo(
+    () => (services as any[])
+      .filter((s) => s.status === 'in_progress' || s.status === 'proximo')
+      .reduce((sum: number, s: any) => sum + (Number(s.worked_hours) || 0), 0),
+    [services],
+  );
   const updatePositions = useUpdateServicePositions();
   const updateService = useUpdateService();
 
@@ -580,11 +584,11 @@ export default function DashboardPage() {
               </div>
               <div>
                 <p className="text-2xl sm:text-4xl font-bold leading-none">
-                  {(stats?.totalHoras || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}
+                  {openHoras.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}
                   <span className="text-base sm:text-xl font-medium text-muted-foreground"> h</span>
                 </p>
                 <p className="text-[10px] sm:text-sm text-muted-foreground leading-tight mt-0.5">
-                  horas trabalhadas<span className="hidden sm:inline"> (finalizados)</span>
+                  horas<span className="hidden sm:inline"> (próximos + em execução)</span>
                 </p>
               </div>
             </div>
