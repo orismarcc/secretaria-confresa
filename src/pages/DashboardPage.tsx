@@ -83,6 +83,10 @@ export default function DashboardPage() {
       return next;
     });
   }, []);
+  const opNameById = useMemo(
+    () => new Map((operators as any[]).map((o) => [o.id, o.name] as const)),
+    [operators],
+  );
 
   // Maquinários atualmente em manutenção (sem data de fim)
   const ongoingMaintenances = useMemo(
@@ -522,6 +526,10 @@ export default function DashboardPage() {
                         </p>
                         <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
                           {service.demand_types?.name || 'N/A'}
+                        </p>
+                        <p className="text-[10px] sm:text-xs text-violet-600 font-medium mt-0.5 flex items-center gap-1 truncate">
+                          <User className="h-3 w-3 shrink-0" />
+                          {service.operator_id ? (opNameById.get(service.operator_id) || 'Operador') : 'Sem operador'}
                         </p>
                         {service.scheduled_date && (
                           <p className="text-[10px] text-muted-foreground mt-1">

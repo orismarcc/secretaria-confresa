@@ -347,8 +347,11 @@ export function ServiceForm({
   // disposição da secretaria): litros = distância (km) × consumo médio (L/km).
   const chargesFuel = !!selectedDemandType?.chargesFuelByDistance;
   const watchedDistance = Number(form.watch('distanceKm')) || 0;
+  // Consumo médio em km/L (ex.: 3 km/L). Litros = distância ÷ consumo.
   const watchedConsumption = Number(form.watch('fuelConsumptionPerKm')) || 0;
-  const computedLiters = chargesFuel ? Math.round(watchedDistance * watchedConsumption * 100) / 100 : 0;
+  const computedLiters = chargesFuel && watchedConsumption > 0
+    ? Math.round((watchedDistance / watchedConsumption) * 100) / 100
+    : 0;
   const selectedProducer = producers.find((p) => p.id === selectedProducerId);
 
   // Mantém fuel_liters sincronizado com o cálculo (para a DAM já vir preenchida).
@@ -826,7 +829,7 @@ export function ServiceForm({
                     name="fuelConsumptionPerKm"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Consumo médio do veículo (L/km)</FormLabel>
+                        <FormLabel>Consumo médio do veículo (km/L)</FormLabel>
                         <FormControl>
                           <DecimalInput value={field.value ?? 0} onChange={field.onChange} placeholder="0,00" />
                         </FormControl>
@@ -840,7 +843,7 @@ export function ServiceForm({
                       {computedLiters.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Distância × consumo médio. Vai preenchido na emissão da DAM (você informa só o valor por litro).
+                      Distância ÷ consumo médio (km/L). Vai preenchido na emissão da DAM (você informa só o valor por litro).
                     </p>
                   </FormItem>
                 </>
