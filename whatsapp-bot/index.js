@@ -69,7 +69,7 @@ const fmtDate = (raw) => {
 async function buildGroups() {
   const { data: services, error } = await supabase
     .from('services')
-    .select('id, status, scheduled_date, appointment_date, operator_id, worked_hours, producers(name, phone), demand_types(name)')
+    .select('id, status, scheduled_date, appointment_date, operator_id, worked_hours, position, updated_at, producers(name, phone), demand_types(name)')
     .in('status', ['proximo', 'in_progress']);
   if (error) throw error;
 
@@ -87,17 +87,31 @@ async function buildGroups() {
       demand: s.demand_types?.name || '',
       appt: s.appointment_date,
       sched: s.scheduled_date,
+      position: s.position ?? 999999,
+      updatedAt: s.updated_at,
       hours: Number(s.worked_hours) || 0,
     };
     (s.status === 'proximo' ? groups.get(key).proximos : groups.get(key).exec).push(item);
   }
-  // Próximos: agendados (appointment_date) primeiro por data; demais por data agendada.
+  // Mesma ordenação do Dashboard.
+  const apptTime = (x) => (x.appt ? +new Date(String(x.appt).replace(' ', 'T')) : null);
+  const schedTime = (x) => +new Date(x.sched + 'T12:00:00');
   for (const g of groups.values()) {
+    // Próximos: agendados por data (prioridade), agendado antes do não-agendado,
+    // depois ordem manual (position) e por fim data agendada.
     g.proximos.sort((a, b) => {
-      const ta = a.appt ? +new Date(String(a.appt).replace(' ', 'T')) : Infinity;
-      const tb = b.appt ? +new Date(String(b.appt).replace(' ', 'T')) : Infinity;
-      if (ta !== tb) return ta - tb;
-      return +new Date(a.sched + 'T12:00:00') - +new Date(b.sched + 'T12:00:00');
+      const ta = apptTime(a), tb = apptTime(b);
+      if (ta != null && tb != null && ta !== tb) return ta - tb;
+      if (ta != null && tb == null) return -1;
+      if (ta == null && tb != null) return 1;
+      if (a.position !== b.position) return a.position - b.position;
+      return schedTime(a) - schedTime(b);
+    });
+    // Em execução: mais recentes primeiro (updated_at, com fallback na data agendada).
+    g.exec.sort((a, b) => {
+      const bd = new Date(b.updatedAt || (b.sched + 'T12:00:00')).getTime();
+      const ad = new Date(a.updatedAt || (a.sched + 'T12:00:00')).getTime();
+      return bd - ad;
     });
   }
   return groups;
@@ -124,7 +138,11 @@ function formatGroup(g) {
 function formatAll(groups) {
   const hoje = new Date().toLocaleDateString('pt-BR');
   let m = `🌾 *Resumo de atendimentos — ${hoje}*\n${LEGENDA}`;
-  const ordered = [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  const ordered = [...groups.values()].sort((a, b) => {
+    if (a.name === 'Sem operador') return 1;
+    if (b.name === 'Sem operador') return -1;
+    return a.name.localeCompare(b.name, 'pt-BR');
+  });
   for (const g of ordered) {
     if (g.proximos.length === 0 && g.exec.length === 0) continue;
     m += `\n\n*${g.name}*  🔵 ${g.exec.length} · 🟣 ${g.proximos.length}`;
@@ -150,7 +168,11 @@ async function sendDaily(sock) {
     return null;
   };
 
-  const ordered = [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  const ordered = [...groups.values()].sort((a, b) => {
+    if (a.name === 'Sem operador') return 1;
+    if (b.name === 'Sem operador') return -1;
+    return a.name.localeCompare(b.name, 'pt-BR');
+  });
 
   for (const r of recipients) {
     if (!r.phone) continue;
