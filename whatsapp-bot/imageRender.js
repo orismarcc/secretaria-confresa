@@ -21,12 +21,24 @@ async function getLogo() {
   return _logo;
 }
 
-const fmtDate = (raw) => {
-  if (!raw) return '';
+const parseDate = (raw) => {
+  if (!raw) return null;
   let s = String(raw).replace(' ', 'T');
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) s += 'T12:00:00'; // evita deslocar o dia por fuso
   const d = new Date(s);
-  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR');
+  return isNaN(d.getTime()) ? null : d;
+};
+const fmtDate = (raw) => {
+  const d = parseDate(raw);
+  return d ? d.toLocaleDateString('pt-BR') : '';
+};
+// Ex.: "qui, 28/08/2026"
+const fmtDateWeek = (raw) => {
+  const d = parseDate(raw);
+  if (!d) return '';
+  let wd = d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
+  wd = wd.charAt(0).toUpperCase() + wd.slice(1);
+  return `${wd}, ${d.toLocaleDateString('pt-BR')}`;
 };
 const hStr = (h) => `${(Number(h) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}h`;
 const fmtPhone = (raw) => {
@@ -117,7 +129,7 @@ async function renderGroupImage(g) {
         ctx.fillStyle = DARK;
         ctx.font = '15px Arial';
         let line = `${it.producer} — ${it.demand}`;
-        if (isProx && it.appt) line += `  (${fmtDate(it.appt)})`;
+        if (isProx && it.appt) line += `  (${fmtDateWeek(it.appt)})`;
         ctx.fillText(ellipsize(ctx, line, W - 2 * pad - 90), pad + 22, y);
         // telefone do produtor (linha secundária)
         const tel = fmtPhone(it.phone);
