@@ -4,3 +4,5 @@ recipients.json
 state.json
 auth/
 node_modules/
+qr.png
+run-daily.bat
