@@ -1,0 +1,67 @@
+# Bot de WhatsApp — Resumo diário de atendimentos
+
+Envia, **1× por dia** no horário definido, o resumo do Dashboard (**Próximos
+Atendimentos** + **Em Execução**, por operador) para os colaboradores
+cadastrados no `recipients.json`. Cada operador recebe a sua parte; quem estiver
+com `"all": true` recebe o resumo completo.
+
+> ⚠️ **Solução não oficial** (biblioteca [Baileys](https://github.com/WhiskeySockets/Baileys)):
+> conecta como um "aparelho vinculado" do WhatsApp, igual ao WhatsApp Web. Para
+> uso interno e baixo volume o risco é baixo, mas o WhatsApp pode bloquear o
+> número. **Use um número dedicado da secretaria** (não o pessoal).
+
+## Pré‑requisitos
+- Um computador que **fique sempre ligado** (o bot precisa manter a sessão viva).
+  Pode ser um PC da secretaria, um mini‑PC/Raspberry Pi, ou um servidorzinho.
+- Node.js 18+ instalado.
+- Um celular com o WhatsApp do número que fará os envios (para escanear o QR uma vez).
+
+## Instalação
+```bash
+cd whatsapp-bot
+npm install
+cp .env.example .env               # preencha SUPABASE_* e o horário
+cp recipients.example.json recipients.json   # preencha nomes e telefones
+```
+No `.env`, use a **chave service_role** (a mesma do `.env.local` do projeto).
+Nos telefones, use o formato internacional só com dígitos: `55` + DDD + número
+(ex.: `5566999998888`).
+
+## Primeiro uso (parear o WhatsApp)
+```bash
+npm start
+```
+Aparecerá um **QR Code** no terminal. No celular: **WhatsApp → Configurações →
+Aparelhos conectados → Conectar aparelho** e escaneie. Depois disso a sessão
+fica salva na pasta `auth/` e não pede QR de novo (a menos que o WhatsApp
+desconecte — nesse caso apague `auth/` e escaneie outra vez).
+
+## Testar o envio na hora
+```bash
+npm run test-now
+```
+Envia o resumo imediatamente para todos do `recipients.json` (bom para conferir
+o formato antes de deixar no automático).
+
+## Deixar rodando 24/7 (recomendado: PM2)
+```bash
+npm install -g pm2
+pm2 start index.js --name whatsapp-bot
+pm2 save
+pm2 startup      # segue as instruções para iniciar junto com o sistema
+```
+Logs: `pm2 logs whatsapp-bot`.
+
+## Como funciona / configuração
+- **Horário:** `SEND_AT` (ex.: `07:00`) e `TIMEZONE` (ex.: `America/Cuiaba`) no `.env`.
+- **Destinatários:** `recipients.json` — lista de `{ match, phone, all }`.
+  - `match`: parte do nome do operador (ex.: `"Gil"`). O bot casa pelo nome que
+    aparece no Dashboard.
+  - `all: true`: recebe o resumo completo (todos os operadores) — útil para a coordenação.
+- **Fonte dos dados:** lê direto do Supabase os atendimentos com status
+  `proximo` (Próximos) e `in_progress` (Em Execução).
+
+## Segurança
+- `.env`, `recipients.json` e `auth/` **não** vão para o Git (já no `.gitignore`).
+- A chave service_role dá acesso total ao banco — guarde o `.env` com cuidado e
+  rode o bot só numa máquina de confiança.

@@ -1,0 +1,24 @@
+[
+  {
+    "match": "Gil",
+    "phone": "5566999999999",
+    "all": false,
+    "_comment": "Recebe SÓ os atendimentos do operador cujo nome contém 'Gil'."
+  },
+  {
+    "match": "ADEMAR",
+    "phone": "5566988888888",
+    "all": false
+  },
+  {
+    "match": "ANTONIEL",
+    "phone": "5566977777777",
+    "all": false
+  },
+  {
+    "name": "Coordenação",
+    "phone": "5566966666666",
+    "all": true,
+    "_comment": "all:true recebe o resumo COMPLETO (todos os operadores)."
+  }
+]
