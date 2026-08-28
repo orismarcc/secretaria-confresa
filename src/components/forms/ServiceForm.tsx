@@ -56,6 +56,8 @@ const serviceSchema = z.object({
   damIssuedAt: z.string().optional(),
   damPaid: z.boolean().optional(),
   damPaidAt: z.string().optional(),
+  // Calcário: pedido pago (apenas para arquivar o documento).
+  limestonePaid: z.boolean().optional(),
   limestoneQuantity: z.coerce.number().min(0).optional(),
   inputQuantity: z.coerce.number().min(0).optional(),
   fuelLiters: z.coerce.number().min(0).optional(),
@@ -111,6 +113,8 @@ interface ServiceFormProps {
     distanceKm?: number;
     fuelConsumptionPerKm?: number;
     damPaidAt?: string;
+    limestonePaid?: boolean;
+    limestoneOrderUrl?: string;
     responsibleTechnicianId?: string;
   } | null;
   producers: Producer[];
@@ -299,6 +303,7 @@ export function ServiceForm({
 }: ServiceFormProps) {
   const [hasAppointment, setHasAppointment] = useState(false);
   const [damReceiptFile, setDamReceiptFile] = useState<File | null>(null);
+  const [limestoneOrderFile, setLimestoneOrderFile] = useState<File | null>(null);
 
   const form = useForm<ServiceFormData>({
     resolver: zodResolver(serviceSchema),
@@ -319,6 +324,7 @@ export function ServiceForm({
       damIssuedAt: '',
       damPaid: false,
       damPaidAt: '',
+      limestonePaid: false,
       limestoneQuantity: 0,
       inputQuantity: 0,
       fuelLiters: 0,
@@ -333,6 +339,7 @@ export function ServiceForm({
   const watchedStatus = form.watch('status');
   const watchedDamIssued = form.watch('damIssued');
   const watchedDamPaid = form.watch('damPaid');
+  const watchedLimestonePaid = form.watch('limestonePaid');
   const watchedDemandTypeId = form.watch('demandTypeId');
   const selectedDemandType = demandTypes.find(d => d.id === watchedDemandTypeId);
   const isCalcario = selectedDemandType?.category === 'calcario';
@@ -385,6 +392,7 @@ export function ServiceForm({
         damIssuedAt: service.damIssuedAt || '',
         damPaid: service.damPaid ?? false,
         damPaidAt: service.damPaidAt || '',
+        limestonePaid: service.limestonePaid ?? false,
         limestoneQuantity: service.limestoneQuantity || 0,
         inputQuantity: service.inputQuantity || 0,
         fuelLiters: service.fuelLiters || 0,
@@ -394,6 +402,7 @@ export function ServiceForm({
         responsibleTechnicianId: service.responsibleTechnicianId || '',
       });
       setDamReceiptFile(null);
+      setLimestoneOrderFile(null);
     } else {
       setHasAppointment(false);
       form.reset({
@@ -413,6 +422,7 @@ export function ServiceForm({
         damIssuedAt: '',
         damPaid: false,
         damPaidAt: '',
+        limestonePaid: false,
         limestoneQuantity: 0,
         inputQuantity: 0,
         fuelLiters: 0,
@@ -422,6 +432,7 @@ export function ServiceForm({
         responsibleTechnicianId: '',
       });
       setDamReceiptFile(null);
+      setLimestoneOrderFile(null);
     }
   }, [service, form]);
 
@@ -436,9 +447,10 @@ export function ServiceForm({
   }, [isImplementos, form]);
 
   const handleSubmit = (data: ServiceFormData) => {
-    onSubmit({ ...data, damReceiptFile: damReceiptFile || null } as any);
+    onSubmit({ ...data, damReceiptFile: damReceiptFile || null, limestoneOrderFile: limestoneOrderFile || null } as any);
     form.reset();
     setDamReceiptFile(null);
+    setLimestoneOrderFile(null);
     onOpenChange(false);
   };
 
@@ -1004,6 +1016,59 @@ export function ServiceForm({
                   </div>
                 )}
               </div>}
+
+              {/* Pedido do calcário — apenas para arquivar o documento (quando pago) */}
+              {isCalcario && (
+                <div className="md:col-span-2 space-y-3 rounded-lg border p-3 bg-muted/30">
+                  <p className="text-sm font-semibold text-foreground">Pedido do Calcário</p>
+
+                  <FormField
+                    control={form.control}
+                    name="limestonePaid"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center gap-2 space-y-0">
+                        <FormControl>
+                          <Checkbox
+                            checked={!!field.value}
+                            onCheckedChange={(checked) => field.onChange(!!checked)}
+                          />
+                        </FormControl>
+                        <FormLabel className="font-normal cursor-pointer">Calcário pago?</FormLabel>
+                      </FormItem>
+                    )}
+                  />
+
+                  {watchedLimestonePaid && (
+                    <div className="pl-2 space-y-1.5 border-l-2 border-success/30 pt-1">
+                      <label className="text-sm font-medium">Anexar pedido (opcional)</label>
+                      <Input
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/webp,application/pdf"
+                        onChange={e => setLimestoneOrderFile(e.target.files?.[0] ?? null)}
+                        className="text-sm cursor-pointer"
+                      />
+                      {limestoneOrderFile && (
+                        <p className="text-xs text-muted-foreground">
+                          {limestoneOrderFile.name} ({(limestoneOrderFile.size / 1024).toFixed(0)} KB)
+                        </p>
+                      )}
+                      {!limestoneOrderFile && service?.limestoneOrderUrl && (
+                        <p className="text-xs">
+                          <a
+                            href={service.limestoneOrderUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary underline"
+                          >
+                            Ver pedido anexado
+                          </a>
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground">PDF ou imagem (max. 10 MB)</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Notes */}
               <FormField

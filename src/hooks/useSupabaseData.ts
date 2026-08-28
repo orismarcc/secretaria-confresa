@@ -723,6 +723,11 @@ export function useCreateService() {
       worked_hours?: number | null;
       dam_paid_at?: string | null;
       dam_receipt_url?: string | null;
+      limestone_paid?: boolean;
+      limestone_order_url?: string | null;
+      distance_km?: number | null;
+      fuel_consumption_per_km?: number | null;
+      responsible_technician_id?: string | null;
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
       const payload: Record<string, unknown> = { ...service, created_by: user?.id ?? null };

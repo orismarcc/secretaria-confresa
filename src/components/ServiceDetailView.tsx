@@ -74,6 +74,8 @@ interface ServiceDetailViewProps {
     dam_paid?: boolean | null;
     dam_paid_at?: string | null;
     dam_receipt_url?: string | null;
+    limestone_paid?: boolean | null;
+    limestone_order_url?: string | null;
     latitude?: number | null;
     longitude?: number | null;
     producers?: { name: string; cpf?: string; phone?: string | null } | null;
@@ -379,6 +381,22 @@ export function ServiceDetailView({
             )}
           </div>
         </>
+      )}
+
+      {/* Pedido do Calcário — documento arquivado */}
+      {service.limestone_order_url && (
+        <div className="rounded-lg bg-success/10 border border-success/30 p-3 space-y-1">
+          <p className="text-sm font-semibold text-foreground">Pedido do Calcário</p>
+          <a
+            href={service.limestone_order_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium"
+          >
+            <Receipt className="h-3.5 w-3.5" />
+            Ver pedido
+          </a>
+        </div>
       )}
 
       {/* Completion Info - Only for archived services */}

@@ -113,6 +113,19 @@ async function uploadDamReceipt(file: File, serviceId: string): Promise<string |
   return data?.signedUrl ?? null;
 }
 
+// Pedido do calcário — reutiliza o bucket privado 'dam-receipts' sob o prefixo 'pedidos/'.
+async function uploadLimestoneOrder(file: File, serviceId: string): Promise<string | null> {
+  const ext = file.name.split('.').pop() ?? 'pdf';
+  const path = `pedidos/${serviceId}/${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from('dam-receipts').upload(path, file, { upsert: true });
+  if (error) {
+    console.error('Limestone order upload error:', error);
+    return null;
+  }
+  const { data } = await supabase.storage.from('dam-receipts').createSignedUrl(path, 60 * 60 * 24 * 3650);
+  return data?.signedUrl ?? null;
+}
+
 interface DbService {
   id: string;
   producer_id: string;
@@ -142,6 +155,8 @@ interface DbService {
   dam_issued_at?: string | null;
   dam_paid_at?: string | null;
   dam_receipt_url?: string | null;
+  limestone_paid?: boolean | null;
+  limestone_order_url?: string | null;
   comunicado_emitido?: boolean | null;
   limestone_quantity?: number | null;
   input_quantity?: number | null;
@@ -363,6 +378,12 @@ export default function ServicesPage() {
       receiptUrl = await uploadDamReceipt(data.damReceiptFile, 'new-' + Date.now());
     }
 
+    // Upload do pedido do calcário, se anexado (só quando marcado como pago)
+    let limestoneOrderUrl: string | null = null;
+    if (data.limestoneOrderFile && data.limestonePaid) {
+      limestoneOrderUrl = await uploadLimestoneOrder(data.limestoneOrderFile, 'new-' + Date.now());
+    }
+
     createService.mutate({
       producer_id: data.producerId,
       demand_type_id: data.demandTypeId,
@@ -383,6 +404,8 @@ export default function ServicesPage() {
       ...(data.damIssued && data.damIssuedAt ? { dam_issued_at: data.damIssuedAt } : {}),
       ...(data.damPaid && data.damPaidAt ? { dam_paid_at: data.damPaidAt } : {}),
       ...(receiptUrl ? { dam_receipt_url: receiptUrl } : {}),
+      limestone_paid: data.limestonePaid ?? false,
+      ...(limestoneOrderUrl ? { limestone_order_url: limestoneOrderUrl } : {}),
       ...(data.limestoneQuantity ? { limestone_quantity: data.limestoneQuantity } : {}),
       ...(data.inputQuantity ? { input_quantity: data.inputQuantity } : {}),
       fuel_liters: data.fuelLiters || null,
@@ -417,6 +440,13 @@ export default function ServicesPage() {
       if (uploaded) receiptUrl = uploaded;
     }
 
+    // Upload do pedido do calcário, se anexado — preserva o existente
+    let limestoneOrderUrl: string | null = editingService.limestone_order_url ?? null;
+    if (data.limestoneOrderFile && data.limestonePaid) {
+      const uploaded = await uploadLimestoneOrder(data.limestoneOrderFile, editingService.id);
+      if (uploaded) limestoneOrderUrl = uploaded;
+    }
+
     updateService.mutate({
       id: editingService.id,
       producer_id: data.producerId,
@@ -438,6 +468,8 @@ export default function ServicesPage() {
       dam_issued_at: (data.damIssued && data.damIssuedAt) ? data.damIssuedAt : null,
       dam_paid_at: (data.damPaid && data.damPaidAt) ? data.damPaidAt : null,
       dam_receipt_url: receiptUrl,
+      limestone_paid: data.limestonePaid ?? false,
+      limestone_order_url: limestoneOrderUrl,
       limestone_quantity: data.limestoneQuantity || null,
       input_quantity: data.inputQuantity || null,
       fuel_liters: data.fuelLiters || null,
@@ -574,6 +606,8 @@ export default function ServicesPage() {
       distanceKm: s.distance_km || 0,
       fuelConsumptionPerKm: s.fuel_consumption_per_km || 0,
       damPaidAt: s.dam_paid_at || '',
+      limestonePaid: s.limestone_paid ?? false,
+      limestoneOrderUrl: s.limestone_order_url || '',
       responsibleTechnicianId: s.responsible_technician_id || '',
     };
   };
