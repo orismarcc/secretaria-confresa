@@ -10,6 +10,7 @@ export interface MaintenanceRow {
   description: string;
   started_at: string;
   ended_at: string | null;
+  cost: number | null;
   created_by: string | null;
   created_at: string;
   machinery?: { name: string; patrimony_number: string } | null;
@@ -36,6 +37,7 @@ export interface MaintenanceInput {
   description: string;
   started_at: string;
   ended_at?: string | null;
+  cost?: number | null;
 }
 
 export function useCreateMaintenance() {
