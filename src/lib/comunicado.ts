@@ -118,11 +118,33 @@ export interface ComunicadoData {
   valorUpfm: number;        // R$
 }
 
+/** Nome de arquivo seguro a partir do nome do produtor. */
+function nomeArquivo(nome: string): string {
+  return (nome || 'produtor').replace(/[^\p{L}\s]/gu, '').trim().replace(/\s+/g, '-');
+}
+
 /**
- * Preenche o modelo .docx e dispara o download.
- * Total = combustível + UPFM.
+ * Dispara o download de um blob. Deve ser o ÚLTIMO passo do fluxo: no iOS o
+ * download abre o arquivo e suspende a página, então qualquer escrita no banco
+ * precisa ter sido concluída ANTES desta chamada.
  */
-export async function gerarComunicadoDam(dados: ComunicadoData): Promise<void> {
+export function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Revoga com folga — no iOS revogar imediatamente pode cancelar o download.
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/**
+ * Monta o comunicado .docx em memória e devolve o blob + nome do arquivo.
+ * NÃO dispara o download (quem chama decide a ordem — gravar no banco antes).
+ */
+export async function buildComunicadoDamDocx(dados: ComunicadoData): Promise<{ blob: Blob; filename: string }> {
   const total = dados.valorCombustivel + dados.valorUpfm;
 
   const resp = await fetch('/templates/comunicado-dam.docx');
@@ -153,15 +175,13 @@ export async function gerarComunicadoDam(dados: ComunicadoData): Promise<void> {
     mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   });
 
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  const nomeArq = (dados.nome || 'produtor').replace(/[^\p{L}\s]/gu, '').trim().replace(/\s+/g, '-');
-  a.download = `Comunicado-DAM-${nomeArq}.docx`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  return { blob, filename: `Comunicado-DAM-${nomeArquivo(dados.nome)}.docx` };
+}
+
+/** Compatibilidade: monta e dispara o download do .docx. */
+export async function gerarComunicadoDam(dados: ComunicadoData): Promise<void> {
+  const { blob, filename } = await buildComunicadoDamDocx(dados);
+  triggerDownload(blob, filename);
 }
 
 // ─── Geração em PDF (mesmo conteúdo e timbrado do modelo) ────────────────────────
@@ -179,7 +199,7 @@ function u8ToBase64(u8: Uint8Array): string {
  * Gera o comunicado em PDF (alternativa ao .docx). Reaproveita o timbrado do
  * modelo oficial (cabeçalho e rodapé) e replica o texto do documento.
  */
-export async function gerarComunicadoDamPdf(dados: ComunicadoData): Promise<void> {
+export async function buildComunicadoDamPdf(dados: ComunicadoData): Promise<{ blob: Blob; filename: string }> {
   const total = dados.valorCombustivel + dados.valorUpfm;
 
   // Reaproveita o timbrado (cabeçalho e rodapé) do modelo .docx.
@@ -274,6 +294,11 @@ export async function gerarComunicadoDamPdf(dados: ComunicadoData): Promise<void
   para('CASSIO RODRIGUES DA COSTA', { bold: true, center: true, gap: 1 });
   para('SECRETÁRIO DE AGRICULTURA', { center: true, gap: 0 });
 
-  const nomeArq = (dados.nome || 'produtor').replace(/[^\p{L}\s]/gu, '').trim().replace(/\s+/g, '-');
-  doc.save(`Comunicado-DAM-${nomeArq}.pdf`);
+  return { blob: doc.output('blob'), filename: `Comunicado-DAM-${nomeArquivo(dados.nome)}.pdf` };
+}
+
+/** Compatibilidade: monta e dispara o download do PDF. */
+export async function gerarComunicadoDamPdf(dados: ComunicadoData): Promise<void> {
+  const { blob, filename } = await buildComunicadoDamPdf(dados);
+  triggerDownload(blob, filename);
 }

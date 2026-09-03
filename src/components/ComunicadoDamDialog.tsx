@@ -15,8 +15,9 @@ import { useNextComunicadoNumber, useIncrementComunicadoNumber } from '@/hooks/u
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  gerarComunicadoDam,
-  gerarComunicadoDamPdf,
+  buildComunicadoDamDocx,
+  buildComunicadoDamPdf,
+  triggerDownload,
   formatHoras,
   formatLitros,
   type ComunicadoData,
@@ -86,12 +87,14 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
         valorCombustivel: combustivel,
         valorUpfm: upfmNum,
       };
-      if (formato === 'pdf') await gerarComunicadoDamPdf(dados);
-      else await gerarComunicadoDam(dados);
+      // 1) Monta o arquivo em memória (sem baixar ainda).
+      const { blob, filename } = formato === 'pdf'
+        ? await buildComunicadoDamPdf(dados)
+        : await buildComunicadoDamDocx(dados);
 
-      // Grava o valor no atendimento e sinaliza "Comunicado emitido" — estado
-      // distinto de DAM pendente e DAM paga. Reemitir sobrescreve o valor (o
-      // último comunicado prevalece). Só entra no arrecadado quando for paga.
+      // 2) Grava no banco ANTES do download. No iOS o download abre o arquivo e
+      // suspende a página; se a escrita ficasse depois, ela não completava e o
+      // flag "Comunicado emitido" não era salvo. Reemitir sobrescreve o valor.
       if (source.serviceId) {
         const { error } = await supabase
           .from('services')
@@ -104,6 +107,9 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
         queryClient.invalidateQueries({ queryKey: ['services'] });
         queryClient.invalidateQueries({ queryKey: ['dashboard_stats'] });
       }
+
+      // 3) Só então dispara o download (último passo).
+      triggerDownload(blob, filename);
 
       toast({
         title: `Comunicado Nº ${numero} gerado!`,
