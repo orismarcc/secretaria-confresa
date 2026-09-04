@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
 import { z } from 'zod';
+import { formatCpf } from '@/lib/documents';
 
 export interface OperatorDemandTypeOption {
   id: string;
@@ -31,11 +32,11 @@ interface OperatorMachineryOption {
 }
 
 interface OperatorFormProps {
-  defaultValues?: { name: string; email?: string };
+  defaultValues?: { name: string; email?: string; cpf?: string };
   onSubmit: (
     data:
-      | { name: string; email: string; password: string; demandTypeIds: string[]; machineryIds: string[] }
-      | { name: string; demandTypeIds: string[]; machineryIds: string[] }
+      | { name: string; email: string; password: string; cpf: string; demandTypeIds: string[]; machineryIds: string[] }
+      | { name: string; cpf: string; demandTypeIds: string[]; machineryIds: string[] }
   ) => Promise<void>;
   onCancel: () => void;
   isLoading: boolean;
@@ -63,6 +64,7 @@ export function OperatorForm({
 }: OperatorFormProps) {
   const [name, setName] = useState(defaultValues?.name || '');
   const [email, setEmail] = useState(defaultValues?.email || '');
+  const [cpf, setCpf] = useState(defaultValues?.cpf || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [demandTypeIds, setDemandTypeIds] = useState<string[]>(initialDemandTypeIds);
@@ -94,7 +96,7 @@ export function OperatorForm({
         setErrors(fieldErrors);
         return;
       }
-      await onSubmit({ name, email, password, demandTypeIds, machineryIds });
+      await onSubmit({ name, email, password, cpf, demandTypeIds, machineryIds });
     } else {
       const result = editSchema.safeParse({ name });
       if (!result.success) {
@@ -105,7 +107,7 @@ export function OperatorForm({
         setErrors(fieldErrors);
         return;
       }
-      await onSubmit({ name, demandTypeIds, machineryIds });
+      await onSubmit({ name, cpf, demandTypeIds, machineryIds });
     }
   };
 
@@ -121,6 +123,17 @@ export function OperatorForm({
           className={errors.name ? 'border-destructive' : ''}
         />
         {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="op-cpf">CPF</Label>
+        <Input
+          id="op-cpf"
+          value={cpf}
+          onChange={(e) => setCpf(formatCpf(e.target.value))}
+          placeholder="000.000.000-00"
+          inputMode="numeric"
+        />
       </div>
 
       {mode === 'create' && (

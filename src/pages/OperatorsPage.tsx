@@ -21,7 +21,11 @@ import {
   useDeleteOperator,
   useUpdateOperator,
   useToggleOperatorStatus,
+  useProfilesMap,
+  useAdminUsers,
+  useUpdateUserProfile,
   Operator,
+  type AppUser,
 } from '@/hooks/useOperatorData';
 import {
   useResponsibleTechnicians,
@@ -148,10 +152,49 @@ function TechnicianForm({
   );
 }
 
+// ─── Admin edit form (nome + CPF) ─────────────────────────────────────────────
+
+function AdminEditForm({
+  initial,
+  onSubmit,
+  onCancel,
+  isPending,
+}: {
+  initial: { name: string; cpf: string | null };
+  onSubmit: (data: { name: string; cpf: string }) => void;
+  onCancel: () => void;
+  isPending?: boolean;
+}) {
+  const [name, setName] = useState(initial.name ?? '');
+  const [cpf, setCpf] = useState(initial.cpf ?? '');
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); onSubmit({ name, cpf }); }} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="adm-name">Nome Completo</Label>
+        <Input id="adm-name" value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="adm-cpf">CPF</Label>
+        <Input
+          id="adm-cpf"
+          value={cpf}
+          onChange={(e) => setCpf(formatCpf(e.target.value))}
+          placeholder="000.000.000-00"
+          inputMode="numeric"
+        />
+      </div>
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="button" variant="outline" onClick={onCancel}>Cancelar</Button>
+        <Button type="submit" disabled={isPending}>{isPending ? 'Salvando...' : 'Salvar'}</Button>
+      </div>
+    </form>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function OperatorsPage() {
-  const [activeTab, setActiveTab] = useState<'operators' | 'technicians'>('operators');
+  const [activeTab, setActiveTab] = useState<'operators' | 'admins' | 'technicians'>('operators');
 
   // ── Operators state ────────────────────────────────────────────────────────
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -163,10 +206,17 @@ export default function OperatorsPage() {
   const { data: services = [] } = useServices();
   const { data: demandTypes = [] } = useDemandTypes();
   const { data: machinery = [] } = useMachinery();
+  const { data: profilesMap } = useProfilesMap();
+  const { data: adminUsers = [], isLoading: adminsLoading } = useAdminUsers();
   const createOperator = useCreateOperator();
   const updateOperator = useUpdateOperator();
   const deleteOperator = useDeleteOperator();
   const toggleStatus = useToggleOperatorStatus();
+  const updateUserProfile = useUpdateUserProfile();
+
+  // ── Admins state ───────────────────────────────────────────────────────────
+  const [editingAdmin, setEditingAdmin] = useState<AppUser | null>(null);
+  const cpfOf = (id: string) => profilesMap?.get(id)?.cpf || '';
   const setOperatorDemandTypes = useSetOperatorDemandTypes();
   const setOperatorMachinery = useSetOperatorMachinery();
 
@@ -226,20 +276,22 @@ export default function OperatorsPage() {
 
   // ── Operator helpers ───────────────────────────────────────────────────────
   const handleCreate = async (
-    data: { name: string; email: string; password: string; demandTypeIds: string[]; machineryIds: string[] }
+    data: { name: string; email: string; password: string; cpf?: string; demandTypeIds: string[]; machineryIds: string[] }
   ) => {
-    const { demandTypeIds, machineryIds, ...operatorData } = data;
+    const { demandTypeIds, machineryIds, cpf, ...operatorData } = data;
     const newUser = await createOperator.mutateAsync(operatorData);
     if (newUser?.id) {
+      if (cpf) await updateUserProfile.mutateAsync({ id: newUser.id, cpf });
       await setOperatorDemandTypes.mutateAsync({ operatorId: newUser.id, demandTypeIds });
       await setOperatorMachinery.mutateAsync({ operatorId: newUser.id, machineryIds });
     }
     setIsFormOpen(false);
   };
 
-  const handleUpdate = async (data: { name: string; demandTypeIds: string[]; machineryIds: string[] }) => {
+  const handleUpdate = async (data: { name: string; cpf?: string; demandTypeIds: string[]; machineryIds: string[] }) => {
     if (editingOperator) {
       await updateOperator.mutateAsync({ userId: editingOperator.id, name: data.name });
+      await updateUserProfile.mutateAsync({ id: editingOperator.id, cpf: data.cpf ?? '' });
       await setOperatorDemandTypes.mutateAsync({
         operatorId: editingOperator.id,
         demandTypeIds: data.demandTypeIds,
@@ -304,6 +356,12 @@ export default function OperatorsPage() {
       header: 'Email',
       className: 'hidden sm:table-cell',
       render: (row: Operator) => <span className="truncate max-w-[200px] block">{row.email}</span>,
+    },
+    {
+      key: 'cpf',
+      header: 'CPF',
+      className: 'hidden md:table-cell',
+      render: (row: Operator) => <span className="text-muted-foreground">{cpfOf(row.id) || '—'}</span>,
     },
     {
       key: 'completed',
@@ -423,6 +481,40 @@ export default function OperatorsPage() {
     },
   ];
 
+  // ── Admin columns ──────────────────────────────────────────────────────────
+  const adminColumns = [
+    {
+      key: 'name',
+      header: 'Nome',
+      render: (row: AppUser) => (
+        <div className="flex items-center gap-2">
+          <User className="h-4 w-4 text-muted-foreground" />
+          <span className="font-medium">{row.name}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'email',
+      header: 'Email',
+      className: 'hidden sm:table-cell',
+      render: (row: AppUser) => <span className="truncate max-w-[220px] block">{row.email}</span>,
+    },
+    {
+      key: 'cpf',
+      header: 'CPF',
+      render: (row: AppUser) => <span className="text-muted-foreground">{row.cpf || '—'}</span>,
+    },
+    {
+      key: 'actions',
+      header: 'Ações',
+      render: (row: AppUser) => (
+        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditingAdmin(row); }} title="Editar CPF">
+          <Pencil className="h-4 w-4" />
+        </Button>
+      ),
+    },
+  ];
+
   const metricsData = metricsOperator ? getOperatorMetrics(metricsOperator.id) : null;
 
   return (
@@ -443,6 +535,10 @@ export default function OperatorsPage() {
             <UserCog className="h-4 w-4" />
             Operadores
           </TabsTrigger>
+          <TabsTrigger value="admins" className="gap-2">
+            <User className="h-4 w-4" />
+            Administradores
+          </TabsTrigger>
           <TabsTrigger value="technicians" className="gap-2">
             <HardHat className="h-4 w-4" />
             Responsáveis Técnicos
@@ -457,6 +553,17 @@ export default function OperatorsPage() {
             keyExtractor={(row) => row.id}
             isLoading={opLoading}
             emptyMessage="Nenhum operador cadastrado"
+          />
+        </TabsContent>
+
+        {/* ── Administradores tab ── */}
+        <TabsContent value="admins">
+          <DataTable
+            data={adminUsers}
+            columns={adminColumns}
+            keyExtractor={(row) => row.id}
+            isLoading={adminsLoading}
+            emptyMessage="Nenhum administrador"
           />
         </TabsContent>
 
@@ -550,7 +657,7 @@ export default function OperatorsPage() {
             ) : (
               <OperatorForm
                 key={editingOperator.id}
-                defaultValues={{ name: editingOperator.name, email: editingOperator.email }}
+                defaultValues={{ name: editingOperator.name, email: editingOperator.email, cpf: cpfOf(editingOperator.id) }}
                 onSubmit={handleUpdate}
                 onCancel={() => setEditingOperator(null)}
                 isLoading={updateOperator.isPending || setOperatorDemandTypes.isPending || setOperatorMachinery.isPending}
@@ -573,6 +680,26 @@ export default function OperatorsPage() {
         onConfirm={handleDelete}
         variant="destructive"
       />
+
+      {/* ── Admin edit dialog (CPF/nome) ─────────────────────────────────────── */}
+      <Dialog open={!!editingAdmin} onOpenChange={(open) => !open && setEditingAdmin(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Editar Administrador</DialogTitle></DialogHeader>
+          {editingAdmin && (
+            <AdminEditForm
+              initial={{ name: editingAdmin.name, cpf: editingAdmin.cpf }}
+              isPending={updateUserProfile.isPending}
+              onCancel={() => setEditingAdmin(null)}
+              onSubmit={(data) => {
+                updateUserProfile.mutate(
+                  { id: editingAdmin.id, name: data.name, cpf: data.cpf },
+                  { onSuccess: () => setEditingAdmin(null) },
+                );
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* ── Technician Dialogs ───────────────────────────────────────────────── */}
       <Dialog open={techFormOpen} onOpenChange={setTechFormOpen}>

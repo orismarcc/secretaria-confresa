@@ -13,6 +13,69 @@ export interface Operator {
   is_active: boolean;
 }
 
+export interface AppUser {
+  id: string;
+  name: string;
+  email: string;
+  cpf: string | null;
+}
+
+/** Mapa id → dados do profile (nome, email, CPF). Usado p/ exibir o CPF. */
+export function useProfilesMap() {
+  return useQuery({
+    queryKey: ['profiles-cpf'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('profiles').select('id, name, email, cpf');
+      if (error) throw error;
+      const map = new Map<string, AppUser>();
+      (data ?? []).forEach((p: any) => map.set(p.id, { id: p.id, name: p.name, email: p.email, cpf: p.cpf ?? null }));
+      return map;
+    },
+  });
+}
+
+/** Lista de administradores (user_roles.role = 'admin' + profile). */
+export function useAdminUsers() {
+  return useQuery({
+    queryKey: ['admin-users'],
+    queryFn: async () => {
+      const { data: roles, error } = await supabase.from('user_roles').select('user_id').eq('role', 'admin');
+      if (error) throw error;
+      const ids = (roles ?? []).map((r: any) => r.user_id);
+      if (ids.length === 0) return [] as AppUser[];
+      const { data: profs, error: e2 } = await supabase.from('profiles').select('id, name, email, cpf').in('id', ids);
+      if (e2) throw e2;
+      return (profs ?? [])
+        .map((p: any) => ({ id: p.id, name: p.name, email: p.email, cpf: p.cpf ?? null }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')) as AppUser[];
+    },
+  });
+}
+
+/** Atualiza nome/CPF de um usuário diretamente no profile (admin). */
+export function useUpdateUserProfile() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ id, name, cpf }: { id: string; name?: string; cpf?: string | null }) => {
+      const patch: Record<string, unknown> = {};
+      if (name !== undefined) patch.name = name;
+      if (cpf !== undefined) patch.cpf = cpf;
+      if (Object.keys(patch).length === 0) return;
+      const { error } = await supabase.from('profiles').update(patch).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profiles-cpf'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: ['operators'] });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao salvar CPF', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
 export function useOperators() {
   return useQuery({
     queryKey: ['operators'],
