@@ -56,6 +56,7 @@ import {
   useProducers,
   useDemandTypes,
   useSettlements,
+  useGlebas,
   useLocations,
   useMachinery,
   useCreateService,
@@ -165,7 +166,7 @@ interface DbService {
   distance_km?: number | null;
   fuel_consumption_per_km?: number | null;
   responsible_technician_id?: string | null;
-  producers?: { name: string; phone?: string | null; location_name?: string | null; latitude?: number | null; longitude?: number | null } | null;
+  producers?: { name: string; phone?: string | null; location_name?: string | null; latitude?: number | null; longitude?: number | null; gleba_id?: string | null; glebas?: { name: string } | null } | null;
   demand_types?: { name: string } | null;
   settlements?: { name: string } | null;
   locations?: { name: string } | null;
@@ -184,6 +185,7 @@ export default function ServicesPage() {
   const { data: producers = [] } = useProducers();
   const { data: demandTypes = [] } = useDemandTypes();
   const { data: settlements = [] } = useSettlements();
+  const { data: glebas = [] } = useGlebas();
   const { data: locations = [] } = useLocations();
   const { data: machinery = [] } = useMachinery();
   const { data: operators = [] } = useOperators();
@@ -205,6 +207,7 @@ export default function ServicesPage() {
     searchParams.get('category') || 'all'
   );
   const [settlementFilter, setSettlementFilter] = useState<string>('all');
+  const [glebaFilter, setGlebaFilter] = useState<string>('all');
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   // Ordenação: 'default' (preferência proximo/DAM) ou por data de cadastro
@@ -257,7 +260,14 @@ export default function ServicesPage() {
   // Reset to page 1 when any filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter, demandTypeFilter, categoryFilter, settlementFilter, dateFrom, dateTo, sortBy, damFilter, yearFilter]);
+  }, [search, statusFilter, demandTypeFilter, categoryFilter, settlementFilter, glebaFilter, dateFrom, dateTo, sortBy, damFilter, yearFilter]);
+
+  // Glebas do assentamento selecionado (classificação por gleba só para
+  // assentamentos que têm glebas). Ao trocar de assentamento, zera a gleba.
+  const settlementGlebas = (glebas as any[]).filter(
+    (g) => settlementFilter !== 'all' && g.settlement_id === settlementFilter,
+  );
+  useEffect(() => { setGlebaFilter('all'); }, [settlementFilter]);
 
   // Realtime subscription
   useEffect(() => {
@@ -297,6 +307,7 @@ export default function ServicesPage() {
       : s.status === 'completed' || s.status === 'cancelled';
     const matchesSettlement =
       settlementFilter === 'all' || s.settlement_id === settlementFilter;
+    const matchesGleba = glebaFilter === 'all' || s.producers?.gleba_id === glebaFilter;
     // Date range uses scheduled_date (YYYY-MM-DD string — direct comparison works)
     const sDate = s.scheduled_date?.substring(0, 10) ?? '';
     const matchesDateFrom = !dateFrom || sDate >= dateFrom;
@@ -306,8 +317,8 @@ export default function ServicesPage() {
       : damFilter === 'paid' ? !!s.dam_paid
       : damFilter === 'pending' ? (!!s.dam_issued && !s.dam_paid)
       : /* comunicado */ (!!s.comunicado_emitido && !s.dam_issued && !s.dam_paid);
-    return matchesSearch && matchesDemandType && matchesCategory && matchesStatus && matchesSettlement && matchesDateFrom && matchesDateTo && matchesDam;
-  }), [services, producers, demandTypes, search, demandTypeFilter, categoryFilter, statusFilter, settlementFilter, dateFrom, dateTo, damFilter, yearFilter]);
+    return matchesSearch && matchesDemandType && matchesCategory && matchesStatus && matchesSettlement && matchesGleba && matchesDateFrom && matchesDateTo && matchesDam;
+  }), [services, producers, demandTypes, search, demandTypeFilter, categoryFilter, statusFilter, settlementFilter, glebaFilter, dateFrom, dateTo, damFilter, yearFilter]);
 
   const sortedServices = useMemo(() => [...filteredServices].sort((a: DbService, b: DbService) => {
     // Ordenação explícita por data de cadastro (sobrepõe a ordem padrão, mantendo os filtros)
@@ -699,7 +710,13 @@ export default function ServicesPage() {
       className: 'hidden lg:table-cell',
       render: (s: DbService) => {
         const st = settlements.find(set => set.id === s.settlement_id);
-        return <span className="text-sm">{st?.name || s.settlements?.name || 'N/A'}</span>;
+        const gleba = (s.producers as any)?.glebas?.name;
+        return (
+          <span className="text-sm">
+            {st?.name || s.settlements?.name || 'N/A'}
+            {gleba && <span className="text-xs text-primary"> · {gleba}</span>}
+          </span>
+        );
       },
     },
     {
@@ -780,6 +797,7 @@ export default function ServicesPage() {
       ? s.status === 'pending' || s.status === 'in_progress' || s.status === 'proximo'
       : s.status === 'completed' || s.status === 'cancelled';
     const matchesSettlement = settlementFilter === 'all' || s.settlement_id === settlementFilter;
+    const matchesGleba = glebaFilter === 'all' || s.producers?.gleba_id === glebaFilter;
     const sDate = s.scheduled_date?.substring(0, 10) ?? '';
     const matchesDateFrom = !dateFrom || sDate >= dateFrom;
     const matchesDateTo = !dateTo || sDate <= dateTo;
@@ -788,8 +806,8 @@ export default function ServicesPage() {
       : damFilter === 'paid' ? !!s.dam_paid
       : damFilter === 'pending' ? (!!s.dam_issued && !s.dam_paid)
       : (!!s.comunicado_emitido && !s.dam_issued && !s.dam_paid);
-    return matchesSearch && matchesStatus && matchesSettlement && matchesDateFrom && matchesDateTo && matchesDam;
-  }), [services, producers, catOfType, search, statusFilter, settlementFilter, dateFrom, dateTo, damFilter, yearFilter]);
+    return matchesSearch && matchesStatus && matchesSettlement && matchesGleba && matchesDateFrom && matchesDateTo && matchesDam;
+  }), [services, producers, catOfType, search, statusFilter, settlementFilter, glebaFilter, dateFrom, dateTo, damFilter, yearFilter]);
 
   // Cards: subdivide Patrulha Mecanizada por tipo de operação (Grade, PC, Pá
   // Carregadeira, Roçadeira, …) e mantém as demais categorias como um card cada.
@@ -828,6 +846,9 @@ export default function ServicesPage() {
   const detailDemandType = detailService ? demandTypes.find(d => d.id === detailService.demand_type_id) : null;
   const detailSettlement = detailService ? settlements.find(s => s.id === detailService.settlement_id) : null;
   const detailLocation = detailService ? locations.find(l => l.id === detailService.location_id) : null;
+  const detailGleba = detailService
+    ? ((detailProducerFull as any)?.glebas?.name || (detailService.producers as any)?.glebas?.name || null)
+    : null;
 
   // ── export ────────────────────────────────────────────────────────────────
 
@@ -875,6 +896,7 @@ export default function ServicesPage() {
           producer?.name || s.producers?.name || 'N/A',
           dt?.name || s.demand_types?.name || 'N/A',
           st?.name || s.settlements?.name || 'N/A',
+          (s.producers as any)?.glebas?.name || '-',
           createdAt ? format(createdAt, 'dd/MM/yyyy', { locale: ptBR }) : '-',
           completedAt ? format(completedAt, 'dd/MM/yyyy', { locale: ptBR }) : '-',
           statusLabel(s.status),
@@ -884,7 +906,7 @@ export default function ServicesPage() {
 
       autoTable(doc, {
         startY: headerH + 4,
-        head: [['Produtor', 'Demanda', 'Assentamento', 'Cadastro', 'Finalização', 'Status', 'Cadastrado por']],
+        head: [['Produtor', 'Demanda', 'Assentamento', 'Gleba', 'Cadastro', 'Finalização', 'Status', 'Cadastrado por']],
         body: rows,
         styles: { fontSize: 9, cellPadding: 3 },
         headStyles: { fillColor: [45, 90, 39], textColor: 255, fontStyle: 'bold' },
@@ -1035,6 +1057,21 @@ export default function ServicesPage() {
               ))}
             </SelectContent>
           </Select>
+
+          {/* Gleba — só aparece para assentamentos que têm glebas */}
+          {settlementGlebas.length > 0 && (
+            <Select value={glebaFilter} onValueChange={(v) => { setGlebaFilter(v); setCurrentPage(1); }}>
+              <SelectTrigger className="w-[140px] sm:w-[170px]">
+                <SelectValue placeholder="Gleba" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as glebas</SelectItem>
+                {settlementGlebas.map((g) => (
+                  <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
           {/* Ordenação */}
           <Select value={sortBy} onValueChange={(v) => { setSortBy(v as typeof sortBy); setCurrentPage(1); }}>
@@ -1207,6 +1244,7 @@ export default function ServicesPage() {
               } : null}
               demandType={detailDemandType ? { name: detailDemandType.name } : null}
               settlement={detailSettlement ? { name: detailSettlement.name } : null}
+              gleba={detailGleba}
               location={detailLocation ? { name: detailLocation.name } : null}
               onEdit={() => openEditForm(detailService)}
               onDelete={() => openDeleteDialog(detailService)}

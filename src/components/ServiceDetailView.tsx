@@ -89,6 +89,7 @@ interface ServiceDetailViewProps {
   producer?: { name: string; cpf: string; phone?: string; location_name?: string; latitude?: number | null; longitude?: number | null } | null;
   demandType?: { name: string } | null;
   settlement?: { name: string } | null;
+  gleba?: string | null;
   location?: { name: string } | null;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -102,6 +103,7 @@ export function ServiceDetailView({
   producer,
   demandType,
   settlement,
+  gleba,
   location,
   onEdit,
   onDelete,
@@ -285,7 +287,10 @@ export function ServiceDetailView({
 
         <div>
           <p className="text-sm text-muted-foreground">Localização</p>
-          <p className="font-medium">{settlement?.name || service.settlements?.name || 'N/A'}</p>
+          <p className="font-medium">
+            {settlement?.name || service.settlements?.name || 'N/A'}
+            {gleba && <span className="text-primary"> · {gleba}</span>}
+          </p>
           <p className="text-sm">{producer?.location_name || location?.name || service.locations?.name || 'N/A'}</p>
         </div>
 

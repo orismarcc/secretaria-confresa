@@ -64,7 +64,14 @@ export default function ProducersPage() {
 
   const [search, setSearch] = useState('');
   const [settlementFilter, setSettlementFilter] = useState<string>('all');
+  const [glebaFilter, setGlebaFilter] = useState<string>('all');
   const [formOpen, setFormOpen] = useState(false);
+
+  // Glebas do assentamento selecionado (classificação por gleba só aparece
+  // para assentamentos que têm glebas).
+  const settlementGlebas = (glebas as any[]).filter(
+    (g) => settlementFilter !== 'all' && g.settlement_id === settlementFilter,
+  );
   const [editingProducer, setEditingProducer] = useState<DbProducer | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [producerToDelete, setProducerToDelete] = useState<DbProducer | null>(null);
@@ -78,7 +85,8 @@ export default function ProducersPage() {
   const filtered = producers.filter((p: DbProducer) => {
     const matchesSearch = textIncludes(p.name, search) || p.cpf.includes(search) || phoneMatches((p as any).phone, search);
     const matchesSettlement = settlementFilter === 'all' || p.settlement_id === settlementFilter;
-    return matchesSearch && matchesSettlement;
+    const matchesGleba = glebaFilter === 'all' || p.gleba_id === glebaFilter;
+    return matchesSearch && matchesSettlement && matchesGleba;
   });
 
   // Paginação (lista pode ser muito longa)
@@ -93,7 +101,10 @@ export default function ProducersPage() {
   useEffect(() => {
     setSelectedIds(new Set());
     setPage(1);
-  }, [search, settlementFilter]);
+  }, [search, settlementFilter, glebaFilter]);
+
+  // Ao trocar de assentamento, zera a gleba (as glebas mudam por assentamento).
+  useEffect(() => { setGlebaFilter('all'); }, [settlementFilter]);
 
   const toggleAll = () => {
     if (allSelected) {
@@ -270,6 +281,19 @@ export default function ProducersPage() {
             ))}
           </SelectContent>
         </Select>
+        {settlementGlebas.length > 0 && (
+          <Select value={glebaFilter} onValueChange={setGlebaFilter}>
+            <SelectTrigger className="w-[170px]">
+              <SelectValue placeholder="Gleba" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as glebas</SelectItem>
+              {settlementGlebas.map((g) => (
+                <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         {selectedIds.size > 0 && (
           <Button
             variant="destructive"
@@ -320,6 +344,9 @@ export default function ProducersPage() {
                   <td className="px-3 py-3 font-medium">{p.name}</td>
                   <td className="px-3 py-3 hidden sm:table-cell text-muted-foreground">
                     {p.settlements?.name || settlements.find(s => s.id === p.settlement_id)?.name || 'N/A'}
+                    {p.glebas?.name && (
+                      <span className="text-xs text-primary"> · {p.glebas.name}</span>
+                    )}
                   </td>
                   <td className="px-3 py-3">
                     <Button variant="ghost" size="sm" onClick={() => openDetail(p)} className="gap-1">
