@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
@@ -205,6 +205,19 @@ export default function AnalyticsPage() {
   const [execCategory, setExecCategory] = useState('all');
   const [execSettlement, setExecSettlement] = useState('all');
   const [execDeliveryLot, setExecDeliveryLot] = useState('all');
+  const [execDemandType, setExecDemandType] = useState('all');
+
+  // Tipos individuais dentro da categoria selecionada (ex.: Grade, PC, Pá
+  // Carregadeira em Patrulha Mecanizada) — permite individualizar um item.
+  const execDemandTypeOptions = useMemo(
+    () => (demandTypes as any[])
+      .filter((d) => execCategory !== 'all' && execCategory !== 'entregas' && d.category === execCategory)
+      .map((d) => ({ id: d.id, name: d.name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+    [demandTypes, execCategory],
+  );
+  // Ao trocar a categoria, zera o tipo específico.
+  useEffect(() => { setExecDemandType('all'); }, [execCategory]);
 
   /** Lotes (projetos) distintos presentes nas entregas — p/ filtro do relatório. */
   const deliveryLots = useMemo(() => {
@@ -1351,7 +1364,7 @@ export default function AnalyticsPage() {
             <CardContent className="pt-5">
               <div className={cn(
                 'grid gap-3 grid-cols-1 sm:grid-cols-2 items-end',
-                execCategory === 'entregas' ? 'lg:grid-cols-4' : 'lg:grid-cols-3',
+                (execCategory === 'entregas' || execDemandTypeOptions.length > 0) ? 'lg:grid-cols-4' : 'lg:grid-cols-3',
               )}>
                 {/* Tipo */}
                 <div className="space-y-1.5">
@@ -1366,6 +1379,22 @@ export default function AnalyticsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Item específico — ex.: Grade, PC, Pá Carregadeira (por categoria) */}
+                {execDemandTypeOptions.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Item</Label>
+                    <Select value={execDemandType} onValueChange={setExecDemandType}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os itens</SelectItem>
+                        {execDemandTypeOptions.map((d) => (
+                          <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 {/* Projeto (lote) — só para Entregas */}
                 {execCategory === 'entregas' && (
@@ -1408,6 +1437,7 @@ export default function AnalyticsPage() {
                     category: execCategory,
                     settlementId: execSettlement,
                     deliveryLotId: execCategory === 'entregas' ? execDeliveryLot : 'all',
+                    demandTypeId: execDemandTypeOptions.length > 0 ? execDemandType : 'all',
                   })}
                   className="w-full gap-2"
                 >

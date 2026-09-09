@@ -37,11 +37,12 @@ import { isDamOverdue as checkDamOverdue } from '@/lib/damUtils';
 import { serviceExerciseYear } from '@/lib/analyticsUtils';
 import {
   Plus, Pencil, Trash2, Archive, CheckCircle, Eye,
-  FileDown, FileSpreadsheet, ChevronLeft, ChevronRight, X, XCircle,
+  FileDown, FileText, FileSpreadsheet, ChevronLeft, ChevronRight, X, XCircle,
   Tractor, Truck, Scissors, Shovel, Stethoscope, Layers, Package, Wrench,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { generateExecutiveReport } from '@/lib/executiveReportPdf';
 import {
   Sheet,
   SheetContent,
@@ -884,7 +885,16 @@ export default function ServicesPage() {
       doc.setTextColor(0);
 
       const statusLabel = (s: string) =>
-        s === 'pending' ? 'Pendente' : s === 'in_progress' ? 'Em Execução' : 'Finalizado';
+        s === 'pending' ? 'Pendente'
+        : s === 'in_progress' ? 'Em Execução'
+        : s === 'proximo' ? 'Próximo'
+        : s === 'cancelled' ? 'Cancelado'
+        : 'Finalizado';
+      const horasLabel = (s: DbService) => {
+        const h = Number(s.worked_hours) || 0;
+        return h > 0 ? `${h.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}h` : '-';
+      };
+      const isActive = statusFilter === 'active';
 
       const rows = sortedServices.map((s: DbService) => {
         const producer = producers.find(p => p.id === s.producer_id);
@@ -892,21 +902,34 @@ export default function ServicesPage() {
         const st = settlements.find(set => set.id === s.settlement_id);
         const createdAt = parseSupabaseDate(s.created_at);
         const completedAt = parseSupabaseDate(s.completed_at);
-        return [
+        const base = [
           producer?.name || s.producers?.name || 'N/A',
           dt?.name || s.demand_types?.name || 'N/A',
           st?.name || s.settlements?.name || 'N/A',
           (s.producers as any)?.glebas?.name || '-',
           createdAt ? format(createdAt, 'dd/MM/yyyy', { locale: ptBR }) : '-',
+        ];
+        // Ativos: sem "Finalização" e sem "Cadastrado por"; com "Horas".
+        if (isActive) {
+          return [...base, horasLabel(s), statusLabel(s.status)];
+        }
+        // Arquivados: mantém finalização + cadastrado por; agora também com horas.
+        return [
+          ...base,
           completedAt ? format(completedAt, 'dd/MM/yyyy', { locale: ptBR }) : '-',
+          horasLabel(s),
           statusLabel(s.status),
           (s as any).profiles?.name || '-',
         ];
       });
 
+      const head = isActive
+        ? [['Produtor', 'Demanda', 'Assentamento', 'Gleba', 'Cadastro', 'Horas', 'Status']]
+        : [['Produtor', 'Demanda', 'Assentamento', 'Gleba', 'Cadastro', 'Finalização', 'Horas', 'Status', 'Cadastrado por']];
+
       autoTable(doc, {
         startY: headerH + 4,
-        head: [['Produtor', 'Demanda', 'Assentamento', 'Gleba', 'Cadastro', 'Finalização', 'Status', 'Cadastrado por']],
+        head,
         body: rows,
         styles: { fontSize: 9, cellPadding: 3 },
         headStyles: { fillColor: [45, 90, 39], textColor: 255, fontStyle: 'bold' },
@@ -917,6 +940,25 @@ export default function ServicesPage() {
       doc.save(`atendimentos-${statusFilter}-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
     };
     img.src = logoTransparent;
+  };
+
+  // Relatório executivo (mesmo design da página de Análise) respeitando os
+  // filtros atuais de tipo/assentamento. Considera apenas atendimentos finalizados.
+  const handleExportExecutive = () => {
+    const demandTypeId = demandTypeFilter !== 'all' ? demandTypeFilter : 'all';
+    const category = demandTypeFilter !== 'all'
+      ? (catOfType.get(demandTypeFilter) || 'all')
+      : categoryFilter;
+    generateExecutiveReport({
+      services: services as any[],
+      deliveries: [],
+      producers: producers as any[],
+      demandTypes: demandTypes as any[],
+      settlements: settlements as any[],
+      category,
+      settlementId: settlementFilter,
+      demandTypeId,
+    });
   };
 
   // ── loading ───────────────────────────────────────────────────────────────
@@ -1026,7 +1068,11 @@ export default function ServicesPage() {
           <SearchInput value={search} onChange={(v) => { setSearch(v); setCurrentPage(1); }} placeholder="Buscar por produtor..." className="flex-1 min-w-[140px]" />
           <Button variant="outline" size="sm" onClick={handleExportPDF} className="gap-1.5 shrink-0">
             <FileDown className="h-4 w-4" />
-            <span className="hidden sm:inline">Exportar PDF</span>
+            <span className="hidden sm:inline">Lista (PDF)</span>
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportExecutive} className="gap-1.5 shrink-0" title="Relatório executivo (atendimentos finalizados) com o filtro atual">
+            <FileText className="h-4 w-4" />
+            <span className="hidden sm:inline">Relatório (PDF)</span>
           </Button>
         </div>
 

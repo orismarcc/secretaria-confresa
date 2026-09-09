@@ -67,6 +67,8 @@ export interface ExecutiveReportOptions {
   settlementId: string;
   /** 'all' | id do lote (projeto) — só se aplica quando category = 'entregas' */
   deliveryLotId?: string;
+  /** 'all' | id do tipo de demanda — individualiza um item (ex.: Grade, PC, Pá Carregadeira) */
+  demandTypeId?: string;
 }
 
 // ─── Bar chart (vetorial) ──────────────────────────────────────────────────────
@@ -338,6 +340,7 @@ function deliveryQty(d: any, lotId?: string): number {
 export function generateExecutiveReport(opts: ExecutiveReportOptions) {
   const { services, deliveries, producers, demandTypes, settlements, category, settlementId } = opts;
   const deliveryLotId = opts.deliveryLotId ?? 'all';
+  const demandTypeId = opts.demandTypeId ?? 'all';
 
   const dtById = new Map((demandTypes as any[]).map((d) => [d.id, d]));
   const stById = new Map((settlements as any[]).map((s) => [s.id, s]));
@@ -366,6 +369,10 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
     : [];
   if (category !== 'all' && category !== 'entregas') {
     compServices = compServices.filter((s) => dtById.get(s.demand_type_id)?.category === category);
+  }
+  // Individualiza um tipo específico (ex.: Grade, PC, Pá Carregadeira).
+  if (demandTypeId !== 'all') {
+    compServices = compServices.filter((s) => s.demand_type_id === demandTypeId);
   }
   if (settlementId !== 'all') compServices = compServices.filter((s) => s.settlement_id === settlementId);
 
@@ -421,8 +428,10 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
   if (includeDeliveries) chartSeries.push({ name: 'Entregas', color: BLUE, data: countByMonth(compDeliveries) });
 
   // ── Subtítulo ─────────────────────────────────────────────────────────────
-  const filtroTipo =
-    category === 'all' ? 'Todos os tipos' : category === 'entregas' ? 'Entregas' : categoryLabel(category);
+  const demandTypeName = demandTypeId !== 'all' ? (dtById.get(demandTypeId)?.name as string | undefined) : undefined;
+  const filtroTipo = demandTypeName
+    ? `${categoryLabel(category)} · ${demandTypeName}`
+    : category === 'all' ? 'Todos os tipos' : category === 'entregas' ? 'Entregas' : categoryLabel(category);
   const filtroAssent = settlementId !== 'all' ? settlementName(settlementId) : 'Todos os assentamentos';
   const subtitle = [filtroTipo, lotFilterName, filtroAssent].filter(Boolean).join(' · ');
 
@@ -627,7 +636,7 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
     }
 
     const slug = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    const tipoSlug = category === 'all' ? 'geral' : category;
+    const tipoSlug = demandTypeName ? slug(demandTypeName) : category === 'all' ? 'geral' : category;
     const loteSlug = lotFilterName ? '-' + slug(lotFilterName) : '';
     const assentSlug = settlementId !== 'all' ? '-' + slug(settlementName(settlementId)) : '';
     doc.save(`relatorio-atividades-${tipoSlug}${loteSlug}${assentSlug}-${format(now, 'yyyy-MM-dd')}.pdf`);
