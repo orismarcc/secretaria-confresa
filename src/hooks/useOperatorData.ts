@@ -20,15 +20,19 @@ export interface AppUser {
   cpf: string | null;
 }
 
-/** Mapa id → dados do profile (nome, email, CPF). Usado p/ exibir o CPF. */
+/** Mapa id → dados do profile (nome, email, CPF). Usado p/ exibir o CPF.
+ *  O CPF vem por função SECURITY DEFINER (só admin recebe) — a coluna cpf de
+ *  profiles é revogada para o cliente. Operadores recebem cpf = null. */
 export function useProfilesMap() {
   return useQuery({
     queryKey: ['profiles-cpf'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('profiles').select('id, name, email, cpf');
+      const { data, error } = await supabase.from('profiles').select('id, name, email');
       if (error) throw error;
+      const { data: cpfRows } = await (supabase as any).rpc('admin_profile_cpfs');
+      const cpfById = new Map<string, string | null>((cpfRows ?? []).map((r: any) => [r.id, r.cpf ?? null]));
       const map = new Map<string, AppUser>();
-      (data ?? []).forEach((p: any) => map.set(p.id, { id: p.id, name: p.name, email: p.email, cpf: p.cpf ?? null }));
+      (data ?? []).forEach((p: any) => map.set(p.id, { id: p.id, name: p.name, email: p.email, cpf: cpfById.get(p.id) ?? null }));
       return map;
     },
   });
@@ -43,10 +47,12 @@ export function useAdminUsers() {
       if (error) throw error;
       const ids = (roles ?? []).map((r: any) => r.user_id);
       if (ids.length === 0) return [] as AppUser[];
-      const { data: profs, error: e2 } = await supabase.from('profiles').select('id, name, email, cpf').in('id', ids);
+      const { data: profs, error: e2 } = await supabase.from('profiles').select('id, name, email').in('id', ids);
       if (e2) throw e2;
+      const { data: cpfRows } = await (supabase as any).rpc('admin_profile_cpfs');
+      const cpfById = new Map<string, string | null>((cpfRows ?? []).map((r: any) => [r.id, r.cpf ?? null]));
       return (profs ?? [])
-        .map((p: any) => ({ id: p.id, name: p.name, email: p.email, cpf: p.cpf ?? null }))
+        .map((p: any) => ({ id: p.id, name: p.name, email: p.email, cpf: cpfById.get(p.id) ?? null }))
         .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')) as AppUser[];
     },
   });
