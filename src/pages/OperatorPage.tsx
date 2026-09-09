@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/StatusBadge';
-import { MapPin, Phone, Calendar, GripVertical, Navigation, User, MessageCircle, RefreshCw } from 'lucide-react';
+import { MapPin, Phone, Calendar, Clock, GripVertical, Navigation, User, MessageCircle, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { OnlineIndicator } from '@/components/ConnectionStatus';
@@ -59,6 +59,7 @@ interface DbService {
   latitude?: number | null;
   longitude?: number | null;
   position?: number | null;
+  worked_hours?: number | null;
   producers?: { name: string; phone?: string | null; location_name?: string | null; latitude?: number | null; longitude?: number | null } | null;
   demand_types?: { name: string } | null;
   settlements?: { name: string } | null;
@@ -84,14 +85,24 @@ function OperatorCardBody({
   onFinalize,
 }: OperatorCardBodyProps) {
   const canStart = service.status === 'pending' || service.status === 'proximo';
-  const canFinalize = service.status === 'in_progress' || service.status === 'proximo';
+  // Só finaliza depois de iniciar (passa por "em execução").
+  const canFinalize = service.status === 'in_progress';
+  const horas = Number(service.worked_hours) || 0;
 
   return (
     <div className="flex-1">
       <div className="flex items-start justify-between mb-3">
         <div>
           <p className="font-semibold text-lg">{service.producers?.name || 'N/A'}</p>
-          <p className="text-sm text-primary">{service.demand_types?.name}</p>
+          <p className="text-sm text-primary">
+            {service.demand_types?.name}
+            {horas > 0 && (
+              <span className="inline-flex items-center gap-1 ml-2 text-xs font-semibold text-foreground bg-muted rounded-full px-2 py-0.5 align-middle">
+                <Clock className="h-3 w-3" />
+                {horas.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}h a realizar
+              </span>
+            )}
+          </p>
         </div>
         <div className="flex flex-col items-end gap-1">
           <StatusBadge status={service.status as 'pending' | 'in_progress' | 'completed'} />
