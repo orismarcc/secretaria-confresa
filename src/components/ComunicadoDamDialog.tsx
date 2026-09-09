@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { FileText, FileDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useNextComunicadoNumber, useIncrementComunicadoNumber } from '@/hooks/useSupabaseData';
@@ -53,6 +54,7 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
   const incrementNumero = useIncrementComunicadoNumber();
   const [valorLitro, setValorLitro] = useState('');
   const [upfm, setUpfm] = useState('71,15');
+  const [somenteTaxa, setSomenteTaxa] = useState(false);
   const [gerando, setGerando] = useState(false);
 
   // Reinicia ao abrir
@@ -60,6 +62,7 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
     if (open) {
       setValorLitro('');
       setUpfm('71,15');
+      setSomenteTaxa(false);
     }
   }, [open]);
 
@@ -67,9 +70,11 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
 
   const litros = source.litros || 0;
   const upfmNum = parseNum(upfm);
-  // Combustível = valor por litro × litros (não editável)
-  const combustivel = parseNum(valorLitro) * litros;
+  // Combustível = valor por litro × litros (não editável). No modo "somente taxa"
+  // (produtor já tem o combustível), não há combustível: cobra-se apenas a taxa.
+  const combustivel = somenteTaxa ? 0 : parseNum(valorLitro) * litros;
   const total = combustivel + upfmNum;
+  const podeGerar = somenteTaxa ? upfmNum > 0 : combustivel > 0;
 
   const handleGerar = async (formato: 'docx' | 'pdf') => {
     setGerando(true);
@@ -86,6 +91,7 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
         litros,
         valorCombustivel: combustivel,
         valorUpfm: upfmNum,
+        somenteTaxa,
       };
       // 1) Monta o arquivo em memória (sem baixar ainda).
       const { blob, filename } = formato === 'pdf'
@@ -167,25 +173,39 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
             <span className="font-semibold">{proximoNumero ?? '—'} <span className="text-xs font-normal text-muted-foreground">(automático)</span></span>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="com-valor-litro">Valor do combustível por litro (R$/L) *</Label>
-            <Input
-              id="com-valor-litro"
-              value={valorLitro}
-              onChange={(e) => setValorLitro(e.target.value)}
-              placeholder="7,50"
-              inputMode="decimal"
+          {/* Somente taxa — quando o produtor já tem o combustível na propriedade */}
+          <label htmlFor="com-somente-taxa" className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 cursor-pointer">
+            <Checkbox
+              id="com-somente-taxa"
+              checked={somenteTaxa}
+              onCheckedChange={(v) => setSomenteTaxa(!!v)}
             />
-          </div>
+            <span className="text-sm">Somente a taxa <span className="text-muted-foreground">(produtor já tem o combustível)</span></span>
+          </label>
 
-          {/* Combustível — calculado (não editável) */}
-          <div className="flex items-center justify-between rounded-lg bg-muted/40 border px-3 py-2">
-            <div>
-              <span className="text-sm font-medium">Combustível</span>
-              <p className="text-[11px] text-muted-foreground">valor/L × {formatLitros(litros)}</p>
-            </div>
-            <span className="font-semibold">{fmtBRL(combustivel)}</span>
-          </div>
+          {!somenteTaxa && (
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor="com-valor-litro">Valor do combustível por litro (R$/L) *</Label>
+                <Input
+                  id="com-valor-litro"
+                  value={valorLitro}
+                  onChange={(e) => setValorLitro(e.target.value)}
+                  placeholder="7,50"
+                  inputMode="decimal"
+                />
+              </div>
+
+              {/* Combustível — calculado (não editável) */}
+              <div className="flex items-center justify-between rounded-lg bg-muted/40 border px-3 py-2">
+                <div>
+                  <span className="text-sm font-medium">Combustível</span>
+                  <p className="text-[11px] text-muted-foreground">valor/L × {formatLitros(litros)}</p>
+                </div>
+                <span className="font-semibold">{fmtBRL(combustivel)}</span>
+              </div>
+            </>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="com-upfm">Taxa referente a 1 UPFM (R$)</Label>
@@ -208,11 +228,11 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
         <DialogFooter className="gap-2 sm:justify-between">
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={gerando}>Cancelar</Button>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => handleGerar('docx')} disabled={gerando || combustivel <= 0}>
+            <Button variant="outline" onClick={() => handleGerar('docx')} disabled={gerando || !podeGerar}>
               <FileText className="h-4 w-4 mr-2" />
               {gerando ? 'Gerando...' : 'Gerar DOC'}
             </Button>
-            <Button onClick={() => handleGerar('pdf')} disabled={gerando || combustivel <= 0}>
+            <Button onClick={() => handleGerar('pdf')} disabled={gerando || !podeGerar}>
               <FileDown className="h-4 w-4 mr-2" />
               {gerando ? 'Gerando...' : 'Gerar PDF'}
             </Button>

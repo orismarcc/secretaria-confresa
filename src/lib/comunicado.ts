@@ -116,6 +116,8 @@ export interface ComunicadoData {
   litros: number;      // fuel_liters
   valorCombustivel: number; // R$ — valor total do combustível (já calculado)
   valorUpfm: number;        // R$
+  /** true = cobra só a taxa (produtor já tem o combustível) — omite combustível. */
+  somenteTaxa?: boolean;
 }
 
 /** Nome de arquivo seguro a partir do nome do produtor. */
@@ -276,13 +278,22 @@ export async function buildComunicadoDamPdf(dados: ComunicadoData): Promise<{ bl
   labeled('Tempo estimado de uso de máquina e/ou veículo:', formatHoras(dados.horas));
   labeled('Quantidade estimada de combustível:', formatLitros(dados.litros));
   y += 4;
-  para(
-    'Informamos que o produtor rural deverá recolher a taxa correspondente a 1 (uma) Unidade Padrão Fiscal Municipal (UPFM), conforme cotação vigente na data, acrescida dos valores referentes ao combustível necessário, considerando o limite de até 6 (seis) horas para a execução dos serviços, conforme disposto abaixo:',
-    { justify: true, gap: 8 },
-  );
-  para(`Combustível: R$ ${formatBRLNumber(dados.valorCombustivel)} (${valorPorExtenso(dados.valorCombustivel)});`, { gap: 4 });
-  para(`Taxa referente a 1 UPFM: R$ ${formatBRLNumber(dados.valorUpfm)} (${valorPorExtenso(dados.valorUpfm)});`, { gap: 4 });
-  para(`Total: R$ ${formatBRLNumber(total)} (${valorPorExtenso(total)})`, { bold: true, gap: 10 });
+  if (dados.somenteTaxa) {
+    para(
+      'Informamos que o produtor rural deverá recolher a taxa correspondente a 1 (uma) Unidade Padrão Fiscal Municipal (UPFM), conforme cotação vigente na data, considerando o limite de até 6 (seis) horas para a execução dos serviços. O combustível necessário será fornecido pelo próprio produtor, conforme disposto abaixo:',
+      { justify: true, gap: 8 },
+    );
+    para(`Taxa referente a 1 UPFM: R$ ${formatBRLNumber(dados.valorUpfm)} (${valorPorExtenso(dados.valorUpfm)});`, { gap: 4 });
+    para(`Total: R$ ${formatBRLNumber(total)} (${valorPorExtenso(total)})`, { bold: true, gap: 10 });
+  } else {
+    para(
+      'Informamos que o produtor rural deverá recolher a taxa correspondente a 1 (uma) Unidade Padrão Fiscal Municipal (UPFM), conforme cotação vigente na data, acrescida dos valores referentes ao combustível necessário, considerando o limite de até 6 (seis) horas para a execução dos serviços, conforme disposto abaixo:',
+      { justify: true, gap: 8 },
+    );
+    para(`Combustível: R$ ${formatBRLNumber(dados.valorCombustivel)} (${valorPorExtenso(dados.valorCombustivel)});`, { gap: 4 });
+    para(`Taxa referente a 1 UPFM: R$ ${formatBRLNumber(dados.valorUpfm)} (${valorPorExtenso(dados.valorUpfm)});`, { gap: 4 });
+    para(`Total: R$ ${formatBRLNumber(total)} (${valorPorExtenso(total)})`, { bold: true, gap: 10 });
+  }
   para(
     'Prazo de pagamento: 30 (trinta) dias. A inserção do atendimento ao cronograma de serviços fica condicionado à comprovação do recolhimento.',
     { justify: true, gap: 30 },
