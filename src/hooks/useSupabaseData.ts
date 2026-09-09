@@ -426,12 +426,21 @@ export function useProducers() {
   return useQuery({
     queryKey: ['producers'],
     queryFn: async () => {
+      // A coluna cpf de producers é revogada no cliente (só admin lê, via função
+      // admin_producer_cpfs). Selecionamos colunas explícitas (sem cpf) e, para
+      // admins, reanexamos o cpf — o restante do app continua lendo p.cpf normal.
       const { data, error } = await supabase
         .from('producers')
-        .select('*, settlements(name), locations(name), glebas(name), producer_demands(demand_type_id)')
+        .select('id, name, phone, settlement_id, location_id, property_name, property_size, dap_cap, created_at, location_name, latitude, longitude, caf, updated_at, gleba_id, settlements(name), locations(name), glebas(name), producer_demands(demand_type_id)')
         .order('name');
       if (error) throw error;
-      return data;
+      const rows = (data ?? []) as any[];
+      const { data: cpfRows } = await (supabase as any).rpc('admin_producer_cpfs');
+      if (cpfRows && cpfRows.length) {
+        const cpfById = new Map<string, string | null>(cpfRows.map((r: any) => [r.id, r.cpf ?? null]));
+        rows.forEach((p) => { p.cpf = cpfById.get(p.id) ?? null; });
+      }
+      return rows;
     },
   });
 }
@@ -479,7 +488,7 @@ export function useCreateProducer() {
       const { data, error } = await supabase
         .from('producers')
         .insert(producerData)
-        .select()
+        .select('id')
         .single();
       if (error) {
         // CPF/CNPJ duplicado (UNIQUE producers_cpf_key) → mensagem clara
@@ -531,7 +540,7 @@ export function useUpdateProducer() {
         .from('producers')
         .update(updates)
         .eq('id', id)
-        .select()
+        .select('id')
         .single();
       if (error) {
         if ((error as any).code === '23505' || /producers_cpf_key|duplicate key/i.test(error.message)) {
@@ -1118,7 +1127,7 @@ export function useDeliveries() {
         .select(`
           *,
           producers:producer_id(
-            name, cpf, phone, settlement_id, location_id, location_name,
+            name, phone, settlement_id, location_id, location_name,
             settlements(name),
             locations(name)
           ),
@@ -1129,7 +1138,14 @@ export function useDeliveries() {
         `)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data;
+      // cpf de producers é revogado no cliente; para admins, reanexa via função.
+      const rows = (data ?? []) as any[];
+      const { data: cpfRows } = await (supabase as any).rpc('admin_producer_cpfs');
+      if (cpfRows && cpfRows.length) {
+        const cpfById = new Map<string, string | null>(cpfRows.map((r: any) => [r.id, r.cpf ?? null]));
+        rows.forEach((d) => { if (d.producers) d.producers.cpf = cpfById.get(d.producer_id) ?? null; });
+      }
+      return rows;
     },
   });
 }
