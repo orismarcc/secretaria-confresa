@@ -69,6 +69,8 @@ export interface ExecutiveReportOptions {
   deliveryLotId?: string;
   /** 'all' | id do tipo de demanda — individualiza um item (ex.: Grade, PC, Pá Carregadeira) */
   demandTypeId?: string;
+  /** true = relatório só de atendimentos (oculta KPIs/série de Entregas). */
+  servicesOnly?: boolean;
 }
 
 // ─── Bar chart (vetorial) ──────────────────────────────────────────────────────
@@ -358,8 +360,9 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
   const settlementName = (id: string | null | undefined, embedded?: any) =>
     stById.get(id)?.name || embedded?.name || 'Sem assentamento';
 
+  const servicesOnly = opts.servicesOnly ?? false;
   const includeServices = category === 'all' || category !== 'entregas';
-  const includeDeliveries = category === 'all' || category === 'entregas';
+  const includeDeliveries = !servicesOnly && (category === 'all' || category === 'entregas');
 
   // ── Filtragem — apenas FINALIZADO ─────────────────────────────────────────
   let compServices = includeServices

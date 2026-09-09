@@ -958,6 +958,7 @@ export default function ServicesPage() {
       category,
       settlementId: settlementFilter,
       demandTypeId,
+      servicesOnly: true,
     });
   };
 
