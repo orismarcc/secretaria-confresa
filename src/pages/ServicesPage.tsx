@@ -198,8 +198,14 @@ export default function ServicesPage() {
   const deleteService = useDeleteService();
 
   const [search, setSearch] = useState('');
+  // Status exato via URL (?status=proximo | in_progress | pending | completed | cancelled)
+  // — usado pelos "Ver todos" e cards do Dashboard para abrir só aquele status.
+  const statusParam = searchParams.get('status') || '';
+  const [exactStatus, setExactStatus] = useState<string>(
+    ['pending', 'in_progress', 'proximo', 'completed', 'cancelled'].includes(statusParam) ? statusParam : ''
+  );
   const [statusFilter, setStatusFilter] = useState<string>(
-    searchParams.get('tab') === 'archived' ? 'archived' : 'active'
+    searchParams.get('tab') === 'archived' || ['completed', 'cancelled'].includes(statusParam) ? 'archived' : 'active'
   );
   const [demandTypeFilter, setDemandTypeFilter] = useState<string>('all');
   // Filtro global de exercício (ano) — padrão sempre o ano atual
@@ -263,7 +269,7 @@ export default function ServicesPage() {
   // Reset to page 1 when any filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter, demandTypeFilter, categoryFilter, settlementFilter, glebaFilter, dateFrom, dateTo, sortBy, damFilter, yearFilter]);
+  }, [search, statusFilter, exactStatus, demandTypeFilter, categoryFilter, settlementFilter, glebaFilter, dateFrom, dateTo, sortBy, damFilter, yearFilter]);
 
   // Glebas do assentamento selecionado (classificação por gleba só para
   // assentamentos que têm glebas). Ao trocar de assentamento, zera a gleba.
@@ -310,6 +316,7 @@ export default function ServicesPage() {
       : s.status === 'completed' || s.status === 'cancelled';
     const matchesSettlement =
       settlementFilter === 'all' || s.settlement_id === settlementFilter;
+    const matchesExactStatus = !exactStatus || s.status === exactStatus;
     const matchesGleba = glebaFilter === 'all' || s.producers?.gleba_id === glebaFilter;
     // Date range uses scheduled_date (YYYY-MM-DD string — direct comparison works)
     const sDate = s.scheduled_date?.substring(0, 10) ?? '';
@@ -320,8 +327,8 @@ export default function ServicesPage() {
       : damFilter === 'paid' ? !!s.dam_paid
       : damFilter === 'pending' ? (!!s.dam_issued && !s.dam_paid)
       : /* comunicado */ (!!s.comunicado_emitido && !s.dam_issued && !s.dam_paid);
-    return matchesSearch && matchesDemandType && matchesCategory && matchesStatus && matchesSettlement && matchesGleba && matchesDateFrom && matchesDateTo && matchesDam;
-  }), [services, producers, demandTypes, search, demandTypeFilter, categoryFilter, statusFilter, settlementFilter, glebaFilter, dateFrom, dateTo, damFilter, yearFilter]);
+    return matchesSearch && matchesDemandType && matchesCategory && matchesStatus && matchesExactStatus && matchesSettlement && matchesGleba && matchesDateFrom && matchesDateTo && matchesDam;
+  }), [services, producers, demandTypes, search, demandTypeFilter, categoryFilter, statusFilter, exactStatus, settlementFilter, glebaFilter, dateFrom, dateTo, damFilter, yearFilter]);
 
   const sortedServices = useMemo(() => [...filteredServices].sort((a: DbService, b: DbService) => {
     // Ordenação explícita por data de cadastro (sobrepõe a ordem padrão, mantendo os filtros)
@@ -800,6 +807,7 @@ export default function ServicesPage() {
       ? s.status === 'pending' || s.status === 'in_progress' || s.status === 'proximo'
       : s.status === 'completed' || s.status === 'cancelled';
     const matchesSettlement = settlementFilter === 'all' || s.settlement_id === settlementFilter;
+    const matchesExactStatus = !exactStatus || s.status === exactStatus;
     const matchesGleba = glebaFilter === 'all' || s.producers?.gleba_id === glebaFilter;
     const sDate = s.scheduled_date?.substring(0, 10) ?? '';
     const matchesDateFrom = !dateFrom || sDate >= dateFrom;
@@ -809,8 +817,8 @@ export default function ServicesPage() {
       : damFilter === 'paid' ? !!s.dam_paid
       : damFilter === 'pending' ? (!!s.dam_issued && !s.dam_paid)
       : (!!s.comunicado_emitido && !s.dam_issued && !s.dam_paid);
-    return matchesSearch && matchesStatus && matchesSettlement && matchesGleba && matchesDateFrom && matchesDateTo && matchesDam;
-  }), [services, producers, catOfType, search, statusFilter, settlementFilter, glebaFilter, dateFrom, dateTo, damFilter, yearFilter]);
+    return matchesSearch && matchesStatus && matchesExactStatus && matchesSettlement && matchesGleba && matchesDateFrom && matchesDateTo && matchesDam;
+  }), [services, producers, catOfType, search, statusFilter, exactStatus, settlementFilter, glebaFilter, dateFrom, dateTo, damFilter, yearFilter]);
 
   // Cards: subdivide Patrulha Mecanizada por tipo de operação (Grade, PC, Pá
   // Carregadeira, Roçadeira, …) e mantém as demais categorias como um card cada.
@@ -995,7 +1003,7 @@ export default function ServicesPage() {
       </div>
 
       <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-        <Tabs value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
+        <Tabs value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setExactStatus(''); setCurrentPage(1); }}>
           <TabsList>
             <TabsTrigger value="active" className="gap-2">
               Ativos <span className="bg-primary/20 text-primary px-2 py-0.5 rounded-full text-xs">{activeCount}</span>
@@ -1006,6 +1014,22 @@ export default function ServicesPage() {
             </TabsTrigger>
           </TabsList>
         </Tabs>
+
+        {exactStatus && (
+          <button
+            type="button"
+            onClick={() => { setExactStatus(''); setCurrentPage(1); }}
+            className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary px-3 py-1 text-xs font-medium shrink-0"
+            title="Remover filtro de status"
+          >
+            {exactStatus === 'proximo' ? 'Somente Próximos'
+              : exactStatus === 'in_progress' ? 'Somente Em Execução'
+              : exactStatus === 'pending' ? 'Somente Pendentes'
+              : exactStatus === 'completed' ? 'Somente Finalizados'
+              : 'Somente Cancelados'}
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
 
         {/* Filtro global de exercício (ano) — padrão: ano atual */}
         <div className="flex items-center gap-2">

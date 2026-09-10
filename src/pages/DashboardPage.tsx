@@ -357,7 +357,7 @@ export default function DashboardPage() {
                   )}
                 </div>
                 <button
-                  onClick={() => navigate('/services')}
+                  onClick={() => navigate('/services?status=proximo')}
                   className="text-[10px] sm:text-sm text-primary hover:underline font-normal whitespace-nowrap shrink-0"
                 >
                   Ver todos
@@ -462,7 +462,7 @@ export default function DashboardPage() {
                   )}
                 </div>
                 <button
-                  onClick={() => navigate('/services')}
+                  onClick={() => navigate('/services?status=in_progress')}
                   className="text-[10px] sm:text-sm text-primary hover:underline font-normal whitespace-nowrap shrink-0"
                 >
                   Ver todos
