@@ -15,6 +15,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { OperatorForm } from '@/components/forms/OperatorForm';
+import { AvatarThumb, AvatarUpload } from '@/components/AvatarUpload';
 import {
   useOperators,
   useCreateOperator,
@@ -59,6 +60,7 @@ interface ResponsibleTechnician {
   name: string;
   cpf: string | null;
   cargo: string | null;
+  photo_url?: string | null;
   is_active: boolean;
   created_at: string | null;
 }
@@ -72,7 +74,7 @@ function TechnicianForm({
   isPending,
 }: {
   initial?: Partial<ResponsibleTechnician>;
-  onSubmit: (data: { name: string; cpf: string; cargo: string }) => void;
+  onSubmit: (data: { name: string; cpf: string; cargo: string; photoUrl: string | null }) => void;
   onCancel: () => void;
   isPending?: boolean;
 }) {
@@ -80,6 +82,7 @@ function TechnicianForm({
   const [cpf, setCpf] = useState(initial?.cpf ?? '');
   const [docType, setDocType] = useState<DocType>(detectDocType(initial?.cpf));
   const [cargo, setCargo] = useState(initial?.cargo ?? '');
+  const [photoUrl, setPhotoUrl] = useState<string | null>(initial?.photo_url ?? null);
 
   const handleDocTypeChange = (type: DocType) => {
     if (type === docType) return;
@@ -90,11 +93,12 @@ function TechnicianForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ name, cpf, cargo });
+    onSubmit({ name, cpf, cargo, photoUrl });
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <AvatarUpload value={photoUrl} onChange={setPhotoUrl} />
       <div className="space-y-2">
         <Label htmlFor="tech-name">Nome Completo *</Label>
         <Input
@@ -160,15 +164,17 @@ function AdminEditForm({
   onCancel,
   isPending,
 }: {
-  initial: { name: string; cpf: string | null };
-  onSubmit: (data: { name: string; cpf: string }) => void;
+  initial: { name: string; cpf: string | null; avatarUrl?: string | null };
+  onSubmit: (data: { name: string; cpf: string; avatarUrl: string | null }) => void;
   onCancel: () => void;
   isPending?: boolean;
 }) {
   const [name, setName] = useState(initial.name ?? '');
   const [cpf, setCpf] = useState(initial.cpf ?? '');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(initial.avatarUrl ?? null);
   return (
-    <form onSubmit={(e) => { e.preventDefault(); onSubmit({ name, cpf }); }} className="space-y-4">
+    <form onSubmit={(e) => { e.preventDefault(); onSubmit({ name, cpf, avatarUrl }); }} className="space-y-4">
+      <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} />
       <div className="space-y-2">
         <Label htmlFor="adm-name">Nome Completo</Label>
         <Input id="adm-name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -217,6 +223,7 @@ export default function OperatorsPage() {
   // ── Admins state ───────────────────────────────────────────────────────────
   const [editingAdmin, setEditingAdmin] = useState<AppUser | null>(null);
   const cpfOf = (id: string) => profilesMap?.get(id)?.cpf || '';
+  const avatarOf = (id: string) => profilesMap?.get(id)?.avatarUrl || null;
   const setOperatorDemandTypes = useSetOperatorDemandTypes();
   const setOperatorMachinery = useSetOperatorMachinery();
 
@@ -276,22 +283,22 @@ export default function OperatorsPage() {
 
   // ── Operator helpers ───────────────────────────────────────────────────────
   const handleCreate = async (
-    data: { name: string; email: string; password: string; cpf?: string; demandTypeIds: string[]; machineryIds: string[] }
+    data: { name: string; email: string; password: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[] }
   ) => {
-    const { demandTypeIds, machineryIds, cpf, ...operatorData } = data;
+    const { demandTypeIds, machineryIds, cpf, avatarUrl, ...operatorData } = data;
     const newUser = await createOperator.mutateAsync(operatorData);
     if (newUser?.id) {
-      if (cpf) await updateUserProfile.mutateAsync({ id: newUser.id, cpf });
+      if (cpf || avatarUrl) await updateUserProfile.mutateAsync({ id: newUser.id, cpf: cpf || undefined, avatar_url: avatarUrl ?? undefined });
       await setOperatorDemandTypes.mutateAsync({ operatorId: newUser.id, demandTypeIds });
       await setOperatorMachinery.mutateAsync({ operatorId: newUser.id, machineryIds });
     }
     setIsFormOpen(false);
   };
 
-  const handleUpdate = async (data: { name: string; cpf?: string; demandTypeIds: string[]; machineryIds: string[] }) => {
+  const handleUpdate = async (data: { name: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[] }) => {
     if (editingOperator) {
       await updateOperator.mutateAsync({ userId: editingOperator.id, name: data.name });
-      await updateUserProfile.mutateAsync({ id: editingOperator.id, cpf: data.cpf ?? '' });
+      await updateUserProfile.mutateAsync({ id: editingOperator.id, cpf: data.cpf ?? '', avatar_url: data.avatarUrl ?? null });
       await setOperatorDemandTypes.mutateAsync({
         operatorId: editingOperator.id,
         demandTypeIds: data.demandTypeIds,
@@ -318,17 +325,17 @@ export default function OperatorsPage() {
   const getTechnicianServiceCount = (techId: string) =>
     (services as any[]).filter((s: any) => s.responsible_technician_id === techId).length;
 
-  const handleTechCreate = (data: { name: string; cpf: string; cargo: string }) => {
+  const handleTechCreate = (data: { name: string; cpf: string; cargo: string; photoUrl: string | null }) => {
     createTech.mutate(
-      { name: data.name, cpf: data.cpf || null, cargo: data.cargo || null },
+      { name: data.name, cpf: data.cpf || null, cargo: data.cargo || null, photo_url: data.photoUrl },
       { onSuccess: () => setTechFormOpen(false) }
     );
   };
 
-  const handleTechUpdate = (data: { name: string; cpf: string; cargo: string }) => {
+  const handleTechUpdate = (data: { name: string; cpf: string; cargo: string; photoUrl: string | null }) => {
     if (!editingTech) return;
     updateTech.mutate(
-      { id: editingTech.id, name: data.name, cpf: data.cpf || null, cargo: data.cargo || null },
+      { id: editingTech.id, name: data.name, cpf: data.cpf || null, cargo: data.cargo || null, photo_url: data.photoUrl },
       { onSuccess: () => setEditingTech(null) }
     );
   };
@@ -346,7 +353,7 @@ export default function OperatorsPage() {
       header: 'Nome',
       render: (row: Operator) => (
         <div className="flex items-center gap-2">
-          <UserCog className="h-4 w-4 text-muted-foreground" />
+          <AvatarThumb url={avatarOf(row.id)} />
           <span className="font-medium">{row.name}</span>
         </div>
       ),
@@ -418,7 +425,7 @@ export default function OperatorsPage() {
       header: 'Nome',
       render: (row: ResponsibleTechnician) => (
         <div className="flex items-center gap-2">
-          <HardHat className="h-4 w-4 text-muted-foreground" />
+          <AvatarThumb url={row.photo_url} />
           <span className="font-medium">{row.name}</span>
         </div>
       ),
@@ -488,7 +495,7 @@ export default function OperatorsPage() {
       header: 'Nome',
       render: (row: AppUser) => (
         <div className="flex items-center gap-2">
-          <User className="h-4 w-4 text-muted-foreground" />
+          <AvatarThumb url={row.avatarUrl} />
           <span className="font-medium">{row.name}</span>
         </div>
       ),
@@ -657,7 +664,7 @@ export default function OperatorsPage() {
             ) : (
               <OperatorForm
                 key={editingOperator.id}
-                defaultValues={{ name: editingOperator.name, email: editingOperator.email, cpf: cpfOf(editingOperator.id) }}
+                defaultValues={{ name: editingOperator.name, email: editingOperator.email, cpf: cpfOf(editingOperator.id), avatarUrl: avatarOf(editingOperator.id) }}
                 onSubmit={handleUpdate}
                 onCancel={() => setEditingOperator(null)}
                 isLoading={updateOperator.isPending || setOperatorDemandTypes.isPending || setOperatorMachinery.isPending}
@@ -687,12 +694,12 @@ export default function OperatorsPage() {
           <DialogHeader><DialogTitle>Editar Administrador</DialogTitle></DialogHeader>
           {editingAdmin && (
             <AdminEditForm
-              initial={{ name: editingAdmin.name, cpf: editingAdmin.cpf }}
+              initial={{ name: editingAdmin.name, cpf: editingAdmin.cpf, avatarUrl: editingAdmin.avatarUrl }}
               isPending={updateUserProfile.isPending}
               onCancel={() => setEditingAdmin(null)}
               onSubmit={(data) => {
                 updateUserProfile.mutate(
-                  { id: editingAdmin.id, name: data.name, cpf: data.cpf },
+                  { id: editingAdmin.id, name: data.name, cpf: data.cpf, avatar_url: data.avatarUrl },
                   { onSuccess: () => setEditingAdmin(null) },
                 );
               }}

@@ -20,6 +20,7 @@ import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { User, KeyRound, Save, Eye, EyeOff, Download, Smartphone, CheckCircle2 } from 'lucide-react';
 import { AVIPrestacaoContas } from '@/components/AVIPrestacaoContas';
 import { AterRelatorio } from '@/components/AterRelatorio';
+import { AvatarUpload } from '@/components/AvatarUpload';
 
 const JOB_TITLES = [
   'Secretário de Agricultura',
@@ -106,6 +107,17 @@ export default function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <AvatarUpload
+              value={profile?.avatar_url}
+              onChange={async (url) => {
+                const result = await updateProfile({ avatar_url: url });
+                toast({
+                  title: result.success ? (url ? 'Foto atualizada!' : 'Foto removida.') : (result.error || 'Erro ao salvar a foto.'),
+                  variant: result.success ? undefined : 'destructive',
+                });
+              }}
+            />
+
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input

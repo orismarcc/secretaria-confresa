@@ -6,7 +6,7 @@ import { UserRole } from '@/types';
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  profile: { name: string; email: string; job_title?: string | null } | null;
+  profile: { name: string; email: string; job_title?: string | null; avatar_url?: string | null } | null;
   role: UserRole | null;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -14,7 +14,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, name: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   hasRole: (role: UserRole) => boolean;
-  updateProfile: (data: { name?: string; job_title?: string }) => Promise<{ success: boolean; error?: string }>;
+  updateProfile: (data: { name?: string; job_title?: string; avatar_url?: string | null }) => Promise<{ success: boolean; error?: string }>;
   updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
 }
 
@@ -23,7 +23,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<{ name: string; email: string; job_title?: string | null } | null>(null);
+  const [profile, setProfile] = useState<{ name: string; email: string; job_title?: string | null; avatar_url?: string | null } | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchUserData = async (userId: string) => {
     try {
       const [profileRes, roleRes] = await Promise.all([
-        supabase.from('profiles').select('name, email, job_title').eq('id', userId).maybeSingle(),
+        supabase.from('profiles').select('name, email, job_title, avatar_url').eq('id', userId).maybeSingle(),
         supabase.from('user_roles').select('role, is_active').eq('user_id', userId).maybeSingle(),
       ]);
 
@@ -152,7 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasRole = (checkRole: UserRole): boolean => role === checkRole;
 
-  const updateProfile = async (data: { name?: string; job_title?: string }): Promise<{ success: boolean; error?: string }> => {
+  const updateProfile = async (data: { name?: string; job_title?: string; avatar_url?: string | null }): Promise<{ success: boolean; error?: string }> => {
     if (!user) return { success: false, error: 'Usuário não autenticado.' };
     try {
       const { error } = await supabase

@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
 import { z } from 'zod';
 import { formatCpf } from '@/lib/documents';
+import { AvatarUpload } from '@/components/AvatarUpload';
 
 export interface OperatorDemandTypeOption {
   id: string;
@@ -32,11 +33,11 @@ interface OperatorMachineryOption {
 }
 
 interface OperatorFormProps {
-  defaultValues?: { name: string; email?: string; cpf?: string };
+  defaultValues?: { name: string; email?: string; cpf?: string; avatarUrl?: string | null };
   onSubmit: (
     data:
-      | { name: string; email: string; password: string; cpf: string; demandTypeIds: string[]; machineryIds: string[] }
-      | { name: string; cpf: string; demandTypeIds: string[]; machineryIds: string[] }
+      | { name: string; email: string; password: string; cpf: string; avatarUrl: string | null; demandTypeIds: string[]; machineryIds: string[] }
+      | { name: string; cpf: string; avatarUrl: string | null; demandTypeIds: string[]; machineryIds: string[] }
   ) => Promise<void>;
   onCancel: () => void;
   isLoading: boolean;
@@ -65,6 +66,7 @@ export function OperatorForm({
   const [name, setName] = useState(defaultValues?.name || '');
   const [email, setEmail] = useState(defaultValues?.email || '');
   const [cpf, setCpf] = useState(defaultValues?.cpf || '');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(defaultValues?.avatarUrl || null);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [demandTypeIds, setDemandTypeIds] = useState<string[]>(initialDemandTypeIds);
@@ -96,7 +98,7 @@ export function OperatorForm({
         setErrors(fieldErrors);
         return;
       }
-      await onSubmit({ name, email, password, cpf, demandTypeIds, machineryIds });
+      await onSubmit({ name, email, password, cpf, avatarUrl, demandTypeIds, machineryIds });
     } else {
       const result = editSchema.safeParse({ name });
       if (!result.success) {
@@ -107,12 +109,14 @@ export function OperatorForm({
         setErrors(fieldErrors);
         return;
       }
-      await onSubmit({ name, cpf, demandTypeIds, machineryIds });
+      await onSubmit({ name, cpf, avatarUrl, demandTypeIds, machineryIds });
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} />
+
       <div className="space-y-2">
         <Label htmlFor="name">Nome Completo</Label>
         <Input

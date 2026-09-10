@@ -18,6 +18,7 @@ export interface AppUser {
   name: string;
   email: string;
   cpf: string | null;
+  avatarUrl?: string | null;
 }
 
 /** Mapa id → dados do profile (nome, email, CPF). Usado p/ exibir o CPF.
@@ -27,12 +28,12 @@ export function useProfilesMap() {
   return useQuery({
     queryKey: ['profiles-cpf'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('profiles').select('id, name, email');
+      const { data, error } = await supabase.from('profiles').select('id, name, email, avatar_url');
       if (error) throw error;
       const { data: cpfRows } = await (supabase as any).rpc('admin_profile_cpfs');
       const cpfById = new Map<string, string | null>((cpfRows ?? []).map((r: any) => [r.id, r.cpf ?? null]));
       const map = new Map<string, AppUser>();
-      (data ?? []).forEach((p: any) => map.set(p.id, { id: p.id, name: p.name, email: p.email, cpf: cpfById.get(p.id) ?? null }));
+      (data ?? []).forEach((p: any) => map.set(p.id, { id: p.id, name: p.name, email: p.email, cpf: cpfById.get(p.id) ?? null, avatarUrl: p.avatar_url ?? null }));
       return map;
     },
   });
@@ -47,12 +48,12 @@ export function useAdminUsers() {
       if (error) throw error;
       const ids = (roles ?? []).map((r: any) => r.user_id);
       if (ids.length === 0) return [] as AppUser[];
-      const { data: profs, error: e2 } = await supabase.from('profiles').select('id, name, email').in('id', ids);
+      const { data: profs, error: e2 } = await supabase.from('profiles').select('id, name, email, avatar_url').in('id', ids);
       if (e2) throw e2;
       const { data: cpfRows } = await (supabase as any).rpc('admin_profile_cpfs');
       const cpfById = new Map<string, string | null>((cpfRows ?? []).map((r: any) => [r.id, r.cpf ?? null]));
       return (profs ?? [])
-        .map((p: any) => ({ id: p.id, name: p.name, email: p.email, cpf: cpfById.get(p.id) ?? null }))
+        .map((p: any) => ({ id: p.id, name: p.name, email: p.email, cpf: cpfById.get(p.id) ?? null, avatarUrl: p.avatar_url ?? null }))
         .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')) as AppUser[];
     },
   });
@@ -63,10 +64,11 @@ export function useUpdateUserProfile() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: async ({ id, name, cpf }: { id: string; name?: string; cpf?: string | null }) => {
+    mutationFn: async ({ id, name, cpf, avatar_url }: { id: string; name?: string; cpf?: string | null; avatar_url?: string | null }) => {
       const patch: Record<string, unknown> = {};
       if (name !== undefined) patch.name = name;
       if (cpf !== undefined) patch.cpf = cpf;
+      if (avatar_url !== undefined) patch.avatar_url = avatar_url;
       if (Object.keys(patch).length === 0) return;
       const { error } = await supabase.from('profiles').update(patch).eq('id', id);
       if (error) throw error;

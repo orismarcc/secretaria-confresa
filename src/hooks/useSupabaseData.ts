@@ -1469,7 +1469,7 @@ export function useCreateResponsibleTechnician() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: async (item: { name: string; cpf?: string | null; cargo?: string | null }) => {
+    mutationFn: async (item: { name: string; cpf?: string | null; cargo?: string | null; photo_url?: string | null }) => {
       const { data, error } = await supabase
         .from('responsible_technicians')
         .insert(item)
@@ -1492,7 +1492,7 @@ export function useUpdateResponsibleTechnician() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; name?: string; cpf?: string | null; cargo?: string | null; is_active?: boolean }) => {
+    mutationFn: async ({ id, ...updates }: { id: string; name?: string; cpf?: string | null; cargo?: string | null; photo_url?: string | null; is_active?: boolean }) => {
       const { data, error } = await supabase
         .from('responsible_technicians')
         .update(updates)
