@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [clockWarn, setClockWarn] = useState<string | null>(null);
   const { login } = useAuth();
+
+  // Aviso de relógio do aparelho (aditivo): só aparece se o AuthContext detectou
+  // diferença grande de horário — a causa clássica de "cai pro login em segundos".
+  useEffect(() => {
+    try { setClockWarn(sessionStorage.getItem('authClockWarn')); } catch { /* ignore */ }
+  }, []);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -71,6 +78,11 @@ export default function LoginPage() {
           <CardDescription>Sistema de Gestão de Demandas</CardDescription>
         </CardHeader>
         <CardContent>
+          {clockWarn && (
+            <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 px-3 py-2 text-sm">
+              ⚠ {clockWarn}
+            </div>
+          )}
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="login-email">Email</Label>

@@ -2,6 +2,21 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { UserRole } from '@/types';
+import { tokenClockSkewSeconds, CLOCK_SKEW_LIMIT, CLOCK_WARN_KEY, clockWarnMessage } from '@/lib/clockSkew';
+
+/** Aditivo/observacional: mede o relógio do aparelho e guarda um aviso p/ a tela
+ *  de login, sem interferir na sessão. Nunca lança nem bloqueia. */
+function checkClockSkew(session: Session | null) {
+  try {
+    const skew = tokenClockSkewSeconds(session?.access_token);
+    if (skew != null && Math.abs(skew) > CLOCK_SKEW_LIMIT) {
+      console.warn('[auth] relógio do aparelho fora do horário (skew s):', skew);
+      sessionStorage.setItem(CLOCK_WARN_KEY, clockWarnMessage(skew));
+    } else if (skew != null) {
+      sessionStorage.removeItem(CLOCK_WARN_KEY);
+    }
+  } catch { /* jamais afeta o login */ }
+}
 
 interface AuthContextType {
   user: User | null;
@@ -36,6 +51,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        // Diagnóstico (observacional): ajuda a entender quedas de sessão em campo.
+        console.debug('[auth] event:', event);
+        checkClockSkew(session);
         setSession(session);
         setUser(session?.user ?? null);
 
@@ -52,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
+      checkClockSkew(session);
       setSession(session);
       setUser(session?.user ?? null);
 
