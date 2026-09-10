@@ -30,7 +30,7 @@ const JOB_TITLES = [
 ];
 
 export default function SettingsPage() {
-  const { profile, updateProfile, updatePassword, hasRole } = useAuth();
+  const { profile, updateProfile, updatePassword, hasRole, isFullAdmin } = useAuth();
   const isAdmin = hasRole('admin');
   const { toast } = useToast();
   const { canInstall, isInstalled, install } = usePWAInstall();
@@ -53,7 +53,7 @@ export default function SettingsPage() {
       return;
     }
     setSavingProfile(true);
-    const result = await updateProfile({ name: name.trim(), job_title: jobTitle || undefined });
+    const result = await updateProfile({ name: name.trim() });
     setSavingProfile(false);
     if (result.success) {
       toast({ title: 'Dados atualizados com sucesso!' });
@@ -139,19 +139,11 @@ export default function SettingsPage() {
               />
             </div>
 
-            {isAdmin && (
+            {isAdmin && jobTitle && (
               <div className="space-y-2">
-                <Label htmlFor="jobTitle">Função</Label>
-                <Select value={jobTitle} onValueChange={setJobTitle}>
-                  <SelectTrigger id="jobTitle">
-                    <SelectValue placeholder="Selecione sua função" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {JOB_TITLES.map(t => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Função</Label>
+                <Input value={jobTitle} disabled className="bg-muted text-muted-foreground cursor-not-allowed" />
+                <p className="text-xs text-muted-foreground">A função é definida pela equipe interna — não pode ser alterada por você.</p>
               </div>
             )}
 
@@ -226,10 +218,10 @@ export default function SettingsPage() {
         </Card>
 
         {/* Prestação de Contas / AVI Card — admin only */}
-        {isAdmin && <AVIPrestacaoContas />}
+        {isFullAdmin && <AVIPrestacaoContas />}
 
         {/* Relatório de ATER — admin only */}
-        {isAdmin && <AterRelatorio />}
+        {isFullAdmin && <AterRelatorio />}
 
         {/* Password Card */}
         <Card>

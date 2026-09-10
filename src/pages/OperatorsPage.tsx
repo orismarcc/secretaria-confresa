@@ -28,6 +28,7 @@ import {
   Operator,
   type AppUser,
 } from '@/hooks/useOperatorData';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   useResponsibleTechnicians,
   useCreateResponsibleTechnician,
@@ -158,23 +159,44 @@ function TechnicianForm({
 
 // ─── Admin edit form (nome + CPF) ─────────────────────────────────────────────
 
+const FUNCOES_EQUIPE = ['Secretário de Agricultura', 'Diretor de Campo', 'Supervisor', 'Coordenador'];
+
 function AdminEditForm({
   initial,
   onSubmit,
   onCancel,
   isPending,
+  canEditFunction,
 }: {
-  initial: { name: string; cpf: string | null; avatarUrl?: string | null };
-  onSubmit: (data: { name: string; cpf: string; avatarUrl: string | null }) => void;
+  initial: { name: string; cpf: string | null; avatarUrl?: string | null; jobTitle?: string | null };
+  onSubmit: (data: { name: string; cpf: string; avatarUrl: string | null; jobTitle: string | null }) => void;
   onCancel: () => void;
   isPending?: boolean;
+  canEditFunction?: boolean;
 }) {
   const [name, setName] = useState(initial.name ?? '');
   const [cpf, setCpf] = useState(initial.cpf ?? '');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(initial.avatarUrl ?? null);
+  const [jobTitle, setJobTitle] = useState<string>(initial.jobTitle ?? '');
   return (
-    <form onSubmit={(e) => { e.preventDefault(); onSubmit({ name, cpf, avatarUrl }); }} className="space-y-4">
+    <form onSubmit={(e) => { e.preventDefault(); onSubmit({ name, cpf, avatarUrl, jobTitle: jobTitle || null }); }} className="space-y-4">
       <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} />
+      <div className="space-y-2">
+        <Label>Função</Label>
+        {canEditFunction ? (
+          <Select value={jobTitle} onValueChange={setJobTitle}>
+            <SelectTrigger><SelectValue placeholder="Selecione a função" /></SelectTrigger>
+            <SelectContent>
+              {FUNCOES_EQUIPE.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        ) : (
+          <>
+            <Input value={jobTitle || '—'} disabled className="bg-muted" />
+            <p className="text-xs text-muted-foreground">Somente Secretário, Diretor de Campo ou Supervisor podem alterar funções.</p>
+          </>
+        )}
+      </div>
       <div className="space-y-2">
         <Label htmlFor="adm-name">Nome Completo</Label>
         <Input id="adm-name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -200,6 +222,7 @@ function AdminEditForm({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function OperatorsPage() {
+  const { canDelete, isFullAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState<'operators' | 'admins' | 'technicians'>('operators');
 
   // ── Operators state ────────────────────────────────────────────────────────
@@ -410,9 +433,11 @@ export default function OperatorsPage() {
           <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditingOperator(row); }}>
             <Pencil className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDeletingOperator(row); }}>
-            <Trash2 className="h-4 w-4 text-destructive" />
-          </Button>
+          {canDelete && (
+            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDeletingOperator(row); }}>
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          )}
         </div>
       ),
     },
@@ -480,9 +505,11 @@ export default function OperatorsPage() {
           <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditingTech(row); }}>
             <Pencil className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDeletingTech(row); }}>
-            <Trash2 className="h-4 w-4 text-destructive" />
-          </Button>
+          {canDelete && (
+            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDeletingTech(row); }}>
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          )}
         </div>
       ),
     },
@@ -497,18 +524,33 @@ export default function OperatorsPage() {
         <div className="flex items-center gap-2">
           <AvatarThumb url={row.avatarUrl} />
           <span className="font-medium">{row.name}</span>
+          {row.email === 'edivaldo@secretaria.com' && (
+            <span className="text-xs text-muted-foreground italic">(Dono)</span>
+          )}
         </div>
+      ),
+    },
+    {
+      key: 'cargo',
+      header: 'Função',
+      render: (row: AppUser) => (
+        row.jobTitle === 'Secretário de Agricultura' ? (
+          <Badge className="bg-primary text-primary-foreground">{row.jobTitle}</Badge>
+        ) : (
+          <span className={row.jobTitle ? 'font-medium' : 'text-muted-foreground'}>{row.jobTitle || '—'}</span>
+        )
       ),
     },
     {
       key: 'email',
       header: 'Email',
-      className: 'hidden sm:table-cell',
+      className: 'hidden md:table-cell',
       render: (row: AppUser) => <span className="truncate max-w-[220px] block">{row.email}</span>,
     },
     {
       key: 'cpf',
       header: 'CPF',
+      className: 'hidden sm:table-cell',
       render: (row: AppUser) => <span className="text-muted-foreground">{row.cpf || '—'}</span>,
     },
     {
@@ -544,7 +586,7 @@ export default function OperatorsPage() {
           </TabsTrigger>
           <TabsTrigger value="admins" className="gap-2">
             <User className="h-4 w-4" />
-            Administradores
+            Equipe interna
           </TabsTrigger>
           <TabsTrigger value="technicians" className="gap-2">
             <HardHat className="h-4 w-4" />
@@ -694,12 +736,13 @@ export default function OperatorsPage() {
           <DialogHeader><DialogTitle>Editar Administrador</DialogTitle></DialogHeader>
           {editingAdmin && (
             <AdminEditForm
-              initial={{ name: editingAdmin.name, cpf: editingAdmin.cpf, avatarUrl: editingAdmin.avatarUrl }}
+              initial={{ name: editingAdmin.name, cpf: editingAdmin.cpf, avatarUrl: editingAdmin.avatarUrl, jobTitle: editingAdmin.jobTitle }}
               isPending={updateUserProfile.isPending}
+              canEditFunction={isFullAdmin}
               onCancel={() => setEditingAdmin(null)}
               onSubmit={(data) => {
                 updateUserProfile.mutate(
-                  { id: editingAdmin.id, name: data.name, cpf: data.cpf, avatar_url: data.avatarUrl },
+                  { id: editingAdmin.id, name: data.name, cpf: data.cpf, avatar_url: data.avatarUrl, ...(isFullAdmin ? { job_title: data.jobTitle } : {}) },
                   { onSuccess: () => setEditingAdmin(null) },
                 );
               }}

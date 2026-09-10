@@ -8,6 +8,12 @@ interface AuthContextType {
   session: Session | null;
   profile: { name: string; email: string; job_title?: string | null; avatar_url?: string | null } | null;
   role: UserRole | null;
+  /** Coordenador = admin com cargo "Coordenador" (pode tudo, exceto excluir/alterar funções). */
+  isCoordenador: boolean;
+  /** Admin pleno (Secretário/Diretor/Supervisor) — acesso total, inclusive excluir. */
+  isFullAdmin: boolean;
+  /** Pode excluir registros (só admin pleno). */
+  canDelete: boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -178,12 +184,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const isCoordenador = role === 'admin' && profile?.job_title === 'Coordenador';
+  const isFullAdmin = role === 'admin' && !isCoordenador;
+
   return (
     <AuthContext.Provider value={{
       user,
       session,
       profile,
       role,
+      isCoordenador,
+      isFullAdmin,
+      canDelete: isFullAdmin,
       isAuthenticated: !!user,
       isLoading,
       login,

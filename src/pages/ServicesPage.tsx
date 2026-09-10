@@ -180,7 +180,7 @@ export default function ServicesPage() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { role } = useAuth();
+  const { role, canDelete } = useAuth();
   const isAdmin = role === 'admin';
 
   const { data: services = [], isLoading: servicesLoading } = useServices();
@@ -1320,7 +1320,7 @@ export default function ServicesPage() {
               gleba={detailGleba}
               location={detailLocation ? { name: detailLocation.name } : null}
               onEdit={() => openEditForm(detailService)}
-              onDelete={() => openDeleteDialog(detailService)}
+              onDelete={canDelete ? () => openDeleteDialog(detailService) : undefined}
               onFinalize={detailService.status !== 'completed' ? () => openFinalizeDialog(detailService) : undefined}
               onCancel={() => openCancelDialog(detailService)}
               onComunicado={() => openComunicado(detailService)}

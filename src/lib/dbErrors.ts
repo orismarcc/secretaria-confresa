@@ -8,6 +8,11 @@ export function friendlyDbError(error: unknown): string {
   const msg = (err?.message || String(err) || '').toString();
   const code = err?.code as string | undefined;
 
+  // Bloqueios de Coordenador (gatilhos do banco) — mensagem já é clara.
+  if (/Coordenadores não podem/i.test(msg)) {
+    return msg;
+  }
+
   // Rede (Safari/iOS usa "Load failed"; Chrome "Failed to fetch")
   if (/failed to fetch|load failed|networkerror|network request failed/i.test(msg)) {
     return 'Falha de conexão. Verifique sua internet e tente novamente.';

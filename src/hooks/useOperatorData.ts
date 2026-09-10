@@ -19,7 +19,15 @@ export interface AppUser {
   email: string;
   cpf: string | null;
   avatarUrl?: string | null;
+  jobTitle?: string | null;
 }
+
+// Ordem de hierarquia da equipe interna (menor = mais alto).
+const HIERARQUIA = ['Secretário de Agricultura', 'Diretor de Campo', 'Supervisor', 'Coordenador'];
+export const jobRank = (t?: string | null) => {
+  const i = HIERARQUIA.indexOf(t || '');
+  return i === -1 ? HIERARQUIA.length : i;
+};
 
 /** Mapa id → dados do profile (nome, email, CPF). Usado p/ exibir o CPF.
  *  O CPF vem por função SECURITY DEFINER (só admin recebe) — a coluna cpf de
@@ -48,13 +56,14 @@ export function useAdminUsers() {
       if (error) throw error;
       const ids = (roles ?? []).map((r: any) => r.user_id);
       if (ids.length === 0) return [] as AppUser[];
-      const { data: profs, error: e2 } = await supabase.from('profiles').select('id, name, email, avatar_url').in('id', ids);
+      const { data: profs, error: e2 } = await supabase.from('profiles').select('id, name, email, avatar_url, job_title').in('id', ids);
       if (e2) throw e2;
       const { data: cpfRows } = await (supabase as any).rpc('admin_profile_cpfs');
       const cpfById = new Map<string, string | null>((cpfRows ?? []).map((r: any) => [r.id, r.cpf ?? null]));
       return (profs ?? [])
-        .map((p: any) => ({ id: p.id, name: p.name, email: p.email, cpf: cpfById.get(p.id) ?? null, avatarUrl: p.avatar_url ?? null }))
-        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')) as AppUser[];
+        .map((p: any) => ({ id: p.id, name: p.name, email: p.email, cpf: cpfById.get(p.id) ?? null, avatarUrl: p.avatar_url ?? null, jobTitle: p.job_title ?? null }))
+        // Ordena pela hierarquia; empate por nome.
+        .sort((a, b) => jobRank(a.jobTitle) - jobRank(b.jobTitle) || a.name.localeCompare(b.name, 'pt-BR')) as AppUser[];
     },
   });
 }
@@ -64,11 +73,12 @@ export function useUpdateUserProfile() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: async ({ id, name, cpf, avatar_url }: { id: string; name?: string; cpf?: string | null; avatar_url?: string | null }) => {
+    mutationFn: async ({ id, name, cpf, avatar_url, job_title }: { id: string; name?: string; cpf?: string | null; avatar_url?: string | null; job_title?: string | null }) => {
       const patch: Record<string, unknown> = {};
       if (name !== undefined) patch.name = name;
       if (cpf !== undefined) patch.cpf = cpf;
       if (avatar_url !== undefined) patch.avatar_url = avatar_url;
+      if (job_title !== undefined) patch.job_title = job_title;
       if (Object.keys(patch).length === 0) return;
       const { error } = await supabase.from('profiles').update(patch).eq('id', id);
       if (error) throw error;

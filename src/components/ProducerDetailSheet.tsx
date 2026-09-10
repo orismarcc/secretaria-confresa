@@ -53,7 +53,7 @@ interface ProducerDetailSheetProps {
   location?: Location;
   demandTypes: DemandType[];
   onEdit: (producer: Producer) => void;
-  onDelete: (producer: Producer) => void;
+  onDelete?: (producer: Producer) => void;
 }
 
 export function ProducerDetailSheet({
@@ -88,7 +88,7 @@ export function ProducerDetailSheet({
 
   const handleDelete = () => {
     onOpenChange(false);
-    onDelete(producer);
+    onDelete?.(producer);
   };
 
   // ── Build unified history ────────────────────────────────────────────────────
@@ -544,14 +544,16 @@ export function ProducerDetailSheet({
               <Pencil className="h-4 w-4 mr-2" />
               Editar Produtor
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              className="w-full"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Excluir Produtor
-            </Button>
+            {onDelete && (
+              <Button
+                variant="destructive"
+                onClick={handleDelete}
+                className="w-full"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Excluir Produtor
+              </Button>
+            )}
           </div>
         </div>
       </SheetContent>

@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { Plus, Eye, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   useProducers,
   useSettlements,
@@ -52,6 +53,7 @@ interface DbProducer {
 }
 
 export default function ProducersPage() {
+  const { canDelete } = useAuth();
   const { data: producers = [], isLoading: producersLoading } = useProducers();
   const { data: settlements = [] } = useSettlements();
   const { data: locations = [] } = useLocations();
@@ -294,7 +296,7 @@ export default function ProducersPage() {
             </SelectContent>
           </Select>
         )}
-        {selectedIds.size > 0 && (
+        {canDelete && selectedIds.size > 0 && (
           <Button
             variant="destructive"
             size="sm"
@@ -420,7 +422,7 @@ export default function ProducersPage() {
         location={selectedLocation ? { id: selectedLocation.id, name: selectedLocation.name, settlementId: selectedLocation.settlement_id, createdAt: new Date() } : undefined}
         demandTypes={mappedDemandTypes}
         onEdit={openEditForm}
-        onDelete={openDeleteDialog}
+        onDelete={canDelete ? openDeleteDialog : undefined}
       />
 
       <ProducerForm
