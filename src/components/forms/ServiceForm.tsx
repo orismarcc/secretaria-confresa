@@ -131,6 +131,8 @@ interface ServiceFormProps {
   }>;
   operators?: OperatorOption[];
   machinery?: MachineryOption[];
+  /** operador → maquinário(s) vinculado(s) no cadastro, p/ auto-preencher. */
+  operatorMachineryMap?: Record<string, string[]>;
   responsibleTechnicians?: TechnicianOption[];
   onSubmit: (data: ServiceFormData) => void;
 }
@@ -298,6 +300,7 @@ export function ServiceForm({
   demandTypes,
   operators = [],
   machinery = [],
+  operatorMachineryMap = {},
   responsibleTechnicians = [],
   onSubmit,
 }: ServiceFormProps) {
@@ -675,7 +678,16 @@ export function ServiceForm({
                     <FormItem>
                       <FormLabel>Operador</FormLabel>
                       <Select
-                        onValueChange={field.onChange}
+                        onValueChange={(v) => {
+                          field.onChange(v);
+                          // Auto-preenche o maquinário vinculado ao operador (pode
+                          // ser trocado depois). Só quando há um vínculo válido.
+                          if (v && v !== 'none') {
+                            const vinculados = operatorMachineryMap[v] || [];
+                            const first = vinculados.find((id) => activeMachinery.some((m) => m.id === id));
+                            if (first) form.setValue('machineryId', first);
+                          }
+                        }}
                         value={field.value}
                       >
                         <FormControl>

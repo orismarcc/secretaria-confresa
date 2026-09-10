@@ -916,6 +916,24 @@ export function useSetOperatorDemandTypes() {
 }
 
 // Maquinário(s) que o operador utiliza. Vários por operador.
+/** Mapa operador → maquinários vinculados (para auto-preencher no atendimento). */
+export function useOperatorMachineryMap() {
+  return useQuery({
+    queryKey: ['operator_machinery', 'all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('operator_machinery')
+        .select('operator_id, machinery_id');
+      if (error) throw error;
+      const map: Record<string, string[]> = {};
+      (data ?? []).forEach((r: any) => {
+        (map[r.operator_id] = map[r.operator_id] || []).push(r.machinery_id);
+      });
+      return map;
+    },
+  });
+}
+
 export function useOperatorMachinery(operatorId: string | undefined) {
   return useQuery({
     queryKey: ['operator_machinery', operatorId],
