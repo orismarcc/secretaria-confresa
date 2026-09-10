@@ -42,6 +42,15 @@ interface ComunicadoDamDialogProps {
   source: ComunicadoSource | null;
 }
 
+// Máscara de moeda: o usuário digita só os números e a vírgula se posiciona
+// sozinha (sempre 2 casas). Ex.: "7" → "0,07", "750" → "7,50", "1250" → "12,50".
+function maskMoeda(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return '';
+  const n = parseInt(digits, 10);
+  return (n / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function parseNum(v: string): number {
   const n = parseFloat(v.replace(/\./g, '').replace(',', '.'));
   return isNaN(n) ? 0 : n;
@@ -190,9 +199,9 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
                 <Input
                   id="com-valor-litro"
                   value={valorLitro}
-                  onChange={(e) => setValorLitro(e.target.value)}
+                  onChange={(e) => setValorLitro(maskMoeda(e.target.value))}
                   placeholder="7,50"
-                  inputMode="decimal"
+                  inputMode="numeric"
                 />
               </div>
 
