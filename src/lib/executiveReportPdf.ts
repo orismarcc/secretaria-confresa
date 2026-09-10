@@ -43,6 +43,8 @@ function fmtDate(d: string | null | undefined): string {
 const fmtInt = (n: number) => n.toLocaleString('pt-BR');
 const fmtDec = (n: number) =>
   n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const fmtBRL = (n: number) =>
+  n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 /** Arredonda o topo do eixo para um número "redondo" (5, 10, 20, 50, 100...). */
 function niceCeil(v: number): number {
@@ -396,6 +398,14 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
   compServices.forEach((s) => s.producer_id && produtoresSet.add(s.producer_id));
   compDeliveries.forEach((d) => d.producer_id && produtoresSet.add(d.producer_id));
 
+  // Horas trabalhadas, combustível consumido e arrecadação das DAMs pagas.
+  const horasTrabalhadas = compServices.reduce((s, x) => s + (Number(x.worked_hours) || 0), 0);
+  const combustivelConsumido = compServices.reduce((s, x) => s + (Number(x.fuel_liters) || 0), 0);
+  const arrecadadoDam = compServices.reduce(
+    (s, x) => s + (x.dam_paid ? (Number(x.dam_value) || 0) : 0),
+    0,
+  );
+
   const kpis: Kpi[] = [];
   if (includeServices) kpis.push({ label: 'Atendimentos finalizados', value: fmtInt(compServices.length), color: GREEN });
   if (includeDeliveries) {
@@ -405,6 +415,12 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
   kpis.push({ label: 'Produtores atendidos', value: fmtInt(produtoresSet.size), color: AMBER });
   if (includeServices && areaTrabalhada > 0)
     kpis.push({ label: 'Área trabalhada (ha)', value: fmtDec(areaTrabalhada), color: AMBER });
+  if (includeServices && horasTrabalhadas > 0)
+    kpis.push({ label: 'Horas trabalhadas', value: `${fmtDec(horasTrabalhadas)} h`, color: AMBER });
+  if (includeServices && combustivelConsumido > 0)
+    kpis.push({ label: 'Combustível consumido', value: `${fmtDec(combustivelConsumido)} L`, color: BLUE });
+  if (includeServices && arrecadadoDam > 0)
+    kpis.push({ label: 'Arrecadado (DAMs pagas)', value: fmtBRL(arrecadadoDam), color: GREEN });
 
   // ── Série mensal (últimos 12 meses) ───────────────────────────────────────
   const now = new Date();
@@ -570,17 +586,20 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
       y = sectionTitle(doc, M, y, `Atendimentos finalizados (${compServices.length})`);
       const body = compServices
         .slice()
-        .sort((a, b) => (parseDate(b.completed_at)?.getTime() || 0) - (parseDate(a.completed_at)?.getTime() || 0))
+        // Ordem crescente de finalização (mais antigo primeiro).
+        .sort((a, b) => (parseDate(a.completed_at)?.getTime() || 0) - (parseDate(b.completed_at)?.getTime() || 0))
         .map((s) => [
           prById.get(s.producer_id)?.name || s.producers?.name || 'N/A',
           dtById.get(s.demand_type_id)?.name || s.demand_types?.name || 'N/A',
           settlementName(s.settlement_id, s.settlements),
+          (s as any).operador?.name || '-',
+          s.worked_hours ? `${fmtDec(Number(s.worked_hours))} h` : '-',
           s.worked_area ? `${fmtDec(Number(s.worked_area))} ha` : '-',
           fmtDate(s.completed_at),
         ]);
       autoTable(doc, {
         startY: y,
-        head: [['Produtor', 'Demanda', 'Assentamento', 'Área', 'Finalizado']],
+        head: [['Produtor', 'Demanda', 'Assentamento', 'Operador', 'Horas', 'Área', 'Finalizado']],
         body,
         styles: { fontSize: 7.5, cellPadding: 1.8 },
         headStyles: { fillColor: GREEN, textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
