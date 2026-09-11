@@ -663,6 +663,8 @@ export function useServices() {
   });
 }
 
+const PENDING_CACHE_KEY = 'op:pending-services';
+
 export function usePendingServices() {
   return useQuery({
     queryKey: ['services', 'pending'],
@@ -675,8 +677,20 @@ export function usePendingServices() {
         .order('position', { ascending: true, nullsFirst: false }) // B-05: explicit NULLS LAST
         .order('scheduled_date', { ascending: true });
       if (error) throw error;
+      // Guarda a última lista sincronizada para o operador ver/usar OFFLINE.
+      try { localStorage.setItem(PENDING_CACHE_KEY, JSON.stringify({ at: Date.now(), data })); } catch { /* storage cheio/bloqueado */ }
       return data;
     },
+    // Semente offline: sem internet, a query fica pausada e mostra esta lista —
+    // permitindo iniciar/finalizar em campo. Volta a atualizar ao reconectar.
+    initialData: () => {
+      try { const c = JSON.parse(localStorage.getItem(PENDING_CACHE_KEY) || 'null'); return c?.data ?? undefined; } catch { return undefined; }
+    },
+    initialDataUpdatedAt: () => {
+      try { const c = JSON.parse(localStorage.getItem(PENDING_CACHE_KEY) || 'null'); return c?.at ?? undefined; } catch { return undefined; }
+    },
+    gcTime: 1000 * 60 * 60 * 24 * 7, // mantém em memória por até 7 dias
+    staleTime: 1000 * 30,
   });
 }
 

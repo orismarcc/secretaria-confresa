@@ -18,10 +18,10 @@ import {
   useUpdateServicePositions,
   useOperatorDemandTypes,
 } from '@/hooks/useSupabaseData';
-import { enqueueOperatorAction } from '@/lib/operatorQueue';
+import { enqueueOperatorAction, getPendingActions } from '@/lib/operatorQueue';
 import { useSyncOperatorActions, usePendingActionsCount } from '@/hooks/useOperatorQueue';
 import { supabase } from '@/integrations/supabase/client';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import {
@@ -267,6 +267,24 @@ export default function OperatorPage() {
     return mine.filter((s) => allowed.has(s.demand_type_id));
   }, [pendingServicesRaw, allowedDemandTypeIds, user?.id]);
 
+  // Ações ainda não sincronizadas (fila local). Sobrepostas à lista para que,
+  // mesmo reabrindo o app OFFLINE no meio do fluxo, os já iniciados apareçam
+  // "em execução" e os já finalizados sumam — evitando duplicar iniciar/finalizar.
+  const { data: pendingActions = [] } = useQuery({
+    queryKey: ['operator_queue_actions'],
+    queryFn: getPendingActions,
+    refetchInterval: 15000,
+  });
+  const overlaidServices = useMemo(() => {
+    const startIds = new Set(pendingActions.filter((a) => a.type === 'start').map((a) => a.serviceId));
+    const finishIds = new Set(pendingActions.filter((a) => a.type === 'finish').map((a) => a.serviceId));
+    return visibleServices
+      .filter((s) => !finishIds.has(s.id))
+      .map((s) => (startIds.has(s.id)
+        ? { ...s, status: 'in_progress', operator_id: user?.id ?? s.operator_id, profiles: s.profiles ?? { name: '' } }
+        : s));
+  }, [visibleServices, pendingActions, user?.id]);
+
   const updatePositions = useUpdateServicePositions();
   const syncActions = useSyncOperatorActions();
   const { data: pendingCount = 0 } = usePendingActionsCount();
@@ -292,13 +310,13 @@ export default function OperatorPage() {
 
   // Sort all non-completed services by position
   const sortedServices = useMemo(() => {
-    return [...visibleServices].sort((a, b) => {
+    return [...overlaidServices].sort((a, b) => {
       const posA = (a as DbService).position ?? 999999;
       const posB = (b as DbService).position ?? 999999;
       if (posA !== posB) return posA - posB;
       return new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime();
     });
-  }, [visibleServices]);
+  }, [overlaidServices]);
 
   const inProgressServices = useMemo(
     () => sortedServices.filter((s) => s.status === 'in_progress'),
@@ -361,6 +379,7 @@ export default function OperatorPage() {
       );
     });
     queryClient.invalidateQueries({ queryKey: ['operator_queue_count'] });
+    queryClient.invalidateQueries({ queryKey: ['operator_queue_actions'] });
 
     toast({
       title: mode === 'start' ? 'Atendimento iniciado' : 'Atendimento finalizado',

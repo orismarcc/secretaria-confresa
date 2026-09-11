@@ -70,6 +70,7 @@ export function useSyncOperatorActions() {
     },
     onSuccess: ({ synced }) => {
       queryClient.invalidateQueries({ queryKey: ['operator_queue_count'] });
+      queryClient.invalidateQueries({ queryKey: ['operator_queue_actions'] });
       if (synced > 0) {
         queryClient.invalidateQueries({ queryKey: ['services'] });
         queryClient.invalidateQueries({ queryKey: ['services', 'pending'] });

@@ -26,38 +26,44 @@ export function useGeolocation() {
 
       setState(prev => ({ ...prev, isLoading: true, error: null }));
 
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          setState({
-            latitude,
-            longitude,
-            error: null,
-            isLoading: false,
-          });
-          resolve({ latitude, longitude });
-        },
-        (error) => {
-          let errorMessage = 'Erro ao obter localização';
-          switch (error.code) {
-            case error.PERMISSION_DENIED:
-              errorMessage = 'Permissão de localização negada';
-              break;
-            case error.POSITION_UNAVAILABLE:
-              errorMessage = 'Localização indisponível';
-              break;
-            case error.TIMEOUT:
-              errorMessage = 'Tempo esgotado ao obter localização';
-              break;
-          }
-          setState(prev => ({ ...prev, error: errorMessage, isLoading: false }));
-          reject(new Error(errorMessage));
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000,
+      const onSuccess = (position: GeolocationPosition) => {
+        const { latitude, longitude } = position.coords;
+        setState({ latitude, longitude, error: null, isLoading: false });
+        resolve({ latitude, longitude });
+      };
+
+      const describe = (error: GeolocationPositionError) => {
+        switch (error.code) {
+          case error.PERMISSION_DENIED: return 'Permissão de localização negada';
+          case error.POSITION_UNAVAILABLE: return 'Localização indisponível';
+          case error.TIMEOUT: return 'Tempo esgotado ao obter localização';
+          default: return 'Erro ao obter localização';
         }
+      };
+
+      // GPS "frio" no campo demora — damos mais tempo com alta precisão e, se
+      // falhar por tempo/indisponível (não por permissão), tentamos de novo em
+      // modo aproximado (rede/última posição), que costuma resolver na hora.
+      navigator.geolocation.getCurrentPosition(
+        onSuccess,
+        (error) => {
+          if (error.code === error.PERMISSION_DENIED) {
+            const msg = describe(error);
+            setState(prev => ({ ...prev, error: msg, isLoading: false }));
+            reject(new Error(msg));
+            return;
+          }
+          navigator.geolocation.getCurrentPosition(
+            onSuccess,
+            (error2) => {
+              const msg = describe(error2);
+              setState(prev => ({ ...prev, error: msg, isLoading: false }));
+              reject(new Error(msg));
+            },
+            { enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 },
+          );
+        },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 30000 },
       );
     });
   }, []);
