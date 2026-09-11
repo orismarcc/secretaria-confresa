@@ -27,8 +27,9 @@ import { format, parseISO, startOfMonth, subMonths, differenceInCalendarMonths }
 import { ptBR } from 'date-fns/locale';
 import {
   TrendingUp, TrendingDown, Minus, MapPin, ClipboardList, Tractor, Users2, Package, Layers,
-  FileDown, Truck, Stethoscope, Fuel, Clock, Timer, CalendarRange, Wrench, DollarSign,
+  FileDown, Truck, Stethoscope, Fuel, Clock, Timer, CalendarRange, Wrench, DollarSign, ChevronDown,
 } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { getPatrulhaIds, getDemandIdsByCategory, getDemandIdsByNameSubstring, serviceExerciseYear, deliveryExerciseYear, dateYear } from '@/lib/analyticsUtils';
 import { ReportsCenter } from '@/components/ReportsCenter';
@@ -1160,15 +1161,22 @@ export default function AnalyticsPage() {
           {/* Operator Productivity */}
           {operatorStats.length > 0 && (
             <Card className="overflow-hidden">
-              <CardHeader className="border-b bg-gradient-to-r from-primary/10 to-primary/5">
-                <CardTitle className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/20"><Users2 className="h-5 w-5 text-primary" /></div>
-                  <div>
-                    <span className="text-lg">Produtividade dos Operadores</span>
-                    <p className="text-sm font-normal text-muted-foreground">Atendimentos finalizados por operador</p>
-                  </div>
+              <Collapsible defaultOpen={false}>
+              <CollapsibleTrigger asChild>
+              <CardHeader className="group border-b bg-gradient-to-r from-primary/10 to-primary/5 cursor-pointer">
+                <CardTitle className="flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-primary/20"><Users2 className="h-5 w-5 text-primary" /></div>
+                    <div>
+                      <span className="text-lg">Produtividade dos Operadores</span>
+                      <p className="text-sm font-normal text-muted-foreground">Atendimentos finalizados por operador</p>
+                    </div>
+                  </span>
+                  <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0 transition-transform group-data-[state=open]:rotate-180" />
                 </CardTitle>
               </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
               <CardContent className="pt-6">
                 <div className="space-y-5">
                   {operatorStats.map((op, index) => {
@@ -1210,23 +1218,32 @@ export default function AnalyticsPage() {
                   })}
                 </div>
               </CardContent>
+              </CollapsibleContent>
+              </Collapsible>
             </Card>
           )}
 
           {/* Manutenções de Maquinários */}
           {maintenanceStats.list.length > 0 && (
             <Card className="overflow-hidden">
-              <CardHeader className="border-b bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-amber-500/10">
-                <CardTitle className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-amber-500/20"><Wrench className="h-5 w-5 text-amber-600" /></div>
-                  <div className="flex-1">
-                    <span className="text-lg">Manutenções de Maquinários</span>
-                    <p className="text-sm font-normal text-muted-foreground">
-                      Tempo parado e ocorrências por maquinário
-                    </p>
-                  </div>
+              <Collapsible defaultOpen={false}>
+              <CollapsibleTrigger asChild>
+              <CardHeader className="group border-b bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-amber-500/10 cursor-pointer">
+                <CardTitle className="flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-amber-500/20"><Wrench className="h-5 w-5 text-amber-600" /></div>
+                    <div className="flex-1">
+                      <span className="text-lg">Manutenções de Maquinários</span>
+                      <p className="text-sm font-normal text-muted-foreground">
+                        Tempo parado e ocorrências por maquinário
+                      </p>
+                    </div>
+                  </span>
+                  <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0 transition-transform group-data-[state=open]:rotate-180" />
                 </CardTitle>
               </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
               <CardContent className="pt-5">
                 {/* Totais */}
                 <div className="grid grid-cols-2 gap-3 mb-5">
@@ -1266,6 +1283,8 @@ export default function AnalyticsPage() {
                   })}
                 </div>
               </CardContent>
+              </CollapsibleContent>
+              </Collapsible>
             </Card>
           )}
 
@@ -1273,15 +1292,19 @@ export default function AnalyticsPage() {
           <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
             {/* Top 5 Assentamentos + PDF export */}
             <Card className="overflow-hidden">
+              <Collapsible defaultOpen={false}>
               <CardHeader className="border-b bg-gradient-to-r from-amber-500/10 to-yellow-500/5">
                 <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-amber-500/20"><MapPin className="h-5 w-5 text-amber-500" /></div>
-                    <div>
-                      <span className="text-lg">Top 5 Assentamentos</span>
-                      <p className="text-sm font-normal text-muted-foreground">Por atendimentos finalizados</p>
-                    </div>
-                  </CardTitle>
+                  <CollapsibleTrigger asChild>
+                    <button type="button" className="group flex items-center gap-3 flex-1 text-left min-w-0">
+                      <div className="p-2 rounded-lg bg-amber-500/20"><MapPin className="h-5 w-5 text-amber-500" /></div>
+                      <div className="min-w-0">
+                        <span className="text-lg font-semibold">Top 5 Assentamentos</span>
+                        <p className="text-sm font-normal text-muted-foreground">Por atendimentos finalizados</p>
+                      </div>
+                      <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0 transition-transform group-data-[state=open]:rotate-180 ml-1" />
+                    </button>
+                  </CollapsibleTrigger>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1293,6 +1316,7 @@ export default function AnalyticsPage() {
                   </Button>
                 </div>
               </CardHeader>
+              <CollapsibleContent>
               <CardContent className="pt-6">
                 <div className="space-y-3">
                   {topSettlements.length === 0 ? (
@@ -1321,19 +1345,28 @@ export default function AnalyticsPage() {
                   )}
                 </div>
               </CardContent>
+              </CollapsibleContent>
+              </Collapsible>
             </Card>
 
             {/* Top 3 Demandas */}
             <Card className="overflow-hidden">
-              <CardHeader className="border-b bg-gradient-to-r from-amber-500/10 to-yellow-500/5">
-                <CardTitle className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-amber-500/20"><ClipboardList className="h-5 w-5 text-amber-500" /></div>
-                  <div>
-                    <span className="text-lg">Top 3 Demandas</span>
-                    <p className="text-sm font-normal text-muted-foreground">Por atendimentos finalizados</p>
-                  </div>
+              <Collapsible defaultOpen={false}>
+              <CollapsibleTrigger asChild>
+              <CardHeader className="group border-b bg-gradient-to-r from-amber-500/10 to-yellow-500/5 cursor-pointer">
+                <CardTitle className="flex items-center justify-between gap-3">
+                  <span className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-amber-500/20"><ClipboardList className="h-5 w-5 text-amber-500" /></div>
+                    <div>
+                      <span className="text-lg">Top 3 Demandas</span>
+                      <p className="text-sm font-normal text-muted-foreground">Por atendimentos finalizados</p>
+                    </div>
+                  </span>
+                  <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0 transition-transform group-data-[state=open]:rotate-180" />
                 </CardTitle>
               </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
               <CardContent className="pt-6">
                 <div className="space-y-3">
                   {topDemandTypes.length === 0 ? (
@@ -1345,6 +1378,8 @@ export default function AnalyticsPage() {
                   )}
                 </div>
               </CardContent>
+              </CollapsibleContent>
+              </Collapsible>
             </Card>
           </div>
 
