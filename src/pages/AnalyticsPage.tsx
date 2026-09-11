@@ -532,6 +532,60 @@ export default function AnalyticsPage() {
     return Object.values(stats).filter(op => op.completed > 0).sort((a, b) => b.completed - a.completed).slice(0, 5);
   }, [scopedServices, operators]);
 
+  // ── Performance individual por categoria (PC / Logísticas / Grade+PC) ────────
+  const [perfCategory, setPerfCategory] = useState<'pc' | 'logistica' | 'grade_pc' | 'all'>('pc');
+  const pcIdsPerf = useMemo(
+    () => getOperationIds('pc', () => new Set((demandTypes as any[]).filter(d => d.name?.toLowerCase().includes(' pc') || d.name?.toLowerCase() === 'pc').map((d: any) => d.id))),
+    [getOperationIds, demandTypes],
+  );
+  const gradeIdsPerf = useMemo(
+    () => getOperationIds('grade', () => getDemandIdsByNameSubstring(demandTypes as any[], 'grade')),
+    [getOperationIds, demandTypes],
+  );
+  const logisticaIdsPerf = useMemo(
+    () => getDemandIdsByCategory(demandTypes as any[], ['calcario', 'logistica_insumos']),
+    [demandTypes],
+  );
+  const perfMonths = useMemo(
+    () => Array.from({ length: monthsCount }, (_, i) => {
+      const md = subMonths(new Date(), monthsCount - 1 - i);
+      return { key: format(startOfMonth(md), 'yyyy-MM'), label: format(md, 'MMM', { locale: ptBR }).replace(/^\w/, (c) => c.toUpperCase()) };
+    }),
+    [monthsCount],
+  );
+  const perfIds = useMemo(() => {
+    if (perfCategory === 'pc') return pcIdsPerf;
+    if (perfCategory === 'grade_pc') return new Set<string>([...pcIdsPerf, ...gradeIdsPerf]);
+    if (perfCategory === 'logistica') return logisticaIdsPerf;
+    return null as Set<string> | null; // 'all'
+  }, [perfCategory, pcIdsPerf, gradeIdsPerf, logisticaIdsPerf]);
+
+  const operatorPerformance = useMemo(() => {
+    const rows: Record<string, { name: string; total: number; days: Set<string>; byMonth: Record<string, number> }> = {};
+    (operators as any[]).forEach((op) => { rows[op.id] = { name: op.name, total: 0, days: new Set(), byMonth: {} }; });
+    scopedServices.forEach((s) => {
+      if (s.status !== 'completed' || !s.operator_id || !rows[s.operator_id]) return;
+      if (perfIds && !perfIds.has(s.demand_type_id)) return;
+      const d = parseISO((s.completed_at || '').replace(' ', 'T'));
+      if (isNaN(d.getTime())) return;
+      const r = rows[s.operator_id];
+      r.total++;
+      r.days.add(format(d, 'yyyy-MM-dd'));
+      const mk = format(startOfMonth(d), 'yyyy-MM');
+      r.byMonth[mk] = (r.byMonth[mk] || 0) + 1;
+    });
+    return Object.values(rows)
+      .filter((r) => r.total > 0)
+      .map((r) => ({
+        name: r.name,
+        total: r.total,
+        activeDays: r.days.size,
+        avgPerDay: r.days.size ? r.total / r.days.size : 0,
+        chart: perfMonths.map((m) => ({ mes: m.label, qtd: r.byMonth[m.key] || 0 })),
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [scopedServices, operators, perfIds, perfMonths]);
+
   // M-11+M-03: operation_type estável com fallback por nome
   const totalWorkedArea = useMemo(() => {
     const gradeIds = getOperationIds('grade', () => getDemandIdsByNameSubstring(demandTypes as any[], 'grade'));
@@ -1219,6 +1273,74 @@ export default function AnalyticsPage() {
                 </div>
               </CardContent>
               </CollapsibleContent>
+              </Collapsible>
+            </Card>
+          )}
+
+          {/* Performance individual por categoria (PC / Logísticas / Grade+PC) */}
+          {operatorPerformance.length > 0 && (
+            <Card className="overflow-hidden">
+              <Collapsible defaultOpen={false}>
+                <CollapsibleTrigger asChild>
+                  <CardHeader className="group border-b bg-gradient-to-r from-primary/10 to-primary/5 cursor-pointer">
+                    <CardTitle className="flex items-center justify-between gap-3">
+                      <span className="flex items-center gap-3">
+                        <div className="p-2 rounded-lg bg-primary/20"><Users2 className="h-5 w-5 text-primary" /></div>
+                        <div>
+                          <span className="text-lg">Performance individual dos operadores</span>
+                          <p className="text-sm font-normal text-muted-foreground">Atendimentos por mês e média por dia, por categoria</p>
+                        </div>
+                      </span>
+                      <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0 transition-transform group-data-[state=open]:rotate-180" />
+                    </CardTitle>
+                  </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <CardContent className="pt-5 space-y-4">
+                    <div className="flex flex-wrap gap-2">
+                      {([['pc', 'PC'], ['logistica', 'Logísticas'], ['grade_pc', 'Grade + PC'], ['all', 'Todos']] as const).map(([val, label]) => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => setPerfCategory(val)}
+                          className={cn('px-3 py-1.5 rounded-full text-sm font-medium border transition-colors',
+                            perfCategory === val ? 'bg-primary text-primary-foreground border-primary' : 'bg-card hover:bg-muted/50 border-border text-muted-foreground')}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {perfCategory === 'logistica' ? 'Logísticas = calcário + insumos.' : perfCategory === 'grade_pc' ? 'Grade + PC somados.' : perfCategory === 'pc' ? 'Somente PC.' : 'Todos os tipos.'}
+                      {' '}Período: {periodLabel.toLowerCase()}.
+                    </p>
+                    <div className="space-y-4">
+                      {operatorPerformance.map((op, i) => (
+                        <div key={i} className="rounded-xl border p-3">
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <span className="font-semibold truncate">{op.name}</span>
+                            <div className="flex items-center gap-2 shrink-0 text-xs">
+                              <span className="inline-flex items-center bg-primary/10 text-primary rounded-full px-2 py-0.5 font-semibold">{op.total} atend.</span>
+                              <span className="inline-flex items-center bg-muted rounded-full px-2 py-0.5 font-medium">{op.avgPerDay.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}/dia</span>
+                              <span className="text-muted-foreground hidden sm:inline">{op.activeDays} dias ativos</span>
+                            </div>
+                          </div>
+                          <div className="h-28">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={op.chart} margin={{ top: 4, right: 6, left: -24, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                                <XAxis dataKey="mes" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} axisLine={{ stroke: 'hsl(var(--border))' }} interval={0} />
+                                <YAxis allowDecimals={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} axisLine={{ stroke: 'hsl(var(--border))' }} width={28} />
+                                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v: any) => [v, 'Atendimentos']} />
+                                <Bar dataKey="qtd" fill="#2D5A27" radius={[3, 3, 0, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </CollapsibleContent>
               </Collapsible>
             </Card>
           )}
