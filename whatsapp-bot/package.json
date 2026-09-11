@@ -8,7 +8,8 @@
     "start": "node index.js",
     "daily": "node index.js --daily",
     "once": "node index.js --once",
-    "test-now": "node index.js --now"
+    "test-now": "node index.js --now",
+    "watch": "node watch.js"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.8",
@@ -16,6 +17,7 @@
     "@whiskeysockets/baileys": "^6.7.9",
     "dotenv": "^16.4.5",
     "node-cron": "^3.0.3",
+    "pg": "^8.23.0",
     "pino": "^9.4.0",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0"
