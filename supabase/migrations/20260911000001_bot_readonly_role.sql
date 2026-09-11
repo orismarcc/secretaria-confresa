@@ -26,5 +26,5 @@ GRANT SELECT (id, name) ON public.producers TO bot_readonly;
 GRANT SELECT (id, name) ON public.demand_types TO bot_readonly;
 GRANT SELECT (id, name) ON public.profiles TO bot_readonly;
 
--- Garante que NÃO herda acessos futuros amplos (defensivo).
-ALTER ROLE bot_readonly NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+-- Observação: um CREATE ROLE novo já nasce NOSUPERUSER/NOCREATEDB/NOCREATEROLE/
+-- NOBYPASSRLS por padrão — não é preciso (nem permitido sem superusuário) alterar.
