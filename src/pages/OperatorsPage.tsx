@@ -349,8 +349,11 @@ export default function OperatorsPage() {
     });
     if (newUser?.id) {
       if (data.cpf || data.avatarUrl) await updateUserProfile.mutateAsync({ id: newUser.id, cpf: data.cpf || undefined, avatar_url: data.avatarUrl ?? undefined });
-      // Tipos de serviço que ele poderá ver (vazio = todos).
+      // O assistente satisfaz DUAS condições (maquinário + assentamentos) e vê só
+      // os tipos de serviço liberados. Vazio em qualquer dimensão = sem restrição nela.
       await setOperatorDemandTypes.mutateAsync({ operatorId: newUser.id, demandTypeIds: data.demandTypeIds });
+      await setOperatorMachinery.mutateAsync({ operatorId: newUser.id, machineryIds: data.machineryIds });
+      await setOperatorSettlements.mutateAsync({ operatorId: newUser.id, settlementIds: data.settlementIds });
     }
     setAssistFormOpen(false);
   };
@@ -746,14 +749,17 @@ export default function OperatorsPage() {
         <DialogContent>
           <DialogHeader><DialogTitle>Novo Assistente de Campo</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground -mt-2">
-            Acesso restrito a Maquinários e Atendimentos (por operador). Selecione os tipos de serviço que ele poderá ver.
+            Acesso restrito a Maquinários e Atendimentos (por operador). Ele só verá atendimentos
+            dos maquinários E assentamentos selecionados, dentro dos tipos de serviço liberados.
           </p>
           <OperatorForm
             onSubmit={handleCreateAssistente}
             onCancel={() => setAssistFormOpen(false)}
-            isLoading={createInternalUser.isPending || setOperatorDemandTypes.isPending}
+            isLoading={createInternalUser.isPending || setOperatorDemandTypes.isPending || setOperatorMachinery.isPending || setOperatorSettlements.isPending}
             mode="create"
             demandTypes={operatorDemandTypeOptions}
+            machinery={operatorMachineryOptions}
+            settlements={operatorSettlementOptions}
           />
         </DialogContent>
       </Dialog>

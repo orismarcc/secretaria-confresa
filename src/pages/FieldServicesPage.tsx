@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { User, Clock, ClipboardList, Navigation, Calendar, ChevronRight, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useServices, useOperatorDemandTypes } from '@/hooks/useSupabaseData';
+import { useServices, useOperatorDemandTypes, useOperatorSettlements, useOperatorMachinery } from '@/hooks/useSupabaseData';
 import { useOperators } from '@/hooks/useOperatorData';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -35,20 +35,37 @@ export default function FieldServicesPage() {
   const { user, isAssistente } = useAuth();
   const { data: services = [], isLoading: servicesLoading } = useServices();
   const { data: operators = [], isLoading: opsLoading } = useOperators();
-  // Assistente vê apenas os tipos de serviço liberados (vazio = todos).
-  const { data: allowedDemandTypeIds = [], isLoading: dtLoading } = useOperatorDemandTypes(isAssistente ? user?.id : undefined);
+  // Assistente satisfaz duas condições (maquinário + assentamento) e vê só os
+  // tipos de serviço liberados. Vazio em qualquer dimensão = sem restrição nela.
+  const uid = isAssistente ? user?.id : undefined;
+  const { data: allowedDemandTypeIds = [], isLoading: dtLoading } = useOperatorDemandTypes(uid);
+  const { data: allowedSettlementIds = [], isLoading: stLoading } = useOperatorSettlements(uid);
+  const { data: allowedMachineryIds = [], isLoading: mLoading } = useOperatorMachinery(uid);
 
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<OperatorGroup | null>(null);
 
-  const isLoading = servicesLoading || opsLoading || dtLoading;
+  const isLoading = servicesLoading || opsLoading || dtLoading || stLoading || mLoading;
 
-  // Serviços visíveis: se o assistente tem tipos liberados, filtra por eles.
+  // Serviços visíveis. Para o assistente aplica-se a interseção:
+  // tipo de serviço ∩ maquinário ∩ assentamento (cada filtro só vale se houver seleção).
   const visibleServices = useMemo(() => {
-    if (!isAssistente || allowedDemandTypeIds.length === 0) return services as any[];
-    const allowed = new Set(allowedDemandTypeIds);
-    return (services as any[]).filter((s) => allowed.has(s.demand_type_id));
-  }, [services, isAssistente, allowedDemandTypeIds]);
+    if (!isAssistente) return services as any[];
+    let vis = services as any[];
+    if (allowedDemandTypeIds.length > 0) {
+      const allow = new Set(allowedDemandTypeIds);
+      vis = vis.filter((s) => allow.has(s.demand_type_id));
+    }
+    if (allowedMachineryIds.length > 0) {
+      const allow = new Set(allowedMachineryIds);
+      vis = vis.filter((s) => s.machinery_id && allow.has(s.machinery_id));
+    }
+    if (allowedSettlementIds.length > 0) {
+      const allow = new Set(allowedSettlementIds);
+      vis = vis.filter((s) => s.settlement_id && allow.has(s.settlement_id));
+    }
+    return vis;
+  }, [services, isAssistente, allowedDemandTypeIds, allowedMachineryIds, allowedSettlementIds]);
 
   // Agrupa por operador (só quem tem atendimentos atribuídos).
   const groups = useMemo(() => {

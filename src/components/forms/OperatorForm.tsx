@@ -239,7 +239,18 @@ export function OperatorForm({
       {/* Veículo(s)/maquinário(s) que o operador utiliza */}
       {machinery.length > 0 && (
         <div className="space-y-2">
-          <Label>Veículo / Maquinário utilizado</Label>
+          <div className="flex items-center justify-between">
+            <Label>Veículo / Maquinário utilizado</Label>
+            <div className="flex items-center gap-2 text-xs">
+              <button type="button" className="text-primary hover:underline" onClick={() => setMachineryIds(machinery.map((m) => m.id))}>
+                Selecionar todos
+              </button>
+              <span className="text-muted-foreground">·</span>
+              <button type="button" className="text-muted-foreground hover:underline" onClick={() => setMachineryIds([])}>
+                Limpar
+              </button>
+            </div>
+          </div>
           <div className="max-h-44 overflow-y-auto rounded-md border p-2 space-y-1.5">
             {machinery.map((m) => (
               <label
@@ -267,7 +278,18 @@ export function OperatorForm({
       {/* Assentamentos que o operador pode operar */}
       {settlements.length > 0 && (
         <div className="space-y-2">
-          <Label>Assentamentos com acesso</Label>
+          <div className="flex items-center justify-between">
+            <Label>Assentamentos com acesso</Label>
+            <div className="flex items-center gap-2 text-xs">
+              <button type="button" className="text-primary hover:underline" onClick={() => setSettlementIds(settlements.map((s) => s.id))}>
+                Selecionar todos
+              </button>
+              <span className="text-muted-foreground">·</span>
+              <button type="button" className="text-muted-foreground hover:underline" onClick={() => setSettlementIds([])}>
+                Limpar
+              </button>
+            </div>
+          </div>
           <div className="max-h-44 overflow-y-auto rounded-md border p-2 space-y-1.5">
             {settlements.map((s) => (
               <label

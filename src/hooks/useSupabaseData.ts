@@ -1195,6 +1195,7 @@ export interface MachineryRefuel {
   fuel_type: string | null;
   refueled_at: string;
   note: string | null;
+  receipt_path: string | null;
   created_at: string;
 }
 
@@ -1206,7 +1207,7 @@ export function useMachineryRefuels(machineryId: string | undefined) {
       if (!machineryId) return [] as MachineryRefuel[];
       const { data, error } = await supabase
         .from('machinery_refuels')
-        .select('id, machinery_id, liters, fuel_type, refueled_at, note, created_at')
+        .select('id, machinery_id, liters, fuel_type, refueled_at, note, receipt_path, created_at')
         .eq('machinery_id', machineryId)
         .order('refueled_at', { ascending: false });
       if (error) throw error;
@@ -1238,7 +1239,7 @@ export function useCreateMachineryRefuel() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: async (item: { machinery_id: string; liters: number; fuel_type?: string | null; refueled_at?: string; note?: string | null }) => {
+    mutationFn: async (item: { machinery_id: string; liters: number; fuel_type?: string | null; refueled_at?: string; note?: string | null; receipt_path?: string | null }) => {
       const { data: auth } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from('machinery_refuels')
