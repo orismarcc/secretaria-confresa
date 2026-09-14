@@ -9,7 +9,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { User, Clock, ClipboardList, Navigation, Calendar, ChevronRight, Loader2 } from 'lucide-react';
+import { User, Clock, ClipboardList, Navigation, Calendar, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useServices, useOperatorDemandTypes, useOperatorSettlements, useOperatorMachinery } from '@/hooks/useSupabaseData';
@@ -19,16 +19,30 @@ import { useAuth } from '@/contexts/AuthContext';
 interface OperatorGroup {
   id: string;
   name: string;
-  services: any[];
-  totalHours: number;
-  emAndamento: number;
-  finalizados: number;
+  /** Nº de atendimentos finalizados no ano vigente. */
+  realizadosAno: number;
+  /** Pendentes com DAM paga e/ou marcados como "próximo". */
+  pendentes: any[];
 }
 
-const hLine = (h: number) => `${(Number(h) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}h`;
+const ANO_VIGENTE = new Date().getFullYear();
 
 function mapsHref(lat: number, lng: number) {
   return `https://www.google.com/maps?q=${lat},${lng}`;
+}
+
+// Ano de finalização do atendimento.
+function completedYear(s: any): number | null {
+  if (s.status !== 'completed' || !s.completed_at) return null;
+  const d = new Date(String(s.completed_at).replace(' ', 'T'));
+  return isNaN(d.getTime()) ? null : d.getFullYear();
+}
+
+// Pendente relevante para o assistente: ainda não finalizado/cancelado e com
+// DAM paga OU marcado como "próximo".
+function isPendenteRelevante(s: any): boolean {
+  if (s.status === 'completed' || s.status === 'cancelled') return false;
+  return s.dam_paid === true || s.status === 'proximo';
 }
 
 export default function FieldServicesPage() {
@@ -67,7 +81,7 @@ export default function FieldServicesPage() {
     return vis;
   }, [services, isAssistente, allowedDemandTypeIds, allowedMachineryIds, allowedSettlementIds]);
 
-  // Agrupa por operador (só quem tem atendimentos atribuídos).
+  // Agrupa por operador: conta finalizados no ano e junta os pendentes relevantes.
   const groups = useMemo(() => {
     const nameById = new Map<string, string>((operators as any[]).map((o) => [o.id, o.name]));
     const map = new Map<string, OperatorGroup>();
@@ -76,13 +90,14 @@ export default function FieldServicesPage() {
       if (!opId) continue;
       const name = nameById.get(opId) || s.operador?.name || s.profiles?.name || 'Operador';
       let g = map.get(opId);
-      if (!g) { g = { id: opId, name, services: [], totalHours: 0, emAndamento: 0, finalizados: 0 }; map.set(opId, g); }
-      g.services.push(s);
-      g.totalHours += Number(s.worked_hours) || 0;
-      if (s.status === 'in_progress') g.emAndamento++;
-      if (s.status === 'completed') g.finalizados++;
+      if (!g) { g = { id: opId, name, realizadosAno: 0, pendentes: [] }; map.set(opId, g); }
+      if (completedYear(s) === ANO_VIGENTE) g.realizadosAno++;
+      if (isPendenteRelevante(s)) g.pendentes.push(s);
     }
-    return Array.from(map.values()).sort((a, b) => b.services.length - a.services.length);
+    // Só operadores com algo a mostrar (realizados no ano ou pendentes relevantes).
+    return Array.from(map.values())
+      .filter((g) => g.realizadosAno > 0 || g.pendentes.length > 0)
+      .sort((a, b) => b.pendentes.length - a.pendentes.length || b.realizadosAno - a.realizadosAno);
   }, [visibleServices, operators]);
 
   const filteredGroups = useMemo(() => {
@@ -91,12 +106,12 @@ export default function FieldServicesPage() {
     return groups.filter((g) => g.name.toLowerCase().includes(q));
   }, [groups, search]);
 
-  // Serviços do operador selecionado, mais recentes primeiro.
+  // Pendentes do operador selecionado (DAM paga / próximo), mais recentes primeiro.
   const selectedServices = useMemo(() => {
     if (!selected) return [];
-    return [...selected.services].sort((a, b) => {
-      const da = new Date(a.completed_at || a.scheduled_date || 0).getTime();
-      const db = new Date(b.completed_at || b.scheduled_date || 0).getTime();
+    return [...selected.pendentes].sort((a, b) => {
+      const da = new Date(a.scheduled_date || a.created_at || 0).getTime();
+      const db = new Date(b.scheduled_date || b.created_at || 0).getTime();
       return db - da;
     });
   }, [selected]);
@@ -114,7 +129,7 @@ export default function FieldServicesPage() {
 
   return (
     <AppLayout>
-      <PageHeader title="Atendimentos por operador" description="Toque em um operador para ver os atendimentos, horas e status" />
+      <PageHeader title="Atendimentos por operador" description={`Realizados em ${ANO_VIGENTE} e pendentes com DAM paga / próximo`} />
 
       <div className="mb-4">
         <SearchInput value={search} onChange={setSearch} placeholder="Buscar operador..." className="max-w-md" />
@@ -139,22 +154,18 @@ export default function FieldServicesPage() {
                       </div>
                       <div className="min-w-0">
                         <p className="font-semibold truncate">{g.name}</p>
-                        <p className="text-xs text-muted-foreground">{g.services.length} atendimento(s)</p>
+                        <p className="text-xs text-emerald-600 font-medium inline-flex items-center gap-1">
+                          <ClipboardList className="h-3.5 w-3.5" />
+                          {g.realizadosAno} realizado(s) em {ANO_VIGENTE}
+                        </p>
                       </div>
                     </div>
                     <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
                   </div>
                   <div className="mt-3 flex items-center gap-3 text-xs">
-                    {g.emAndamento > 0 && (
-                      <span className="inline-flex items-center gap-1 text-amber-600 font-medium">
-                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" /> {g.emAndamento} em execução
-                      </span>
-                    )}
-                    <span className="inline-flex items-center gap-1 text-muted-foreground">
-                      <Clock className="h-3.5 w-3.5" /> {hLine(g.totalHours)}
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-emerald-600">
-                      <ClipboardList className="h-3.5 w-3.5" /> {g.finalizados} concluído(s)
+                    <span className="inline-flex items-center gap-1 text-amber-600 font-medium">
+                      <Clock className="h-3.5 w-3.5" />
+                      {g.pendentes.length} pendente(s) — DAM paga / próximo
                     </span>
                   </div>
                 </CardContent>
@@ -173,7 +184,7 @@ export default function FieldServicesPage() {
               {selected?.name}
             </DialogTitle>
             <DialogDescription>
-              {selected ? `${selected.services.length} atendimento(s) · ${hLine(selected.totalHours)} · ${selected.finalizados} concluído(s)` : ''}
+              {selected ? `${selected.realizadosAno} realizado(s) em ${ANO_VIGENTE} · ${selected.pendentes.length} pendente(s) com DAM paga / próximo` : ''}
             </DialogDescription>
           </DialogHeader>
 
@@ -185,17 +196,17 @@ export default function FieldServicesPage() {
                     <p className="font-medium truncate">{s.producers?.name || 'N/A'}</p>
                     <p className="text-sm text-primary truncate">
                       {s.demand_types?.name || 'N/A'}
-                      {(Number(s.worked_hours) || 0) > 0 && (
-                        <span className="ml-2 text-xs text-foreground bg-muted rounded-full px-2 py-0.5">
-                          {hLine(Number(s.worked_hours))}
+                      {s.dam_paid && (
+                        <span className="ml-2 text-xs text-emerald-700 bg-emerald-500/15 rounded-full px-2 py-0.5">
+                          DAM paga
                         </span>
                       )}
                     </p>
                     <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                      {(s.completed_at || s.scheduled_date) && (
+                      {s.scheduled_date && (
                         <span className="inline-flex items-center gap-1">
                           <Calendar className="h-3.5 w-3.5" />
-                          {format(new Date((s.completed_at || s.scheduled_date).toString().replace(' ', 'T')), 'dd/MM/yyyy', { locale: ptBR })}
+                          {format(new Date(String(s.scheduled_date).replace(' ', 'T')), 'dd/MM/yyyy', { locale: ptBR })}
                         </span>
                       )}
                       {s.settlements?.name && <span className="truncate">{s.settlements.name}</span>}
@@ -216,7 +227,7 @@ export default function FieldServicesPage() {
               </div>
             ))}
             {selectedServices.length === 0 && (
-              <p className="text-sm text-muted-foreground py-6 text-center">Nenhum atendimento.</p>
+              <p className="text-sm text-muted-foreground py-6 text-center">Nenhum pendente com DAM paga ou marcado como próximo.</p>
             )}
           </div>
         </DialogContent>
