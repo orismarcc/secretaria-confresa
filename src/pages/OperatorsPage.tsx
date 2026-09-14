@@ -338,22 +338,26 @@ export default function OperatorsPage() {
     setIsFormOpen(false);
   };
 
-  // Cria um Assistente de Campo (membro interno com login próprio). Reaproveita
-  // o OperatorForm apenas para nome/email/senha + tipos de serviço liberados.
-  const handleCreateAssistente = async (
-    data: { name: string; email: string; password: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[] }
+  // Cria um MEMBRO DA EQUIPE INTERNA com login próprio e o cargo escolhido
+  // (Secretário, Diretor, Supervisor, Coordenador ou Assistente de Campo).
+  // Todos são role='admin'; só o Assistente de Campo tem restrições (tipos/
+  // maquinário/assentamentos) — os demais são admins plenos.
+  const handleCreateInternal = async (
+    data: { name: string; email: string; password: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; jobTitle?: string }
   ) => {
+    const cargo = data.jobTitle || 'Assistente de Campo';
     const newUser = await createInternalUser.mutateAsync({
       name: data.name, email: data.email, password: data.password,
-      role: 'admin', jobTitle: 'Assistente de Campo',
+      role: 'admin', jobTitle: cargo,
     });
     if (newUser?.id) {
       if (data.cpf || data.avatarUrl) await updateUserProfile.mutateAsync({ id: newUser.id, cpf: data.cpf || undefined, avatar_url: data.avatarUrl ?? undefined });
-      // O assistente satisfaz DUAS condições (maquinário + assentamentos) e vê só
-      // os tipos de serviço liberados. Vazio em qualquer dimensão = sem restrição nela.
-      await setOperatorDemandTypes.mutateAsync({ operatorId: newUser.id, demandTypeIds: data.demandTypeIds });
-      await setOperatorMachinery.mutateAsync({ operatorId: newUser.id, machineryIds: data.machineryIds });
-      await setOperatorSettlements.mutateAsync({ operatorId: newUser.id, settlementIds: data.settlementIds });
+      // Restrições só se aplicam ao Assistente de Campo.
+      if (cargo === 'Assistente de Campo') {
+        await setOperatorDemandTypes.mutateAsync({ operatorId: newUser.id, demandTypeIds: data.demandTypeIds });
+        await setOperatorMachinery.mutateAsync({ operatorId: newUser.id, machineryIds: data.machineryIds });
+        await setOperatorSettlements.mutateAsync({ operatorId: newUser.id, settlementIds: data.settlementIds });
+      }
     }
     setAssistFormOpen(false);
   };
@@ -620,7 +624,7 @@ export default function OperatorsPage() {
             ? { label: 'Novo Operador', onClick: () => setIsFormOpen(true), icon: <Plus className="h-4 w-4 mr-2" /> }
             : activeTab === 'admins'
               ? (isFullAdmin
-                  ? { label: 'Novo Assistente de Campo', onClick: () => setAssistFormOpen(true), icon: <Plus className="h-4 w-4 mr-2" /> }
+                  ? { label: 'Novo integrante', onClick: () => setAssistFormOpen(true), icon: <Plus className="h-4 w-4 mr-2" /> }
                   : undefined)
               : { label: 'Novo Responsável', onClick: () => setTechFormOpen(true), icon: <Plus className="h-4 w-4 mr-2" /> }
         }
@@ -744,19 +748,23 @@ export default function OperatorsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Novo Assistente de Campo — membro interno restrito (Maquinários + Atendimentos) */}
+      {/* Novo integrante da equipe interna — escolhe o cargo; só o Assistente
+          de Campo tem restrições (tipos/maquinário/assentamentos). */}
       <Dialog open={assistFormOpen} onOpenChange={setAssistFormOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Novo Assistente de Campo</DialogTitle></DialogHeader>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Novo integrante da equipe interna</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground -mt-2">
-            Acesso restrito a Maquinários e Atendimentos (por operador). Ele só verá atendimentos
-            dos maquinários E assentamentos selecionados, dentro dos tipos de serviço liberados.
+            Selecione a função. O <strong>Assistente de Campo</strong> tem acesso restrito
+            (Maquinários + Atendimentos por operador) e só vê atendimentos dos maquinários e
+            assentamentos selecionados. Os demais cargos têm acesso completo.
           </p>
           <OperatorForm
-            onSubmit={handleCreateAssistente}
+            onSubmit={handleCreateInternal}
             onCancel={() => setAssistFormOpen(false)}
             isLoading={createInternalUser.isPending || setOperatorDemandTypes.isPending || setOperatorMachinery.isPending || setOperatorSettlements.isPending}
             mode="create"
+            roleOptions={FUNCOES_EQUIPE}
+            initialRole="Assistente de Campo"
             demandTypes={operatorDemandTypeOptions}
             machinery={operatorMachineryOptions}
             settlements={operatorSettlementOptions}

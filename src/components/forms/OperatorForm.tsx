@@ -3,6 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
 import { z } from 'zod';
 import { formatCpf } from '@/lib/documents';
@@ -41,12 +44,18 @@ interface OperatorFormProps {
   defaultValues?: { name: string; email?: string; cpf?: string; avatarUrl?: string | null };
   onSubmit: (
     data:
-      | { name: string; email: string; password: string; cpf: string; avatarUrl: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[] }
-      | { name: string; cpf: string; avatarUrl: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[] }
+      | { name: string; email: string; password: string; cpf: string; avatarUrl: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; jobTitle?: string }
+      | { name: string; cpf: string; avatarUrl: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; jobTitle?: string }
   ) => Promise<void>;
   onCancel: () => void;
   isLoading: boolean;
   mode: 'create' | 'edit';
+  /** Se informado, mostra um seletor de "Função" (cargo) com estas opções. */
+  roleOptions?: string[];
+  /** Cargo pré-selecionado (quando roleOptions é usado). */
+  initialRole?: string;
+  /** Rótulo do botão de envio (sobrepõe o padrão). */
+  submitLabel?: string;
   /** Tipos de serviço disponíveis para conceder acesso */
   demandTypes?: OperatorDemandTypeOption[];
   /** Tipos já atribuídos ao operador (modo edição) */
@@ -73,7 +82,15 @@ export function OperatorForm({
   initialMachineryIds = [],
   settlements = [],
   initialSettlementIds = [],
+  roleOptions,
+  initialRole,
+  submitLabel,
 }: OperatorFormProps) {
+  // Seletor de cargo (só quando roleOptions é informado — cadastro da equipe interna).
+  const hasRoleSelect = (roleOptions?.length ?? 0) > 0;
+  const [jobTitle, setJobTitle] = useState<string>(initialRole || roleOptions?.[0] || '');
+  // Restrições (tipos/maquinário/assentamentos) só fazem sentido p/ Assistente de Campo.
+  const showRestrictions = !hasRoleSelect || jobTitle === 'Assistente de Campo';
   const [name, setName] = useState(defaultValues?.name || '');
   const [email, setEmail] = useState(defaultValues?.email || '');
   const [cpf, setCpf] = useState(defaultValues?.cpf || '');
@@ -115,7 +132,7 @@ export function OperatorForm({
         setErrors(fieldErrors);
         return;
       }
-      await onSubmit({ name, email, password, cpf, avatarUrl, demandTypeIds, machineryIds, settlementIds });
+      await onSubmit({ name, email, password, cpf, avatarUrl, demandTypeIds, machineryIds, settlementIds, jobTitle: hasRoleSelect ? jobTitle : undefined });
     } else {
       const result = editSchema.safeParse({ name });
       if (!result.success) {
@@ -133,6 +150,18 @@ export function OperatorForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <AvatarUpload value={avatarUrl} onChange={setAvatarUrl} />
+
+      {hasRoleSelect && mode === 'create' && (
+        <div className="space-y-2">
+          <Label>Função (cargo)</Label>
+          <Select value={jobTitle} onValueChange={setJobTitle}>
+            <SelectTrigger><SelectValue placeholder="Selecione a função" /></SelectTrigger>
+            <SelectContent>
+              {roleOptions!.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="name">Nome Completo</Label>
@@ -209,7 +238,7 @@ export function OperatorForm({
       )}
 
       {/* Tipos de serviço que o operador pode atender */}
-      {demandTypes.length > 0 && (
+      {showRestrictions && demandTypes.length > 0 && (
         <div className="space-y-2">
           <Label>Tipos de serviço com acesso</Label>
           <div className="max-h-44 overflow-y-auto rounded-md border p-2 space-y-1.5">
@@ -237,7 +266,7 @@ export function OperatorForm({
       )}
 
       {/* Veículo(s)/maquinário(s) que o operador utiliza */}
-      {machinery.length > 0 && (
+      {showRestrictions && machinery.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label>Veículo / Maquinário utilizado</Label>
@@ -276,7 +305,7 @@ export function OperatorForm({
       )}
 
       {/* Assentamentos que o operador pode operar */}
-      {settlements.length > 0 && (
+      {showRestrictions && settlements.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label>Assentamentos com acesso</Label>
@@ -320,7 +349,11 @@ export function OperatorForm({
         </Button>
         <Button type="submit" disabled={isLoading}>
           {isLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-          {mode === 'create' ? 'Criar Operador' : 'Salvar'}
+          {mode === 'edit'
+            ? 'Salvar'
+            : hasRoleSelect
+              ? `Criar ${jobTitle || 'membro'}`
+              : (submitLabel || 'Criar Operador')}
         </Button>
       </div>
     </form>

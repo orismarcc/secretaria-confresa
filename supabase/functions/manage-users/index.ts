@@ -47,7 +47,13 @@ function errorResponse(
 // Input validation schemas
 // ---------------------------------------------------------------------------
 // Cargos internos que podem ser criados (além do operador comum).
-const ALLOWED_JOB_TITLES = ["Assistente de Campo"];
+const ALLOWED_JOB_TITLES = [
+  "Secretário de Agricultura",
+  "Diretor de Campo",
+  "Supervisor",
+  "Coordenador",
+  "Assistente de Campo",
+];
 
 const createUserSchema = z.object({
   email: z.string().email("Email inválido").max(255, "Email muito longo"),
