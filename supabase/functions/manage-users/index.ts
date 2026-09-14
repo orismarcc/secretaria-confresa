@@ -5,13 +5,17 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 // CORS — restrict to known origins; fallback to env var for production domain
 // ---------------------------------------------------------------------------
 const DEV_ORIGINS = ["http://localhost:8080", "http://localhost:5173", "http://localhost:3000"];
-const PROD_ORIGIN = Deno.env.get("ALLOWED_ORIGIN") ?? "";
+// ALLOWED_ORIGIN aceita UMA ou VÁRIAS origens de produção separadas por vírgula
+// (ex.: "https://app.vercel.app,https://meudominio.com"). Cada origem é só
+// esquema+host, sem barra final e sem caminho.
+const PROD_ORIGINS = (Deno.env.get("ALLOWED_ORIGIN") ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 function buildCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get("Origin") ?? "";
-  const allowed = PROD_ORIGIN
-    ? [PROD_ORIGIN, ...DEV_ORIGINS]
-    : DEV_ORIGINS;
+  const allowed = [...PROD_ORIGINS, ...DEV_ORIGINS];
   const allowedOrigin = allowed.includes(origin) ? origin : (allowed[0] ?? "");
   return {
     "Access-Control-Allow-Origin": allowedOrigin,

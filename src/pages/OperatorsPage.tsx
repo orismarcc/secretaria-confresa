@@ -228,7 +228,7 @@ function AdminEditForm({
 
 export default function OperatorsPage() {
   const { canDelete, isFullAdmin } = useAuth();
-  const [activeTab, setActiveTab] = useState<'operators' | 'admins' | 'technicians'>('operators');
+  const [activeTab, setActiveTab] = useState<'operators' | 'admins' | 'technicians'>('admins');
 
   // ── Operators state ────────────────────────────────────────────────────────
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -628,13 +628,13 @@ export default function OperatorsPage() {
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="space-y-4">
         <TabsList>
-          <TabsTrigger value="operators" className="gap-2">
-            <UserCog className="h-4 w-4" />
-            Operadores
-          </TabsTrigger>
           <TabsTrigger value="admins" className="gap-2">
             <User className="h-4 w-4" />
             Equipe interna
+          </TabsTrigger>
+          <TabsTrigger value="operators" className="gap-2">
+            <UserCog className="h-4 w-4" />
+            Operadores
           </TabsTrigger>
           <TabsTrigger value="technicians" className="gap-2">
             <HardHat className="h-4 w-4" />
