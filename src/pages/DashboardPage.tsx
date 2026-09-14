@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { StatsCard } from '@/components/StatsCard';
 import {
   ClipboardList, Clock, Loader2, CheckCircle2, Users, CalendarCheck, PlayCircle, Wrench,
-  ChevronDown, ChevronRight, User, CalendarClock,
+  ChevronDown, ChevronRight, User, CalendarClock, Navigation,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -549,6 +549,19 @@ export default function DashboardPage() {
                         className="shrink-0"
                       />
                     </div>
+                    {/* Localização captada ao iniciar — acesso direto ao mapa */}
+                    {(service as any).latitude && (service as any).longitude && (
+                      <a
+                        href={`https://www.google.com/maps?q=${(service as any).latitude},${(service as any).longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-1.5 inline-flex items-center gap-1 text-[10px] sm:text-xs text-info font-medium hover:underline"
+                      >
+                        <Navigation className="h-3 w-3 shrink-0" />
+                        Ver no mapa
+                      </a>
+                    )}
                   </div>
                 ))}
               </div>

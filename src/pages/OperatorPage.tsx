@@ -8,7 +8,8 @@ import { MapPin, Phone, Calendar, Clock, GripVertical, Navigation, User, Message
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { OnlineIndicator } from '@/components/ConnectionStatus';
-import { PhotoCaptureModal, type CaptureMode } from '@/components/PhotoCaptureModal';
+import { FinalizePhotosModal } from '@/components/FinalizePhotosModal';
+import { useGeolocation } from '@/hooks/useGeolocation';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -76,6 +77,7 @@ interface OperatorCardBodyProps {
   locationName: string;
   onStart: (service: DbService) => void;
   onFinalize: (service: DbService) => void;
+  isStarting?: boolean;
 }
 
 function OperatorCardBody({
@@ -84,6 +86,7 @@ function OperatorCardBody({
   locationName,
   onStart,
   onFinalize,
+  isStarting,
 }: OperatorCardBodyProps) {
   const canStart = service.status === 'pending' || service.status === 'proximo';
   // Só finaliza depois de iniciar (passa por "em execução").
@@ -171,8 +174,8 @@ function OperatorCardBody({
           </Button>
         )}
         {canStart && (
-          <Button className="flex-1" onClick={() => onStart(service)}>
-            Iniciar
+          <Button className="flex-1" onClick={() => onStart(service)} disabled={isStarting}>
+            {isStarting ? 'Iniciando…' : 'Iniciar'}
           </Button>
         )}
         {canFinalize && (
@@ -299,9 +302,11 @@ export default function OperatorPage() {
   const { data: pendingCount = 0 } = usePendingActionsCount();
   const isOnline = useOnlineStatus();
 
-  // Modal de captura (foto + GPS) para Iniciar / Finalizar.
-  const [capture, setCapture] = useState<{ open: boolean; service: DbService | null; mode: CaptureMode }>({
-    open: false, service: null, mode: 'start',
+  // Iniciar: captura só GPS (sem modal). Finalizar: modal com duas fotos.
+  const { getCurrentPosition } = useGeolocation();
+  const [startingId, setStartingId] = useState<string | null>(null);
+  const [finalize, setFinalize] = useState<{ open: boolean; service: DbService | null }>({
+    open: false, service: null,
   });
 
   // Sincroniza a fila offline ao (re)conectar e ao montar.
@@ -360,39 +365,71 @@ export default function OperatorPage() {
     };
   }, [queryClient]);
 
-  const openStart = (service: DbService) => setCapture({ open: true, service, mode: 'start' });
-  const openFinalize = (service: DbService) => setCapture({ open: true, service, mode: 'finish' });
+  const openFinalize = (service: DbService) => setFinalize({ open: true, service });
 
-  // Confirma a captura: enfileira localmente (funciona offline), atualiza a tela
-  // na hora (otimista) e tenta sincronizar. Se estiver sem sinal, fica na fila.
-  const handleCaptureConfirm = async (data: { photoBlob: Blob | null; latitude: number | null; longitude: number | null }) => {
-    const { service, mode } = capture;
+  // Iniciar: tenta captar o GPS automaticamente (não trava se falhar) e enfileira
+  // a ação de início. Sem foto. O GPS captado alimenta o mapa "em execução".
+  const handleStart = async (service: DbService) => {
+    if (startingId) return;
+    setStartingId(service.id);
+    let coords: { latitude: number; longitude: number } | null = null;
+    try { coords = await getCurrentPosition(); } catch { /* sem GPS: inicia mesmo assim */ }
+
+    await enqueueOperatorAction({
+      serviceId: service.id,
+      operatorId: user?.id ?? null,
+      type: 'start',
+      latitude: coords?.latitude ?? null,
+      longitude: coords?.longitude ?? null,
+    });
+
+    queryClient.setQueryData<DbService[]>(['services', 'pending'], (old = []) =>
+      old.map((s) =>
+        s.id === service.id
+          ? { ...s, status: 'in_progress', operator_id: user?.id ?? null,
+              latitude: coords?.latitude ?? s.latitude, longitude: coords?.longitude ?? s.longitude,
+              profiles: s.profiles ?? { name: '' } }
+          : s,
+      ),
+    );
+    queryClient.invalidateQueries({ queryKey: ['operator_queue_count'] });
+    queryClient.invalidateQueries({ queryKey: ['operator_queue_actions'] });
+
+    toast({
+      title: 'Atendimento iniciado',
+      description: !coords
+        ? 'Iniciado sem localização (GPS indisponível).'
+        : (isOnline ? undefined : 'Salvo no aparelho — sincroniza quando o sinal voltar.'),
+    });
+
+    setStartingId(null);
+    syncActions.mutate();
+  };
+
+  // Finalizar: recebe as duas fotos (opcionais) do modal, enfileira e sincroniza.
+  const handleFinalizeConfirm = async (data: { startPhotoBlob: Blob | null; finishPhotoBlob: Blob | null }) => {
+    const service = finalize.service;
     if (!service) return;
 
     await enqueueOperatorAction({
       serviceId: service.id,
       operatorId: user?.id ?? null,
-      type: mode,
-      photoBlob: data.photoBlob,
-      latitude: data.latitude,
-      longitude: data.longitude,
+      type: 'finish',
+      photoBlob: data.finishPhotoBlob,
+      startPhotoBlob: data.startPhotoBlob,
+      latitude: null,
+      longitude: null,
     });
 
-    // Atualização otimista da lista de pendentes.
-    queryClient.setQueryData<DbService[]>(['services', 'pending'], (old = []) => {
-      if (mode === 'finish') return old.filter((s) => s.id !== service.id);
-      return old.map((s) =>
-        s.id === service.id
-          ? { ...s, status: 'in_progress', operator_id: user?.id ?? null, profiles: s.profiles ?? { name: '' } }
-          : s,
-      );
-    });
+    queryClient.setQueryData<DbService[]>(['services', 'pending'], (old = []) =>
+      old.filter((s) => s.id !== service.id),
+    );
     queryClient.invalidateQueries({ queryKey: ['operator_queue_count'] });
     queryClient.invalidateQueries({ queryKey: ['operator_queue_actions'] });
 
     toast({
-      title: mode === 'start' ? 'Atendimento iniciado' : 'Atendimento finalizado',
-      description: isOnline ? undefined : 'Salvo no aparelho — sincroniza sozinho quando o sinal voltar.',
+      title: 'Atendimento finalizado',
+      description: isOnline ? undefined : 'Salvo no aparelho — sincroniza quando o sinal voltar.',
     });
 
     syncActions.mutate();
@@ -474,7 +511,7 @@ export default function OperatorPage() {
                       service={service}
                       settlementName={settlement?.name || service.settlements?.name || 'N/A'}
                       locationName={service.producers?.location_name || location?.name || service.locations?.name || 'N/A'}
-                      onStart={openStart}
+                      onStart={handleStart}
                       onFinalize={openFinalize}
                     />
                   );
@@ -515,8 +552,9 @@ export default function OperatorPage() {
                           service={service}
                           settlementName={settlement?.name || service.settlements?.name || 'N/A'}
                           locationName={service.producers?.location_name || location?.name || service.locations?.name || 'N/A'}
-                          onStart={openStart}
+                          onStart={handleStart}
                           onFinalize={openFinalize}
+                          isStarting={startingId === service.id}
                         />
                       );
                     })}
@@ -528,13 +566,12 @@ export default function OperatorPage() {
         </div>
       )}
 
-      <PhotoCaptureModal
-        open={capture.open}
-        onOpenChange={(o) => setCapture((c) => ({ ...c, open: o }))}
-        mode={capture.mode}
-        producerName={capture.service?.producers?.name}
-        demandName={capture.service?.demand_types?.name}
-        onConfirm={handleCaptureConfirm}
+      <FinalizePhotosModal
+        open={finalize.open}
+        onOpenChange={(o) => setFinalize((f) => ({ ...f, open: o }))}
+        producerName={finalize.service?.producers?.name}
+        demandName={finalize.service?.demand_types?.name}
+        onConfirm={handleFinalizeConfirm}
       />
     </AppLayout>
   );

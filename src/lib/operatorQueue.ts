@@ -15,7 +15,8 @@ export interface OperatorAction {
   serviceId: string;
   operatorId: string | null;
   type: OperatorActionType;
-  blobKey?: string;            // referência da foto no IndexedDB (se houver)
+  blobKey?: string;            // foto principal (finish: término; start: —)
+  startBlobKey?: string;       // no finalizar: foto de INÍCIO do serviço (opcional)
   latitude: number | null;
   longitude: number | null;
   capturedAt: string;          // ISO — momento real da ação
@@ -25,7 +26,8 @@ export interface EnqueueInput {
   serviceId: string;
   operatorId: string | null;
   type: OperatorActionType;
-  photoBlob?: Blob | null;
+  photoBlob?: Blob | null;         // finish: foto de término
+  startPhotoBlob?: Blob | null;    // finish: foto de início (opcional)
   latitude?: number | null;
   longitude?: number | null;
 }
@@ -37,12 +39,18 @@ export async function enqueueOperatorAction(input: EnqueueInput): Promise<Operat
     blobKey = `blob-${id}`;
     await set(blobKey, input.photoBlob, blobStore);
   }
+  let startBlobKey: string | undefined;
+  if (input.startPhotoBlob) {
+    startBlobKey = `blob-${id}-start`;
+    await set(startBlobKey, input.startPhotoBlob, blobStore);
+  }
   const action: OperatorAction = {
     id,
     serviceId: input.serviceId,
     operatorId: input.operatorId,
     type: input.type,
     blobKey,
+    startBlobKey,
     latitude: input.latitude ?? null,
     longitude: input.longitude ?? null,
     capturedAt: new Date().toISOString(),
@@ -68,6 +76,7 @@ export async function getActionBlob(blobKey: string): Promise<Blob | undefined> 
 
 export async function deleteOperatorAction(action: OperatorAction): Promise<void> {
   if (action.blobKey) await del(action.blobKey, blobStore);
+  if (action.startBlobKey) await del(action.startBlobKey, blobStore);
   await del(action.id, actionStore);
 }
 

@@ -5,47 +5,70 @@ import {
   type OperatorAction,
 } from '@/lib/operatorQueue';
 
-// Envia UMA ação (Iniciar/Finalizar) para o Supabase: foto -> storage,
+// Sobe um blob de foto e devolve o caminho no storage (ou null se não houver).
+async function uploadPhoto(serviceId: string, blobKey: string | undefined, tag: string): Promise<string | null> {
+  if (!blobKey) return null;
+  const blob = await getActionBlob(blobKey);
+  if (!blob) return null;
+  const filename = `${serviceId}/${tag}-${blobKey}.jpg`;
+  const { error } = await supabase.storage
+    .from('service-photos')
+    .upload(filename, blob, { contentType: 'image/jpeg', cacheControl: '3600', upsert: true });
+  if (error) throw error; // offline/rede -> mantém pendente
+  return filename;
+}
+
+// Envia UMA ação (Iniciar/Finalizar) para o Supabase: foto(s) -> storage,
 // registro em service_photos e atualização do status do atendimento.
 async function pushAction(action: OperatorAction): Promise<void> {
-  let storagePath: string | null = null;
-
-  if (action.blobKey) {
-    const blob = await getActionBlob(action.blobKey);
-    if (blob) {
-      const filename = `${action.serviceId}/${action.type}-${action.id}.jpg`;
-      const { error } = await supabase.storage
-        .from('service-photos')
-        .upload(filename, blob, { contentType: 'image/jpeg', cacheControl: '3600', upsert: true });
-      if (error) throw error; // offline/rede -> mantém pendente
-      storagePath = filename;
+  if (action.type === 'start') {
+    // Iniciar: só GPS (sem foto). Grava as coordenadas no atendimento para o
+    // mapa já aparecer "em execução" para a equipe interna.
+    if (action.latitude != null) {
+      const { error: pErr } = await supabase.from('service_photos').insert({
+        service_id: action.serviceId,
+        storage_path: null,
+        latitude: action.latitude,
+        longitude: action.longitude,
+        captured_at: action.capturedAt,
+        event_type: 'start',
+      });
+      if (pErr) throw pErr;
     }
-  }
-
-  // Registro do evento (foto/coordenadas) — só se houver algo a registrar.
-  if (storagePath || action.latitude != null) {
-    const { error: pErr } = await supabase.from('service_photos').insert({
-      service_id: action.serviceId,
-      storage_path: storagePath,
+    const { error: sErr } = await supabase.from('services').update({
+      status: 'in_progress',
+      operator_id: action.operatorId,
       latitude: action.latitude,
       longitude: action.longitude,
-      captured_at: action.capturedAt,
-      event_type: action.type,
-    });
+    }).eq('id', action.serviceId);
+    if (sErr) throw sErr;
+    return;
+  }
+
+  // Finalizar: até duas fotos (início e término), ambas opcionais.
+  const finishPath = await uploadPhoto(action.serviceId, action.blobKey, 'finish');
+  const startPath = await uploadPhoto(action.serviceId, action.startBlobKey, 'start');
+
+  const rows: any[] = [];
+  if (finishPath) rows.push({
+    service_id: action.serviceId, storage_path: finishPath,
+    captured_at: action.capturedAt, event_type: 'finish',
+  });
+  if (startPath) rows.push({
+    service_id: action.serviceId, storage_path: startPath,
+    captured_at: action.capturedAt, event_type: 'start',
+  });
+  if (rows.length > 0) {
+    const { error: pErr } = await supabase.from('service_photos').insert(rows);
     if (pErr) throw pErr;
   }
 
-  // Atualiza o atendimento.
-  const updates = action.type === 'start'
-    ? { status: 'in_progress', operator_id: action.operatorId }
-    : {
-        status: 'completed',
-        completed_at: action.capturedAt,
-        latitude: action.latitude,
-        longitude: action.longitude,
-        sync_status: 'synced',
-      };
-  const { error: sErr } = await supabase.from('services').update(updates).eq('id', action.serviceId);
+  // NÃO sobrescreve latitude/longitude — foram gravadas ao Iniciar.
+  const { error: sErr } = await supabase.from('services').update({
+    status: 'completed',
+    completed_at: action.capturedAt,
+    sync_status: 'synced',
+  }).eq('id', action.serviceId);
   if (sErr) throw sErr;
 }
 

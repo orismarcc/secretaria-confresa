@@ -404,6 +404,24 @@ export function ServiceDetailView({
         </div>
       )}
 
+      {/* Localização do atendimento em execução — acesso direto ao mapa para a
+          equipe interna (coordenada captada quando o operador iniciou). */}
+      {!isCompleted && service.status === 'in_progress' && service.latitude && service.longitude && (
+        <div className="rounded-lg bg-blue-500/10 border border-blue-500/30 p-3 flex items-center gap-2">
+          <Navigation className="h-4 w-4 text-blue-500 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-foreground">Localização (em execução)</p>
+            <p className="font-mono text-xs text-muted-foreground">
+              {service.latitude.toFixed(6)}, {service.longitude.toFixed(6)}
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => openInMaps(service.latitude!, service.longitude!)}>
+            <ExternalLink className="h-3 w-3 mr-1" />
+            Mapa
+          </Button>
+        </div>
+      )}
+
       {/* Completion Info - Only for archived services */}
       {isCompleted && (
         <>
