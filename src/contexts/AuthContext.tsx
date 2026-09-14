@@ -25,6 +25,8 @@ interface AuthContextType {
   role: UserRole | null;
   /** Coordenador = admin com cargo "Coordenador" (pode tudo, exceto excluir/alterar funções). */
   isCoordenador: boolean;
+  /** Assistente de Campo = membro interno com acesso restrito (Maquinários + Atendimentos por operador). */
+  isAssistente: boolean;
   /** Admin pleno (Secretário/Diretor/Supervisor) — acesso total, inclusive excluir. */
   isFullAdmin: boolean;
   /** Pode excluir registros (só admin pleno). */
@@ -204,7 +206,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isCoordenador = role === 'admin' && profile?.job_title === 'Coordenador';
-  const isFullAdmin = role === 'admin' && !isCoordenador;
+  const isAssistente = role === 'admin' && profile?.job_title === 'Assistente de Campo';
+  // Admin pleno = admin que NÃO é Coordenador nem Assistente de Campo.
+  const isFullAdmin = role === 'admin' && !isCoordenador && !isAssistente;
 
   return (
     <AuthContext.Provider value={{
@@ -213,6 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       role,
       isCoordenador,
+      isAssistente,
       isFullAdmin,
       canDelete: isFullAdmin,
       isAuthenticated: !!user,

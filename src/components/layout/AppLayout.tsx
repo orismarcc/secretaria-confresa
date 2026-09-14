@@ -52,16 +52,25 @@ const operatorNavItems = [
   { path: '/operator', label: 'Meus Atendimentos', icon: ClipboardList },
 ];
 
+// Assistente de Campo: acesso restrito a Atendimentos (por operador) e Maquinários.
+const assistenteNavItems = [
+  { path: '/field-services', label: 'Atendimentos', icon: ClipboardList },
+  { path: '/machinery', label: 'Maquinários', icon: Wrench },
+];
+
 export function AppLayout({ children }: AppLayoutProps) {
-  const { profile, role, logout, hasRole, isFullAdmin } = useAuth();
+  const { profile, role, logout, hasRole, isFullAdmin, isAssistente } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // DAMs: só admin pleno (Secretário/Diretor/Supervisor), não Coordenador.
-  const navItems = hasRole('admin')
-    ? adminNavItems.filter((item) => item.path !== '/dam' || isFullAdmin)
-    : operatorNavItems;
+  // Assistente de Campo: menu restrito. Demais admins: menu completo (DAMs só
+  // para admin pleno). Operadores: menu de operador.
+  const navItems = isAssistente
+    ? assistenteNavItems
+    : hasRole('admin')
+      ? adminNavItems.filter((item) => item.path !== '/dam' || isFullAdmin)
+      : operatorNavItems;
 
   const handleLogout = async () => {
     await logout();

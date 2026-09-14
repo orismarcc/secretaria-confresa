@@ -20,6 +20,7 @@ import DeliveriesPage from "./pages/DeliveriesPage";
 import ImportServicesPage from "./pages/ImportServicesPage";
 import SettingsPage from "./pages/SettingsPage";
 import OperatorPage from "./pages/OperatorPage";
+import FieldServicesPage from "./pages/FieldServicesPage";
 import DAMPage from "./pages/DAMPage";
 import PatrimonyPage from "./pages/PatrimonyPage";
 import SEFAZPage from "./pages/SEFAZPage";
@@ -30,12 +31,14 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-function ProtectedRoute({ children, adminOnly = false, fullAdminOnly = false }: { children: React.ReactNode; adminOnly?: boolean; fullAdminOnly?: boolean }) {
-  const { isAuthenticated, isLoading, hasRole, isFullAdmin } = useAuth();
+function ProtectedRoute({ children, adminOnly = false, fullAdminOnly = false, assistenteOk = false }: { children: React.ReactNode; adminOnly?: boolean; fullAdminOnly?: boolean; assistenteOk?: boolean }) {
+  const { isAuthenticated, isLoading, hasRole, isFullAdmin, isAssistente } = useAuth();
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if ((adminOnly || fullAdminOnly) && !hasRole('admin')) return <Navigate to="/operator" replace />;
+  // Assistente de Campo: só acessa as áreas liberadas (Maquinários e Atendimentos por operador).
+  if (isAssistente && !assistenteOk) return <Navigate to="/field-services" replace />;
   // DAM e afins: só admin pleno (Secretário/Diretor/Supervisor), não Coordenador.
   if (fullAdminOnly && !isFullAdmin) return <Navigate to="/dashboard" replace />;
 
@@ -43,12 +46,14 @@ function ProtectedRoute({ children, adminOnly = false, fullAdminOnly = false }: 
 }
 
 function AppRoutes() {
-  const { isAuthenticated, hasRole } = useAuth();
+  const { isAuthenticated, hasRole, isAssistente } = useAuth();
+  // Destino inicial: Assistente de Campo vai direto para a área dele.
+  const adminHome = isAssistente ? '/field-services' : '/dashboard';
 
   return (
     <Routes>
-      <Route path="/login" element={isAuthenticated ? <Navigate to={hasRole('admin') ? '/dashboard' : '/operator'} replace /> : <LoginPage />} />
-      <Route path="/" element={<Navigate to={isAuthenticated ? (hasRole('admin') ? '/dashboard' : '/operator') : '/login'} replace />} />
+      <Route path="/login" element={isAuthenticated ? <Navigate to={hasRole('admin') ? adminHome : '/operator'} replace /> : <LoginPage />} />
+      <Route path="/" element={<Navigate to={isAuthenticated ? (hasRole('admin') ? adminHome : '/operator') : '/login'} replace />} />
 
       {/* Admin Routes */}
       <Route path="/dashboard" element={<ProtectedRoute adminOnly><DashboardPage /></ProtectedRoute>} />
@@ -57,7 +62,8 @@ function AppRoutes() {
       <Route path="/operators" element={<ProtectedRoute adminOnly><OperatorsPage /></ProtectedRoute>} />
       <Route path="/demand-types" element={<ProtectedRoute adminOnly><DemandTypesPage /></ProtectedRoute>} />
       <Route path="/settlements" element={<ProtectedRoute adminOnly><SettlementsPage /></ProtectedRoute>} />
-      <Route path="/machinery" element={<ProtectedRoute adminOnly><MachineryPage /></ProtectedRoute>} />
+      <Route path="/machinery" element={<ProtectedRoute adminOnly assistenteOk><MachineryPage /></ProtectedRoute>} />
+      <Route path="/field-services" element={<ProtectedRoute adminOnly assistenteOk><FieldServicesPage /></ProtectedRoute>} />
       <Route path="/maintenance" element={<ProtectedRoute adminOnly><MaintenancePage /></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute adminOnly><AnalyticsPage /></ProtectedRoute>} />
       <Route path="/calendar" element={<ProtectedRoute adminOnly><CalendarPage /></ProtectedRoute>} />
@@ -68,7 +74,7 @@ function AppRoutes() {
       <Route path="/sefaz" element={<ProtectedRoute adminOnly><SEFAZPage /></ProtectedRoute>} />
       <Route path="/import-sefaz" element={<ProtectedRoute adminOnly><ImportSEFAZPage /></ProtectedRoute>} />
       <Route path="/audit" element={<ProtectedRoute adminOnly><AuditPage /></ProtectedRoute>} />
-      <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute assistenteOk><SettingsPage /></ProtectedRoute>} />
 
       {/* Operator Route */}
       <Route path="/operator" element={<ProtectedRoute><OperatorPage /></ProtectedRoute>} />

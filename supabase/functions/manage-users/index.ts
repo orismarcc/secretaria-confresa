@@ -38,6 +38,9 @@ function errorResponse(
 // ---------------------------------------------------------------------------
 // Input validation schemas
 // ---------------------------------------------------------------------------
+// Cargos internos que podem ser criados (além do operador comum).
+const ALLOWED_JOB_TITLES = ["Assistente de Campo"];
+
 const createUserSchema = z.object({
   email: z.string().email("Email inválido").max(255, "Email muito longo"),
   password: z
@@ -49,6 +52,10 @@ const createUserSchema = z.object({
     .min(2, "Nome deve ter no mínimo 2 caracteres")
     .max(100, "Nome muito longo")
     .regex(/^[\p{L}\s'-]+$/u, "Nome contém caracteres inválidos"),
+  // Opcionais: permitem criar um membro interno (ex.: Assistente de Campo).
+  // Ausentes = operador comum (comportamento anterior, retrocompatível).
+  role: z.enum(["operator", "admin"]).optional(),
+  jobTitle: z.string().max(50).optional(),
 });
 
 const updateUserSchema = z.object({
@@ -134,7 +141,25 @@ Deno.serve(async (req) => {
         );
       }
 
-      const { email, password, name } = parsed.data;
+      const { email, password, name, role: reqRole, jobTitle } = parsed.data;
+      const targetRole = reqRole === "admin" ? "admin" : "operator";
+
+      // Defesa em profundidade: criar um MEMBRO INTERNO (role admin e/ou cargo)
+      // exige que o solicitante seja admin PLENO (não Coordenador nem Assistente).
+      if (targetRole === "admin" || jobTitle) {
+        const { data: callerProfile } = await supabaseAdmin
+          .from("profiles")
+          .select("job_title")
+          .eq("id", user.id)
+          .maybeSingle();
+        const callerJob = callerProfile?.job_title ?? "";
+        if (callerJob === "Coordenador" || callerJob === "Assistente de Campo") {
+          return errorResponse(cors, 403, "Sem permissão para criar membros internos.");
+        }
+        if (jobTitle && !ALLOWED_JOB_TITLES.includes(jobTitle)) {
+          return errorResponse(cors, 400, "Cargo interno inválido.");
+        }
+      }
 
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email,
@@ -154,16 +179,16 @@ Deno.serve(async (req) => {
 
       const { error: roleError } = await supabaseAdmin
         .from("user_roles")
-        .insert({ user_id: newUser.user.id, role: "operator", is_active: true });
+        .insert({ user_id: newUser.user.id, role: targetRole, is_active: true });
 
       if (roleError) {
         await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
-        return errorResponse(cors, 500, "Erro interno ao criar operador.");
+        return errorResponse(cors, 500, "Erro interno ao criar usuário.");
       }
 
       const { error: profileError } = await supabaseAdmin
         .from("profiles")
-        .upsert({ id: newUser.user.id, email, name });
+        .upsert({ id: newUser.user.id, email, name, ...(jobTitle ? { job_title: jobTitle } : {}) });
 
       if (profileError) {
         // Non-fatal — log internally only

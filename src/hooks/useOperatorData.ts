@@ -154,6 +154,42 @@ export function useCreateOperator() {
   });
 }
 
+/** Cria um MEMBRO INTERNO com login próprio (ex.: Assistente de Campo).
+ *  Usa a mesma edge function (service role), passando role/cargo. Só admin
+ *  pleno consegue — a função valida o solicitante. */
+export function useCreateInternalUser() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ name, email, password, role, jobTitle }: { name: string; email: string; password: string; role: 'admin' | 'operator'; jobTitle: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const response = await fetch(FUNCTION_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, email, password, role, jobTitle }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Falha ao criar usuário');
+      return data.user;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['operators'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      toast({ title: 'Usuário interno criado com sucesso!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao criar usuário interno', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
 export function useUpdateOperator() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

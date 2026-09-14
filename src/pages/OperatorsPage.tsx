@@ -20,6 +20,7 @@ import { AvatarThumb, AvatarUpload } from '@/components/AvatarUpload';
 import {
   useOperators,
   useCreateOperator,
+  useCreateInternalUser,
   useDeleteOperator,
   useUpdateOperator,
   useToggleOperatorStatus,
@@ -163,7 +164,7 @@ function TechnicianForm({
 
 // ─── Admin edit form (nome + CPF) ─────────────────────────────────────────────
 
-const FUNCOES_EQUIPE = ['Secretário de Agricultura', 'Diretor de Campo', 'Supervisor', 'Coordenador'];
+const FUNCOES_EQUIPE = ['Secretário de Agricultura', 'Diretor de Campo', 'Supervisor', 'Coordenador', 'Assistente de Campo'];
 
 function AdminEditForm({
   initial,
@@ -231,6 +232,7 @@ export default function OperatorsPage() {
 
   // ── Operators state ────────────────────────────────────────────────────────
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [assistFormOpen, setAssistFormOpen] = useState(false);
   const [editingOperator, setEditingOperator] = useState<Operator | null>(null);
   const [deletingOperator, setDeletingOperator] = useState<Operator | null>(null);
   const [metricsOperator, setMetricsOperator] = useState<Operator | null>(null);
@@ -243,6 +245,7 @@ export default function OperatorsPage() {
   const { data: profilesMap } = useProfilesMap();
   const { data: adminUsers = [], isLoading: adminsLoading } = useAdminUsers();
   const createOperator = useCreateOperator();
+  const createInternalUser = useCreateInternalUser();
   const updateOperator = useUpdateOperator();
   const deleteOperator = useDeleteOperator();
   const toggleStatus = useToggleOperatorStatus();
@@ -333,6 +336,23 @@ export default function OperatorsPage() {
       await setOperatorSettlements.mutateAsync({ operatorId: newUser.id, settlementIds });
     }
     setIsFormOpen(false);
+  };
+
+  // Cria um Assistente de Campo (membro interno com login próprio). Reaproveita
+  // o OperatorForm apenas para nome/email/senha + tipos de serviço liberados.
+  const handleCreateAssistente = async (
+    data: { name: string; email: string; password: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[] }
+  ) => {
+    const newUser = await createInternalUser.mutateAsync({
+      name: data.name, email: data.email, password: data.password,
+      role: 'admin', jobTitle: 'Assistente de Campo',
+    });
+    if (newUser?.id) {
+      if (data.cpf || data.avatarUrl) await updateUserProfile.mutateAsync({ id: newUser.id, cpf: data.cpf || undefined, avatar_url: data.avatarUrl ?? undefined });
+      // Tipos de serviço que ele poderá ver (vazio = todos).
+      await setOperatorDemandTypes.mutateAsync({ operatorId: newUser.id, demandTypeIds: data.demandTypeIds });
+    }
+    setAssistFormOpen(false);
   };
 
   const handleUpdate = async (data: { name: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[] }) => {
@@ -595,7 +615,11 @@ export default function OperatorsPage() {
         action={
           activeTab === 'operators'
             ? { label: 'Novo Operador', onClick: () => setIsFormOpen(true), icon: <Plus className="h-4 w-4 mr-2" /> }
-            : { label: 'Novo Responsável', onClick: () => setTechFormOpen(true), icon: <Plus className="h-4 w-4 mr-2" /> }
+            : activeTab === 'admins'
+              ? (isFullAdmin
+                  ? { label: 'Novo Assistente de Campo', onClick: () => setAssistFormOpen(true), icon: <Plus className="h-4 w-4 mr-2" /> }
+                  : undefined)
+              : { label: 'Novo Responsável', onClick: () => setTechFormOpen(true), icon: <Plus className="h-4 w-4 mr-2" /> }
         }
       />
 
@@ -713,6 +737,23 @@ export default function OperatorsPage() {
             demandTypes={operatorDemandTypeOptions}
             machinery={operatorMachineryOptions}
             settlements={operatorSettlementOptions}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Novo Assistente de Campo — membro interno restrito (Maquinários + Atendimentos) */}
+      <Dialog open={assistFormOpen} onOpenChange={setAssistFormOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Novo Assistente de Campo</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">
+            Acesso restrito a Maquinários e Atendimentos (por operador). Selecione os tipos de serviço que ele poderá ver.
+          </p>
+          <OperatorForm
+            onSubmit={handleCreateAssistente}
+            onCancel={() => setAssistFormOpen(false)}
+            isLoading={createInternalUser.isPending || setOperatorDemandTypes.isPending}
+            mode="create"
+            demandTypes={operatorDemandTypeOptions}
           />
         </DialogContent>
       </Dialog>

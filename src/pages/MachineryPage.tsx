@@ -31,6 +31,7 @@ import {
 } from '@/hooks/useSupabaseData';
 import { useOperators } from '@/hooks/useOperatorData';
 import { MachineryRefuelDialog, FUEL_TYPES } from '@/components/MachineryRefuelDialog';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface MachineryItem {
   id: string;
@@ -45,6 +46,9 @@ interface MachineryItem {
 const NO_FUEL = '__none__';
 
 export default function MachineryPage() {
+  const { isAssistente } = useAuth();
+  // Assistente de Campo: só vê e ABASTECE — não cria/edita/exclui maquinário.
+  const canManage = !isAssistente;
   const { data: machinery = [], isLoading } = useMachinery();
   const createMachinery = useCreateMachinery();
   const updateMachinery = useUpdateMachinery();
@@ -196,6 +200,7 @@ export default function MachineryPage() {
           <Switch
             checked={m.is_active}
             onCheckedChange={() => handleToggleActive(m)}
+            disabled={!canManage}
           />
           <Badge variant="outline" className={`hidden sm:inline-flex ${m.is_active ? 'status-completed' : ''}`}>
             {m.is_active ? 'Ativo' : 'Inativo'}
@@ -211,17 +216,21 @@ export default function MachineryPage() {
           <Button variant="ghost" size="icon" onClick={() => setRefuelMachine(m)} title="Abastecimento">
             <Droplet className="h-4 w-4 text-blue-500" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => openEditForm(m)}>
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => { setToDelete(m); setDeleteDialogOpen(true); }}
-            className="text-destructive hover:text-destructive"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          {canManage && (
+            <>
+              <Button variant="ghost" size="icon" onClick={() => openEditForm(m)}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => { setToDelete(m); setDeleteDialogOpen(true); }}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
+          )}
         </div>
       ),
     },
@@ -244,7 +253,7 @@ export default function MachineryPage() {
       <PageHeader
         title="Maquinários"
         description="Gerenciar maquinários para os serviços"
-        action={{ label: 'Novo', onClick: openCreateForm, icon: <Plus className="h-4 w-4 mr-2" /> }}
+        action={canManage ? { label: 'Novo', onClick: openCreateForm, icon: <Plus className="h-4 w-4 mr-2" /> } : undefined}
       />
 
       <div className="mb-4">
