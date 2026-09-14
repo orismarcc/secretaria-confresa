@@ -32,12 +32,17 @@ interface OperatorMachineryOption {
   name: string;
 }
 
+interface OperatorSettlementOption {
+  id: string;
+  name: string;
+}
+
 interface OperatorFormProps {
   defaultValues?: { name: string; email?: string; cpf?: string; avatarUrl?: string | null };
   onSubmit: (
     data:
-      | { name: string; email: string; password: string; cpf: string; avatarUrl: string | null; demandTypeIds: string[]; machineryIds: string[] }
-      | { name: string; cpf: string; avatarUrl: string | null; demandTypeIds: string[]; machineryIds: string[] }
+      | { name: string; email: string; password: string; cpf: string; avatarUrl: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[] }
+      | { name: string; cpf: string; avatarUrl: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[] }
   ) => Promise<void>;
   onCancel: () => void;
   isLoading: boolean;
@@ -50,6 +55,10 @@ interface OperatorFormProps {
   machinery?: OperatorMachineryOption[];
   /** Maquinários já vinculados ao operador (modo edição) */
   initialMachineryIds?: string[];
+  /** Assentamentos disponíveis para conceder acesso */
+  settlements?: OperatorSettlementOption[];
+  /** Assentamentos já atribuídos ao operador (modo edição) */
+  initialSettlementIds?: string[];
 }
 
 export function OperatorForm({
@@ -62,6 +71,8 @@ export function OperatorForm({
   initialDemandTypeIds = [],
   machinery = [],
   initialMachineryIds = [],
+  settlements = [],
+  initialSettlementIds = [],
 }: OperatorFormProps) {
   const [name, setName] = useState(defaultValues?.name || '');
   const [email, setEmail] = useState(defaultValues?.email || '');
@@ -71,6 +82,7 @@ export function OperatorForm({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [demandTypeIds, setDemandTypeIds] = useState<string[]>(initialDemandTypeIds);
   const [machineryIds, setMachineryIds] = useState<string[]>(initialMachineryIds);
+  const [settlementIds, setSettlementIds] = useState<string[]>(initialSettlementIds);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const toggleDemandType = (id: string) => {
@@ -80,6 +92,11 @@ export function OperatorForm({
   };
   const toggleMachinery = (id: string) => {
     setMachineryIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
+  const toggleSettlement = (id: string) => {
+    setSettlementIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
   };
@@ -98,7 +115,7 @@ export function OperatorForm({
         setErrors(fieldErrors);
         return;
       }
-      await onSubmit({ name, email, password, cpf, avatarUrl, demandTypeIds, machineryIds });
+      await onSubmit({ name, email, password, cpf, avatarUrl, demandTypeIds, machineryIds, settlementIds });
     } else {
       const result = editSchema.safeParse({ name });
       if (!result.success) {
@@ -109,7 +126,7 @@ export function OperatorForm({
         setErrors(fieldErrors);
         return;
       }
-      await onSubmit({ name, cpf, avatarUrl, demandTypeIds, machineryIds });
+      await onSubmit({ name, cpf, avatarUrl, demandTypeIds, machineryIds, settlementIds });
     }
   };
 
@@ -243,6 +260,34 @@ export function OperatorForm({
             {machineryIds.length === 0
               ? 'Opcional — registre o(s) maquinário(s) que este operador utiliza.'
               : `${machineryIds.length} maquinário(s) vinculado(s).`}
+          </p>
+        </div>
+      )}
+
+      {/* Assentamentos que o operador pode operar */}
+      {settlements.length > 0 && (
+        <div className="space-y-2">
+          <Label>Assentamentos com acesso</Label>
+          <div className="max-h-44 overflow-y-auto rounded-md border p-2 space-y-1.5">
+            {settlements.map((s) => (
+              <label
+                key={s.id}
+                htmlFor={`settl-${s.id}`}
+                className="flex items-center gap-2.5 px-1.5 py-1 rounded hover:bg-muted/50 cursor-pointer"
+              >
+                <Checkbox
+                  id={`settl-${s.id}`}
+                  checked={settlementIds.includes(s.id)}
+                  onCheckedChange={() => toggleSettlement(s.id)}
+                />
+                <span className="text-sm">{s.name}</span>
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {settlementIds.length === 0
+              ? 'Nenhum selecionado — o operador poderá operar em todos os assentamentos.'
+              : `${settlementIds.length} assentamento(s) selecionado(s). O operador só verá esses no login.`}
           </p>
         </div>
       )}

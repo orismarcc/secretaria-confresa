@@ -17,6 +17,7 @@ import {
   useLocations,
   useUpdateServicePositions,
   useOperatorDemandTypes,
+  useOperatorSettlements,
 } from '@/hooks/useSupabaseData';
 import { enqueueOperatorAction, getPendingActions } from '@/lib/operatorQueue';
 import { useSyncOperatorActions, usePendingActionsCount } from '@/hooks/useOperatorQueue';
@@ -253,19 +254,27 @@ export default function OperatorPage() {
 
   const { data: pendingServicesRaw = [], isLoading: servicesLoading } = usePendingServices();
   const { data: allowedDemandTypeIds = [], isLoading: dtLoading } = useOperatorDemandTypes(user?.id);
+  const { data: allowedSettlementIds = [], isLoading: stLoading } = useOperatorSettlements(user?.id);
   const { data: settlements = [] } = useSettlements();
   const { data: locations = [] } = useLocations();
 
-  const isLoading = servicesLoading || dtLoading;
+  const isLoading = servicesLoading || dtLoading || stLoading;
 
   // Mostra apenas os atendimentos atribuídos a este operador (operator_id).
-  // Ainda respeita a restrição por tipo de serviço, se houver (lista vazia = todos os tipos).
+  // Ainda respeita as restrições por tipo de serviço e por assentamento, se
+  // houver (lista vazia em qualquer uma = sem restrição naquela dimensão).
   const visibleServices = useMemo(() => {
-    const mine = (pendingServicesRaw as DbService[]).filter((s) => s.operator_id === user?.id);
-    if (allowedDemandTypeIds.length === 0) return mine;
-    const allowed = new Set(allowedDemandTypeIds);
-    return mine.filter((s) => allowed.has(s.demand_type_id));
-  }, [pendingServicesRaw, allowedDemandTypeIds, user?.id]);
+    let mine = (pendingServicesRaw as DbService[]).filter((s) => s.operator_id === user?.id);
+    if (allowedDemandTypeIds.length > 0) {
+      const allowedDt = new Set(allowedDemandTypeIds);
+      mine = mine.filter((s) => allowedDt.has(s.demand_type_id));
+    }
+    if (allowedSettlementIds.length > 0) {
+      const allowedSt = new Set(allowedSettlementIds);
+      mine = mine.filter((s) => !s.settlement_id || allowedSt.has(s.settlement_id));
+    }
+    return mine;
+  }, [pendingServicesRaw, allowedDemandTypeIds, allowedSettlementIds, user?.id]);
 
   // Ações ainda não sincronizadas (fila local). Sobrepostas à lista para que,
   // mesmo reabrindo o app OFFLINE no meio do fluxo, os já iniciados apareçam

@@ -42,6 +42,9 @@ import {
   useMachinery,
   useOperatorMachinery,
   useSetOperatorMachinery,
+  useSettlements,
+  useOperatorSettlements,
+  useSetOperatorSettlements,
 } from '@/hooks/useSupabaseData';
 import {
   Plus, Pencil, Trash2, UserCog, BarChart3, CheckCircle,
@@ -236,6 +239,7 @@ export default function OperatorsPage() {
   const { data: services = [] } = useServices();
   const { data: demandTypes = [] } = useDemandTypes();
   const { data: machinery = [] } = useMachinery();
+  const { data: settlements = [] } = useSettlements();
   const { data: profilesMap } = useProfilesMap();
   const { data: adminUsers = [], isLoading: adminsLoading } = useAdminUsers();
   const createOperator = useCreateOperator();
@@ -250,6 +254,7 @@ export default function OperatorsPage() {
   const avatarOf = (id: string) => profilesMap?.get(id)?.avatarUrl || null;
   const setOperatorDemandTypes = useSetOperatorDemandTypes();
   const setOperatorMachinery = useSetOperatorMachinery();
+  const setOperatorSettlements = useSetOperatorSettlements();
 
   // Tipos de serviço ofertáveis a operadores (exclui Entregas — fluxo próprio)
   const operatorDemandTypeOptions = useMemo(
@@ -267,11 +272,21 @@ export default function OperatorsPage() {
     [machinery],
   );
 
-  // Acessos e maquinários já atribuídos ao operador em edição
+  // Assentamentos ofertáveis (ativos, se houver a flag)
+  const operatorSettlementOptions = useMemo(
+    () => (settlements as any[])
+      .filter((s) => s.is_active ?? true)
+      .map((s) => ({ id: s.id, name: s.name })),
+    [settlements],
+  );
+
+  // Acessos, maquinários e assentamentos já atribuídos ao operador em edição
   const { data: editingOperatorDemandTypeIds = [], isLoading: editingDtLoading } =
     useOperatorDemandTypes(editingOperator?.id);
   const { data: editingOperatorMachineryIds = [], isLoading: editingMachLoading } =
     useOperatorMachinery(editingOperator?.id);
+  const { data: editingOperatorSettlementIds = [], isLoading: editingSettlLoading } =
+    useOperatorSettlements(editingOperator?.id);
 
   // ── Technicians state ──────────────────────────────────────────────────────
   const [techFormOpen, setTechFormOpen] = useState(false);
@@ -307,19 +322,20 @@ export default function OperatorsPage() {
 
   // ── Operator helpers ───────────────────────────────────────────────────────
   const handleCreate = async (
-    data: { name: string; email: string; password: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[] }
+    data: { name: string; email: string; password: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[] }
   ) => {
-    const { demandTypeIds, machineryIds, cpf, avatarUrl, ...operatorData } = data;
+    const { demandTypeIds, machineryIds, settlementIds, cpf, avatarUrl, ...operatorData } = data;
     const newUser = await createOperator.mutateAsync(operatorData);
     if (newUser?.id) {
       if (cpf || avatarUrl) await updateUserProfile.mutateAsync({ id: newUser.id, cpf: cpf || undefined, avatar_url: avatarUrl ?? undefined });
       await setOperatorDemandTypes.mutateAsync({ operatorId: newUser.id, demandTypeIds });
       await setOperatorMachinery.mutateAsync({ operatorId: newUser.id, machineryIds });
+      await setOperatorSettlements.mutateAsync({ operatorId: newUser.id, settlementIds });
     }
     setIsFormOpen(false);
   };
 
-  const handleUpdate = async (data: { name: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[] }) => {
+  const handleUpdate = async (data: { name: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[] }) => {
     if (editingOperator) {
       await updateOperator.mutateAsync({ userId: editingOperator.id, name: data.name });
       await updateUserProfile.mutateAsync({ id: editingOperator.id, cpf: data.cpf ?? '', avatar_url: data.avatarUrl ?? null });
@@ -330,6 +346,10 @@ export default function OperatorsPage() {
       await setOperatorMachinery.mutateAsync({
         operatorId: editingOperator.id,
         machineryIds: data.machineryIds,
+      });
+      await setOperatorSettlements.mutateAsync({
+        operatorId: editingOperator.id,
+        settlementIds: data.settlementIds,
       });
       setEditingOperator(null);
     }
@@ -688,10 +708,11 @@ export default function OperatorsPage() {
           <OperatorForm
             onSubmit={handleCreate}
             onCancel={() => setIsFormOpen(false)}
-            isLoading={createOperator.isPending || setOperatorDemandTypes.isPending || setOperatorMachinery.isPending}
+            isLoading={createOperator.isPending || setOperatorDemandTypes.isPending || setOperatorMachinery.isPending || setOperatorSettlements.isPending}
             mode="create"
             demandTypes={operatorDemandTypeOptions}
             machinery={operatorMachineryOptions}
+            settlements={operatorSettlementOptions}
           />
         </DialogContent>
       </Dialog>
@@ -700,7 +721,7 @@ export default function OperatorsPage() {
         <DialogContent>
           <DialogHeader><DialogTitle>Editar Operador</DialogTitle></DialogHeader>
           {editingOperator && (
-            (editingDtLoading || editingMachLoading) ? (
+            (editingDtLoading || editingMachLoading || editingSettlLoading) ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
@@ -710,12 +731,14 @@ export default function OperatorsPage() {
                 defaultValues={{ name: editingOperator.name, email: editingOperator.email, cpf: cpfOf(editingOperator.id), avatarUrl: avatarOf(editingOperator.id) }}
                 onSubmit={handleUpdate}
                 onCancel={() => setEditingOperator(null)}
-                isLoading={updateOperator.isPending || setOperatorDemandTypes.isPending || setOperatorMachinery.isPending}
+                isLoading={updateOperator.isPending || setOperatorDemandTypes.isPending || setOperatorMachinery.isPending || setOperatorSettlements.isPending}
                 mode="edit"
                 demandTypes={operatorDemandTypeOptions}
                 initialDemandTypeIds={editingOperatorDemandTypeIds}
                 machinery={operatorMachineryOptions}
                 initialMachineryIds={editingOperatorMachineryIds}
+                settlements={operatorSettlementOptions}
+                initialSettlementIds={editingOperatorSettlementIds}
               />
             )
           )}

@@ -929,6 +929,65 @@ export function useSetOperatorDemandTypes() {
   });
 }
 
+// ============= OPERATOR SETTLEMENT ACCESS =============
+// Restringe quais assentamentos um operador enxerga/opera.
+// Lista vazia = acesso a todos os assentamentos (retrocompatível).
+export function useOperatorSettlements(operatorId: string | undefined) {
+  return useQuery({
+    queryKey: ['operator_settlements', operatorId],
+    queryFn: async () => {
+      if (!operatorId) return [] as string[];
+      const { data, error } = await supabase
+        .from('operator_settlements')
+        .select('settlement_id')
+        .eq('operator_id', operatorId);
+      if (error) throw error;
+      return (data ?? []).map((r: any) => r.settlement_id as string);
+    },
+    enabled: !!operatorId,
+  });
+}
+
+export function useSetOperatorSettlements() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ operatorId, settlementIds }: { operatorId: string; settlementIds: string[] }) => {
+      // Snapshot para rollback compensatório
+      const { data: existing } = await supabase
+        .from('operator_settlements')
+        .select('settlement_id')
+        .eq('operator_id', operatorId);
+
+      const { error: delErr } = await supabase
+        .from('operator_settlements')
+        .delete()
+        .eq('operator_id', operatorId);
+      if (delErr) throw delErr;
+
+      if (settlementIds.length > 0) {
+        const rows = settlementIds.map((id) => ({ operator_id: operatorId, settlement_id: id }));
+        const { error: insErr } = await supabase.from('operator_settlements').insert(rows);
+        if (insErr) {
+          // Restaura o estado anterior
+          if (existing && existing.length > 0) {
+            await supabase.from('operator_settlements').insert(
+              existing.map((e: any) => ({ operator_id: operatorId, settlement_id: e.settlement_id })),
+            );
+          }
+          throw insErr;
+        }
+      }
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['operator_settlements', variables.operatorId] });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao salvar assentamentos do operador', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
 // Maquinário(s) que o operador utiliza. Vários por operador.
 /** Mapa operador → maquinários vinculados (para auto-preencher no atendimento). */
 export function useOperatorMachineryMap() {
