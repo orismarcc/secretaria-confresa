@@ -1431,15 +1431,17 @@ export default function AnalyticsPage() {
                       <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0 transition-transform group-data-[state=open]:rotate-180 ml-1" />
                     </button>
                   </CollapsibleTrigger>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleExportBySettlement}
-                    className="gap-1.5 shrink-0 text-xs"
-                  >
-                    <FileDown className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Relatório PDF</span>
-                  </Button>
+                  {isFullAdmin && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleExportBySettlement}
+                      className="gap-1.5 shrink-0 text-xs"
+                    >
+                      <FileDown className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Relatório PDF</span>
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CollapsibleContent>
@@ -1509,6 +1511,9 @@ export default function AnalyticsPage() {
             </Card>
           </div>
 
+          {/* Relatórios (PDF) — restrito a admin pleno; Coordenador não baixa. */}
+          {isFullAdmin && (
+          <>
           {/* ── Relatório Executivo (PDF com gráficos) ──────────────────── */}
           <Card className="overflow-hidden border-primary/30">
             <CardHeader className="border-b bg-gradient-to-r from-primary/15 to-primary/5">
@@ -1617,6 +1622,8 @@ export default function AnalyticsPage() {
             demandTypes={demandTypes as any[]}
             settlements={settlements as any[]}
           />
+          </>
+          )}
         </div>
       )}
 

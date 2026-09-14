@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { isDamOverdue } from '@/lib/damUtils';
 import { getUserColorClass } from '@/lib/userColors';
+import { useAuth } from '@/contexts/AuthContext';
 
 function buildWhatsAppUrl(phone: string): string {
   const digits = phone.replace(/\D/g, '');
@@ -112,6 +113,9 @@ export function ServiceDetailView({
   onComunicado,
 }: ServiceDetailViewProps) {
   const { photos, isLoading: photosLoading } = useCombinedServicePhotos(service.id);
+  const { isCoordenador } = useAuth();
+  // DAM (documento e valor) é restrito a admin pleno — Coordenador não vê.
+  const canSeeDam = !isCoordenador;
   const isCompleted = service.status === 'completed';
   const isCancelled = service.status === 'cancelled';
 
@@ -330,8 +334,8 @@ export function ServiceDetailView({
         )}
       </div>
 
-      {/* DAM Section — shown whenever a DAM has been issued */}
-      {service.dam_issued && (
+      {/* DAM Section — shown whenever a DAM has been issued (oculto p/ Coordenador) */}
+      {service.dam_issued && canSeeDam && (
         <>
           <Separator />
           <div className="space-y-3">
@@ -516,7 +520,7 @@ export function ServiceDetailView({
             Finalizar Atendimento
           </Button>
         )}
-        {onComunicado && (
+        {onComunicado && canSeeDam && (
           <Button variant="outline" onClick={onComunicado} className="w-full">
             <FileText className="h-4 w-4 mr-2" />
             Emitir Comunicado (DAM)

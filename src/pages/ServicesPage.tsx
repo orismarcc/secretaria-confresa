@@ -1094,14 +1094,19 @@ export default function ServicesPage() {
         {/* Row 1: search + export */}
         <div className="flex gap-2 items-center flex-wrap">
           <SearchInput value={search} onChange={(v) => { setSearch(v); setCurrentPage(1); }} placeholder="Buscar por produtor..." className="flex-1 min-w-[140px]" />
-          <Button variant="outline" size="sm" onClick={handleExportPDF} className="gap-1.5 shrink-0">
-            <FileDown className="h-4 w-4" />
-            <span className="hidden sm:inline">Lista (PDF)</span>
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleExportExecutive} className="gap-1.5 shrink-0" title="Relatório executivo (atendimentos finalizados) com o filtro atual">
-            <FileText className="h-4 w-4" />
-            <span className="hidden sm:inline">Relatório (PDF)</span>
-          </Button>
+          {/* Downloads de relatório — restritos a admin pleno (Coordenador não baixa). */}
+          {isFullAdmin && (
+            <>
+              <Button variant="outline" size="sm" onClick={handleExportPDF} className="gap-1.5 shrink-0">
+                <FileDown className="h-4 w-4" />
+                <span className="hidden sm:inline">Lista (PDF)</span>
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleExportExecutive} className="gap-1.5 shrink-0" title="Relatório executivo (atendimentos finalizados) com o filtro atual">
+                <FileText className="h-4 w-4" />
+                <span className="hidden sm:inline">Relatório (PDF)</span>
+              </Button>
+            </>
+          )}
         </div>
 
         {/* Row 2: type + settlement + date range + clear */}
