@@ -50,6 +50,7 @@ import {
 import {
   Plus, Pencil, Trash2, UserCog, BarChart3, CheckCircle,
   ClipboardList, HardHat, User, Briefcase, FileText, Loader2,
+  Eye, Landmark,
 } from 'lucide-react';
 import {
   formatDocument,
@@ -290,6 +291,14 @@ export default function OperatorsPage() {
     useOperatorMachinery(editingOperator?.id);
   const { data: editingOperatorSettlementIds = [], isLoading: editingSettlLoading } =
     useOperatorSettlements(editingOperator?.id);
+  // Assentamentos selecionados do operador em foco no painel de detalhes ("olho").
+  const { data: metricsOperatorSettlementIds = [] } = useOperatorSettlements(metricsOperator?.id);
+  const metricsOperatorSettlementNames = useMemo(
+    () => (metricsOperatorSettlementIds as string[])
+      .map((id) => (settlements as any[]).find((s) => s.id === id)?.name)
+      .filter(Boolean) as string[],
+    [metricsOperatorSettlementIds, settlements],
+  );
 
   // ── Technicians state ──────────────────────────────────────────────────────
   const [techFormOpen, setTechFormOpen] = useState(false);
@@ -304,24 +313,44 @@ export default function OperatorsPage() {
   // ── M-10: Memoized operator metrics — O(services + operators) instead of
   //         O(services × operators) per render ────────────────────────────────
   const operatorMetricsMap = useMemo(() => {
-    const map: Record<string, { total: number; byDemandType: { name: string; count: number }[] }> = {};
+    interface M {
+      total: number;
+      hours: number;
+      byDemandType: { name: string; count: number }[];
+      _days: Set<string>;
+      _settlements: Set<string>;
+      dias: number;
+      assentamentosAtendidos: number;
+    }
+    const map: Record<string, M> = {};
     (services as any[])
       .filter(s => s.status === 'completed' && s.operator_id)
       .forEach(s => {
-        if (!map[s.operator_id]) map[s.operator_id] = { total: 0, byDemandType: [] };
-        map[s.operator_id].total++;
+        if (!map[s.operator_id]) map[s.operator_id] = { total: 0, hours: 0, byDemandType: [], _days: new Set(), _settlements: new Set(), dias: 0, assentamentosAtendidos: 0 };
+        const m = map[s.operator_id];
+        m.total++;
+        m.hours += Number(s.worked_hours) || 0;
+        // Dia de operação = data de finalização (só a parte da data).
+        const raw = s.completed_at || s.scheduled_date;
+        if (raw) m._days.add(String(raw).slice(0, 10));
+        if (s.settlement_id) m._settlements.add(s.settlement_id);
         const dt = (demandTypes as any[]).find(d => d.id === s.demand_type_id);
         const name = dt?.name || s.demand_types?.name || 'Desconhecido';
-        const entry = map[s.operator_id].byDemandType.find(e => e.name === name);
+        const entry = m.byDemandType.find(e => e.name === name);
         if (entry) entry.count++;
-        else map[s.operator_id].byDemandType.push({ name, count: 1 });
+        else m.byDemandType.push({ name, count: 1 });
       });
-    Object.values(map).forEach(m => m.byDemandType.sort((a, b) => b.count - a.count));
+    Object.values(map).forEach(m => {
+      m.byDemandType.sort((a, b) => b.count - a.count);
+      m.dias = m._days.size;
+      m.assentamentosAtendidos = m._settlements.size;
+    });
     return map;
   }, [services, demandTypes]);
 
+  const emptyMetrics = { total: 0, hours: 0, byDemandType: [] as { name: string; count: number }[], _days: new Set<string>(), _settlements: new Set<string>(), dias: 0, assentamentosAtendidos: 0 };
   const getOperatorMetrics = (operatorId: string) =>
-    operatorMetricsMap[operatorId] ?? { total: 0, byDemandType: [] };
+    operatorMetricsMap[operatorId] ?? emptyMetrics;
 
   // ── Operator helpers ───────────────────────────────────────────────────────
   const handleCreate = async (
@@ -475,8 +504,8 @@ export default function OperatorsPage() {
       header: 'Ações',
       render: (row: Operator) => (
         <div className="flex gap-1">
-          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setMetricsOperator(row); }} title="Ver métricas">
-            <BarChart3 className="h-4 w-4 text-primary" />
+          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setMetricsOperator(row); }} title="Ver detalhes">
+            <Eye className="h-4 w-4 text-primary" />
           </Button>
           <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditingOperator(row); }}>
             <Pencil className="h-4 w-4" />
@@ -684,7 +713,7 @@ export default function OperatorsPage() {
       <Sheet open={!!metricsOperator} onOpenChange={(open) => !open && setMetricsOperator(null)}>
         <SheetContent className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader>
-            <SheetTitle className="text-left">Métricas do Operador</SheetTitle>
+            <SheetTitle className="text-left">Detalhes do Operador</SheetTitle>
           </SheetHeader>
           {metricsOperator && metricsData && (
             <div className="mt-6 space-y-6">
@@ -704,11 +733,45 @@ export default function OperatorsPage() {
                     <CheckCircle className="h-8 w-8 text-primary" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Total de Atendimentos Finalizados</p>
+                    <p className="text-sm text-muted-foreground">Atendimentos realizados</p>
                     <p className="text-4xl font-black text-foreground">{metricsData.total}</p>
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Resumo em números */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-lg border p-3 text-center">
+                  <p className="text-2xl font-bold text-foreground">{(metricsData as any).dias ?? 0}</p>
+                  <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">dias de operação</p>
+                </div>
+                <div className="rounded-lg border p-3 text-center">
+                  <p className="text-2xl font-bold text-foreground">{(metricsData as any).assentamentosAtendidos ?? 0}</p>
+                  <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">assentamentos atendidos</p>
+                </div>
+                <div className="rounded-lg border p-3 text-center">
+                  <p className="text-2xl font-bold text-foreground">{((metricsData as any).hours ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}</p>
+                  <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">horas realizadas</p>
+                </div>
+              </div>
+
+              {/* Assentamentos que o operador pode operar (selecionados no cadastro) */}
+              <div>
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-2">
+                  <Landmark className="h-4 w-4" />
+                  Assentamentos selecionados
+                </h3>
+                {metricsOperatorSettlementNames.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Todos os assentamentos (nenhuma restrição).</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {metricsOperatorSettlementNames.map((n) => (
+                      <Badge key={n} variant="secondary">{n}</Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div>
                 <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-2">
                   <ClipboardList className="h-4 w-4" />
