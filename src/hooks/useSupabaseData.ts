@@ -932,6 +932,24 @@ export function useSetOperatorDemandTypes() {
 // ============= OPERATOR SETTLEMENT ACCESS =============
 // Restringe quais assentamentos um operador enxerga/opera.
 // Lista vazia = acesso a todos os assentamentos (retrocompatível).
+/** Mapa operador → assentamentos liberados (para auto-preencher no atendimento). */
+export function useOperatorSettlementsMap() {
+  return useQuery({
+    queryKey: ['operator_settlements', 'all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('operator_settlements')
+        .select('operator_id, settlement_id');
+      if (error) throw error;
+      const map: Record<string, string[]> = {};
+      (data ?? []).forEach((r: any) => {
+        (map[r.operator_id] = map[r.operator_id] || []).push(r.settlement_id);
+      });
+      return map;
+    },
+  });
+}
+
 export function useOperatorSettlements(operatorId: string | undefined) {
   return useQuery({
     queryKey: ['operator_settlements', operatorId],

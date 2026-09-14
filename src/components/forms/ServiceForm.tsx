@@ -133,6 +133,8 @@ interface ServiceFormProps {
   machinery?: MachineryOption[];
   /** operador → maquinário(s) vinculado(s) no cadastro, p/ auto-preencher. */
   operatorMachineryMap?: Record<string, string[]>;
+  /** operador → assentamento(s) liberado(s), p/ pré-selecionar o operador pelo produtor. */
+  operatorSettlementsMap?: Record<string, string[]>;
   responsibleTechnicians?: TechnicianOption[];
   onSubmit: (data: ServiceFormData) => void;
 }
@@ -301,6 +303,7 @@ export function ServiceForm({
   operators = [],
   machinery = [],
   operatorMachineryMap = {},
+  operatorSettlementsMap = {},
   responsibleTechnicians = [],
   onSubmit,
 }: ServiceFormProps) {
@@ -448,6 +451,26 @@ export function ServiceForm({
       form.setValue('workedHours', 0);
     }
   }, [isImplementos, form]);
+
+  // Auto-preenche o operador (e seu maquinário) ao escolher o produtor, com base
+  // no assentamento do produtor: pega o operador que tem aquele assentamento
+  // liberado no cadastro. Só em NOVOS atendimentos e pode ser trocado depois.
+  useEffect(() => {
+    if (service) return;                 // não mexe ao editar um atendimento existente
+    if (!selectedProducer) return;
+    const settlementId = (selectedProducer as any).settlementId;
+    if (!settlementId) return;
+    const opId = Object.keys(operatorSettlementsMap).find(
+      (oid) => (operatorSettlementsMap[oid] || []).includes(settlementId)
+        && operators.some((o) => o.id === oid),
+    );
+    if (!opId) return;
+    form.setValue('operatorId', opId);
+    const machs = operatorMachineryMap[opId] || [];
+    const firstMach = machs.find((id) => machinery.some((m) => m.id === id));
+    if (firstMach) form.setValue('machineryId', firstMach);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProducerId]);
 
   const handleSubmit = (data: ServiceFormData) => {
     onSubmit({ ...data, damReceiptFile: damReceiptFile || null, limestoneOrderFile: limestoneOrderFile || null } as any);

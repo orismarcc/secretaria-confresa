@@ -61,6 +61,7 @@ import {
   useLocations,
   useMachinery,
   useOperatorMachineryMap,
+  useOperatorSettlementsMap,
   useCreateService,
   useUpdateService,
   useDeleteService,
@@ -191,6 +192,7 @@ export default function ServicesPage() {
   const { data: locations = [] } = useLocations();
   const { data: machinery = [] } = useMachinery();
   const { data: operatorMachineryMap = {} } = useOperatorMachineryMap();
+  const { data: operatorSettlementsMap = {} } = useOperatorSettlementsMap();
   const { data: operators = [] } = useOperators();
   const { data: responsibleTechnicians = [] } = useResponsibleTechnicians();
   const createService = useCreateService();
@@ -1433,6 +1435,7 @@ export default function ServicesPage() {
         operators={(operators || []).filter(op => op.is_active).map(op => ({ id: op.id, name: op.name }))}
         machinery={(machinery || []).filter((m: any) => m.is_active).map((m: any) => ({ id: m.id, name: m.name, patrimony_number: m.patrimony_number }))}
         operatorMachineryMap={operatorMachineryMap}
+        operatorSettlementsMap={operatorSettlementsMap}
         responsibleTechnicians={(responsibleTechnicians as any[]).filter((t: any) => t.is_active).map((t: any) => ({ id: t.id, name: t.name, cargo: t.cargo }))}
         onSubmit={editingService ? handleEdit : handleCreate}
       />
