@@ -73,6 +73,8 @@ export interface ExecutiveReportOptions {
   demandTypeId?: string;
   /** true = relatório só de atendimentos (oculta KPIs/série de Entregas). */
   servicesOnly?: boolean;
+  /** true = inclui o KPI "Arrecadado (DAMs pagas)". Restrito a admin pleno. */
+  includeDamRevenue?: boolean;
 }
 
 // ─── Bar chart (vetorial) ──────────────────────────────────────────────────────
@@ -419,7 +421,7 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
     kpis.push({ label: 'Horas trabalhadas', value: `${fmtDec(horasTrabalhadas)} h`, color: AMBER });
   if (includeServices && combustivelConsumido > 0)
     kpis.push({ label: 'Combustível consumido', value: `${fmtDec(combustivelConsumido)} L`, color: BLUE });
-  if (includeServices && arrecadadoDam > 0)
+  if (includeServices && arrecadadoDam > 0 && opts.includeDamRevenue)
     kpis.push({ label: 'Arrecadado (DAMs pagas)', value: fmtBRL(arrecadadoDam), color: GREEN });
 
   // ── Série mensal (últimos 12 meses) ───────────────────────────────────────

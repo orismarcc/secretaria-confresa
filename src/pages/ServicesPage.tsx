@@ -180,7 +180,7 @@ export default function ServicesPage() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { role, canDelete } = useAuth();
+  const { role, canDelete, isFullAdmin } = useAuth();
   const isAdmin = role === 'admin';
 
   const { data: services = [], isLoading: servicesLoading } = useServices();
@@ -969,6 +969,7 @@ export default function ServicesPage() {
       settlementId: settlementFilter,
       demandTypeId,
       servicesOnly: true,
+      includeDamRevenue: isFullAdmin,
     });
   };
 

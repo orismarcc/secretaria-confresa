@@ -1599,6 +1599,7 @@ export default function AnalyticsPage() {
                     settlementId: execSettlement,
                     deliveryLotId: execCategory === 'entregas' ? execDeliveryLot : 'all',
                     demandTypeId: execDemandTypeOptions.length > 0 ? execDemandType : 'all',
+                    includeDamRevenue: isFullAdmin,
                   })}
                   className="w-full gap-2"
                 >
