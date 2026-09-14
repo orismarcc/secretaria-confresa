@@ -1123,7 +1123,7 @@ export function useCreateMachinery() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (item: { name: string; patrimony_number: string; chassis?: string | null }) => {
+    mutationFn: async (item: { name: string; patrimony_number: string; chassis?: string | null; fuel_type?: string | null }) => {
       const { data, error } = await supabase
         .from('machinery')
         .insert(item)
@@ -1183,6 +1183,97 @@ export function useDeleteMachinery() {
     },
     onError: (error: Error) => {
       toast({ title: 'Erro ao remover maquinário', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
+// ============= MACHINERY REFUELS (abastecimento por máquina) =============
+export interface MachineryRefuel {
+  id: string;
+  machinery_id: string;
+  liters: number;
+  fuel_type: string | null;
+  refueled_at: string;
+  note: string | null;
+  created_at: string;
+}
+
+/** Abastecimentos de uma máquina (mais recente primeiro). */
+export function useMachineryRefuels(machineryId: string | undefined) {
+  return useQuery({
+    queryKey: ['machinery_refuels', machineryId],
+    queryFn: async () => {
+      if (!machineryId) return [] as MachineryRefuel[];
+      const { data, error } = await supabase
+        .from('machinery_refuels')
+        .select('id, machinery_id, liters, fuel_type, refueled_at, note, created_at')
+        .eq('machinery_id', machineryId)
+        .order('refueled_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as MachineryRefuel[];
+    },
+    enabled: !!machineryId,
+  });
+}
+
+/** Total de litros abastecidos por máquina (mapa machinery_id → litros). */
+export function useMachineryRefuelTotals() {
+  return useQuery({
+    queryKey: ['machinery_refuels', 'totals'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('machinery_refuels')
+        .select('machinery_id, liters');
+      if (error) throw error;
+      const map: Record<string, number> = {};
+      (data ?? []).forEach((r: any) => {
+        map[r.machinery_id] = (map[r.machinery_id] || 0) + Number(r.liters || 0);
+      });
+      return map;
+    },
+  });
+}
+
+export function useCreateMachineryRefuel() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (item: { machinery_id: string; liters: number; fuel_type?: string | null; refueled_at?: string; note?: string | null }) => {
+      const { data: auth } = await supabase.auth.getUser();
+      const { data, error } = await supabase
+        .from('machinery_refuels')
+        .insert({ ...item, created_by: auth?.user?.id ?? null })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['machinery_refuels', variables.machinery_id] });
+      queryClient.invalidateQueries({ queryKey: ['machinery_refuels', 'totals'] });
+      toast({ title: 'Abastecimento registrado!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao registrar abastecimento', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
+export function useDeleteMachineryRefuel() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; machinery_id: string }) => {
+      const { error } = await supabase.from('machinery_refuels').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['machinery_refuels', variables.machinery_id] });
+      queryClient.invalidateQueries({ queryKey: ['machinery_refuels', 'totals'] });
+      toast({ title: 'Abastecimento removido.' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao remover abastecimento', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }

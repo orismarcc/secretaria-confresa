@@ -16,40 +16,67 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Pencil, Trash2, Wrench } from 'lucide-react';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { Plus, Pencil, Trash2, Wrench, Droplet, User } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   useMachinery,
   useCreateMachinery,
   useUpdateMachinery,
   useDeleteMachinery,
+  useOperatorMachineryMap,
+  useMachineryRefuelTotals,
 } from '@/hooks/useSupabaseData';
+import { useOperators } from '@/hooks/useOperatorData';
+import { MachineryRefuelDialog, FUEL_TYPES } from '@/components/MachineryRefuelDialog';
 
 interface MachineryItem {
   id: string;
   name: string;
   patrimony_number: string;
   chassis: string | null;
+  fuel_type: string | null;
   is_active: boolean;
   created_at: string | null;
 }
+
+const NO_FUEL = '__none__';
 
 export default function MachineryPage() {
   const { data: machinery = [], isLoading } = useMachinery();
   const createMachinery = useCreateMachinery();
   const updateMachinery = useUpdateMachinery();
   const deleteMachinery = useDeleteMachinery();
+  const { data: operators = [] } = useOperators();
+  const { data: opMachineryMap = {} } = useOperatorMachineryMap();
+  const { data: refuelTotals = {} } = useMachineryRefuelTotals();
+
+  // Mapa maquinário → nomes de operadores (a partir do vínculo em Operadores).
+  const machineryOperators = (() => {
+    const nameById = new Map<string, string>((operators as any[]).map((o) => [o.id, o.name]));
+    const map: Record<string, string[]> = {};
+    Object.entries(opMachineryMap as Record<string, string[]>).forEach(([opId, machIds]) => {
+      const opName = nameById.get(opId);
+      if (!opName) return;
+      (machIds || []).forEach((mid) => { (map[mid] = map[mid] || []).push(opName); });
+    });
+    return map;
+  })();
 
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<MachineryItem | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [toDelete, setToDelete] = useState<MachineryItem | null>(null);
+  const [refuelMachine, setRefuelMachine] = useState<MachineryItem | null>(null);
 
   // Form state
   const [formName, setFormName] = useState('');
   const [formPatrimony, setFormPatrimony] = useState('');
   const [formChassis, setFormChassis] = useState('');
+  const [formFuel, setFormFuel] = useState('');
 
   const filtered = machinery.filter((m: MachineryItem) =>
     textIncludes(m.name, search) ||
@@ -61,6 +88,7 @@ export default function MachineryPage() {
     setFormName('');
     setFormPatrimony('');
     setFormChassis('');
+    setFormFuel('');
     setFormOpen(true);
   };
 
@@ -69,6 +97,7 @@ export default function MachineryPage() {
     setFormName(item.name);
     setFormPatrimony(item.patrimony_number);
     setFormChassis(item.chassis || '');
+    setFormFuel(item.fuel_type || '');
     setFormOpen(true);
   };
 
@@ -80,12 +109,14 @@ export default function MachineryPage() {
         name: formName,
         patrimony_number: formPatrimony,
         chassis: formChassis || null,
+        fuel_type: formFuel || null,
       });
     } else {
       createMachinery.mutate({
         name: formName,
         patrimony_number: formPatrimony,
         chassis: formChassis || null,
+        fuel_type: formFuel || null,
       });
     }
     setFormOpen(false);
@@ -123,8 +154,39 @@ export default function MachineryPage() {
     {
       key: 'chassis',
       header: 'Chassi',
-      className: 'hidden sm:table-cell',
+      className: 'hidden lg:table-cell',
       render: (m: MachineryItem) => m.chassis || '—',
+    },
+    {
+      key: 'operator',
+      header: 'Operador',
+      render: (m: MachineryItem) => {
+        const ops = machineryOperators[m.id] || [];
+        return ops.length > 0 ? (
+          <span className="inline-flex items-center gap-1.5 text-sm">
+            <User className="h-3.5 w-3.5 text-violet-600 shrink-0" />
+            <span className="truncate max-w-[160px]">{ops.join(', ')}</span>
+          </span>
+        ) : <span className="text-muted-foreground text-sm">—</span>;
+      },
+    },
+    {
+      key: 'fuel',
+      header: 'Combustível',
+      className: 'hidden sm:table-cell',
+      render: (m: MachineryItem) => {
+        const total = Number((refuelTotals as Record<string, number>)[m.id] || 0);
+        return (
+          <div className="text-sm">
+            <span>{m.fuel_type || '—'}</span>
+            {total > 0 && (
+              <span className="block text-xs text-blue-600 font-medium">
+                {total.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} L
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'status',
@@ -146,6 +208,9 @@ export default function MachineryPage() {
       header: '',
       render: (m: MachineryItem) => (
         <div className="flex gap-1">
+          <Button variant="ghost" size="icon" onClick={() => setRefuelMachine(m)} title="Abastecimento">
+            <Droplet className="h-4 w-4 text-blue-500" />
+          </Button>
           <Button variant="ghost" size="icon" onClick={() => openEditForm(m)}>
             <Pencil className="h-4 w-4" />
           </Button>
@@ -229,6 +294,19 @@ export default function MachineryPage() {
                 placeholder="Ex: 9BWHE21JX24060811"
               />
             </div>
+            <div className="space-y-2">
+              <Label>Tipo de combustível (opcional)</Label>
+              <Select
+                value={formFuel || NO_FUEL}
+                onValueChange={(v) => setFormFuel(v === NO_FUEL ? '' : v)}
+              >
+                <SelectTrigger><SelectValue placeholder="Selecione o combustível" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_FUEL}>—</SelectItem>
+                  {FUEL_TYPES.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
                 Cancelar
@@ -249,6 +327,14 @@ export default function MachineryPage() {
         onConfirm={handleDelete}
         confirmLabel="Excluir"
         variant="destructive"
+      />
+
+      <MachineryRefuelDialog
+        open={!!refuelMachine}
+        onOpenChange={(o) => { if (!o) setRefuelMachine(null); }}
+        machineryId={refuelMachine?.id ?? null}
+        machineryName={refuelMachine?.name}
+        defaultFuelType={refuelMachine?.fuel_type}
       />
     </AppLayout>
   );
