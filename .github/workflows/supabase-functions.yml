@@ -1,0 +1,34 @@
+name: Deploy Supabase Functions
+
+# Deploya as Edge Functions automaticamente quando algo em supabase/functions/**
+# muda no main. Também pode ser disparado manualmente (Actions → Run workflow).
+#
+# Pré-requisito (uma única vez): criar o secret SUPABASE_ACCESS_TOKEN no GitHub
+# (Settings → Secrets and variables → Actions). O token é gerado em
+# https://supabase.com/dashboard/account/tokens
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - '.github/workflows/supabase-functions.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy edge functions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy manage-users --project-ref pqvsdzvmbwbotkfggcxc
