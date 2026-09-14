@@ -30,12 +30,14 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-function ProtectedRoute({ children, adminOnly = false }: { children: React.ReactNode; adminOnly?: boolean }) {
-  const { isAuthenticated, isLoading, hasRole } = useAuth();
+function ProtectedRoute({ children, adminOnly = false, fullAdminOnly = false }: { children: React.ReactNode; adminOnly?: boolean; fullAdminOnly?: boolean }) {
+  const { isAuthenticated, isLoading, hasRole, isFullAdmin } = useAuth();
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (adminOnly && !hasRole('admin')) return <Navigate to="/operator" replace />;
+  if ((adminOnly || fullAdminOnly) && !hasRole('admin')) return <Navigate to="/operator" replace />;
+  // DAM e afins: só admin pleno (Secretário/Diretor/Supervisor), não Coordenador.
+  if (fullAdminOnly && !isFullAdmin) return <Navigate to="/dashboard" replace />;
 
   return <>{children}</>;
 }
@@ -61,7 +63,7 @@ function AppRoutes() {
       <Route path="/calendar" element={<ProtectedRoute adminOnly><CalendarPage /></ProtectedRoute>} />
       <Route path="/deliveries" element={<ProtectedRoute adminOnly><DeliveriesPage /></ProtectedRoute>} />
       <Route path="/import" element={<ProtectedRoute adminOnly><ImportServicesPage /></ProtectedRoute>} />
-      <Route path="/dam" element={<ProtectedRoute adminOnly><DAMPage /></ProtectedRoute>} />
+      <Route path="/dam" element={<ProtectedRoute fullAdminOnly><DAMPage /></ProtectedRoute>} />
       <Route path="/patrimony" element={<ProtectedRoute adminOnly><PatrimonyPage /></ProtectedRoute>} />
       <Route path="/sefaz" element={<ProtectedRoute adminOnly><SEFAZPage /></ProtectedRoute>} />
       <Route path="/import-sefaz" element={<ProtectedRoute adminOnly><ImportSEFAZPage /></ProtectedRoute>} />

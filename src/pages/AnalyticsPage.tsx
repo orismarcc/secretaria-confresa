@@ -18,6 +18,7 @@ import {
 import { DEMAND_CATEGORIES } from '@/components/forms/DemandTypeForm';
 import { generateExecutiveReport } from '@/lib/executiveReportPdf';
 import { useServices, useSettlements, useDemandTypes, useDeliveries, useProducers } from '@/hooks/useSupabaseData';
+import { useAuth } from '@/contexts/AuthContext';
 import { useOperators } from '@/hooks/useOperatorData';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -130,6 +131,7 @@ function RankingItem({ position, name, count, maxCount, patrulha, producersCount
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function AnalyticsPage() {
   const navigate = useNavigate();
+  const { isFullAdmin } = useAuth();
   const { data: services = [], isLoading: servicesLoading } = useServices();
   const { data: settlements = [], isLoading: settlementsLoading } = useSettlements();
   const { data: demandTypes = [], isLoading: demandTypesLoading } = useDemandTypes();
@@ -921,7 +923,8 @@ export default function AnalyticsPage() {
             </Card>
           </div>
 
-          {/* Arrecadação de DAMs */}
+          {/* Arrecadação de DAMs — só admin pleno (Secretário/Diretor/Supervisor) */}
+          {isFullAdmin && (
           <Card className="overflow-hidden bg-gradient-to-br from-success/10 via-emerald-500/5 to-background border-success/20">
             <CardContent className="p-4 sm:p-6 flex items-center gap-3 sm:gap-4">
               <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-br from-success to-emerald-600 shadow-lg shadow-success/30 shrink-0">
@@ -938,6 +941,7 @@ export default function AnalyticsPage() {
               </div>
             </CardContent>
           </Card>
+          )}
 
           {/* ── Seletor de período global ───────────────────────────────── */}
           <div className="flex items-center justify-between flex-wrap gap-3">

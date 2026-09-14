@@ -53,12 +53,15 @@ const operatorNavItems = [
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const { profile, role, logout, hasRole } = useAuth();
+  const { profile, role, logout, hasRole, isFullAdmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const navItems = hasRole('admin') ? adminNavItems : operatorNavItems;
+  // DAMs: só admin pleno (Secretário/Diretor/Supervisor), não Coordenador.
+  const navItems = hasRole('admin')
+    ? adminNavItems.filter((item) => item.path !== '/dam' || isFullAdmin)
+    : operatorNavItems;
 
   const handleLogout = async () => {
     await logout();

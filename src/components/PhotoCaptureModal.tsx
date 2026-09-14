@@ -54,12 +54,9 @@ export function PhotoCaptureModal({
 
   const handleStartCamera = async () => {
     setPermDenied(false);
-    if ('permissions' in navigator) {
-      try {
-        const perm = await navigator.permissions.query({ name: 'camera' as PermissionName });
-        if (perm.state === 'denied') { setPermDenied(true); return; }
-      } catch { /* sem Permissions API */ }
-    }
+    // Não pré-bloqueia por navigator.permissions.query (em vários Androids ele
+    // retorna "denied" indevidamente). Tenta abrir a câmera direto — o próprio
+    // navegador pede a permissão. Só marca negado se o getUserMedia falhar.
     setShowCamera(true);
     const ok = await startCamera();
     if (!ok) { setShowCamera(false); setPermDenied(true); }
