@@ -145,13 +145,21 @@ export function PhotoCaptureModal({
               </>
             )}
 
-            {/* GPS (opcional) */}
+            {/* GPS (opcional, mas destacado para não ser esquecido) */}
             {coords ? (
-              <p className="text-xs text-success font-mono">✓ GPS {coords.latitude.toFixed(5)}, {coords.longitude.toFixed(5)}</p>
+              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-success/10 border border-success/30">
+                <MapPin className="h-4 w-4 shrink-0 text-success" />
+                <p className="text-xs text-success font-mono">GPS marcado: {coords.latitude.toFixed(5)}, {coords.longitude.toFixed(5)}</p>
+              </div>
             ) : (
-              <Button variant="ghost" size="sm" onClick={handleGps} disabled={gpsLoading} className="text-muted-foreground">
+              <Button
+                variant="outline"
+                onClick={handleGps}
+                disabled={gpsLoading}
+                className="w-full border-primary/40 text-primary hover:bg-primary/10 hover:text-primary"
+              >
                 {gpsLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <MapPin className="h-4 w-4 mr-2" />}
-                Adicionar localização (opcional)
+                {gpsLoading ? 'Obtendo localização…' : '📍 Marcar localização (GPS)'}
               </Button>
             )}
 
