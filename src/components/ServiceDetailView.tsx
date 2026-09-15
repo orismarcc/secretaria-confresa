@@ -85,6 +85,7 @@ interface ServiceDetailViewProps {
     locations?: { name: string } | null;
     machinery?: { name: string; patrimony_number: string } | null;
     profiles?: { name: string } | null;
+    operador?: { name: string } | null;
     responsible_technicians?: { name: string } | null;
   };
   producer?: { name: string; cpf: string; phone?: string; location_name?: string; latitude?: number | null; longitude?: number | null } | null;
@@ -306,14 +307,17 @@ export function ServiceDetailView({
               {service.created_at
                 ? format(new Date(service.created_at.replace(' ', 'T')), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
                 : format(new Date(service.scheduled_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
+              {service.profiles?.name && (
+                <span className={`font-medium ${getUserColorClass(service.profiles.name)}`}> - {service.profiles.name}</span>
+              )}
             </p>
           </div>
         </div>
 
-        {service.profiles?.name && (
+        {service.operador?.name && (
           <div>
-            <p className="text-sm text-muted-foreground">Cadastrado por</p>
-            <p className={`font-medium ${getUserColorClass(service.profiles.name)}`}>{service.profiles.name}</p>
+            <p className="text-sm text-muted-foreground">Operador</p>
+            <p className={`font-medium ${getUserColorClass(service.operador.name)}`}>{service.operador.name}</p>
           </div>
         )}
 
