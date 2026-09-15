@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/StatusBadge';
-import { MapPin, Phone, Calendar, Clock, GripVertical, Navigation, User, MessageCircle, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { MapPin, Phone, Calendar, Clock, GripVertical, Navigation, User, MessageCircle, RefreshCw, CheckCircle2, Banknote } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { OnlineIndicator } from '@/components/ConnectionStatus';
@@ -65,6 +65,8 @@ interface DbService {
   longitude?: number | null;
   position?: number | null;
   worked_hours?: number | null;
+  dam_paid?: boolean | null;
+  dam_issued?: boolean | null;
   producers?: { name: string; phone?: string | null; location_name?: string | null; latitude?: number | null; longitude?: number | null } | null;
   demand_types?: { name: string } | null;
   settlements?: { name: string } | null;
@@ -140,6 +142,21 @@ function OperatorCardBody({
           <MapPin className="h-4 w-4" />
           {settlementName} - {locationName}
         </div>
+        {/* Status da DAM (paga ou não) */}
+        {(() => {
+          const damPaid = (service as any).dam_paid === true;
+          return (
+            <div className="flex items-center gap-2">
+              <Banknote className={cn('h-4 w-4 shrink-0', damPaid ? 'text-success' : 'text-amber-600')} />
+              <span className={cn(
+                'text-xs font-semibold rounded-full px-2 py-0.5',
+                damPaid ? 'bg-success/10 text-success' : 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+              )}>
+                {damPaid ? 'DAM paga' : 'DAM não paga'}
+              </span>
+            </div>
+          );
+        })()}
         <div className="flex items-center gap-2">
           <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
           {service.producers?.phone ? (
