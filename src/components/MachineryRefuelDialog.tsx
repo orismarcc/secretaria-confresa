@@ -209,7 +209,7 @@ export function MachineryRefuelDialog({
                     <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()} className={cameraSupported ? '' : 'col-span-2'}>
                       <Upload className="h-4 w-4 mr-2" /> Galeria
                     </Button>
-                    <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleFile} className="hidden" />
+                    <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
                   </div>
                 )}
               </div>

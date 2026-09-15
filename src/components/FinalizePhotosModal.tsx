@@ -120,7 +120,7 @@ export function FinalizePhotosModal({
           <Button variant="outline" onClick={() => inputRef.current?.click()} className={cameraSupported && !permDenied ? '' : 'col-span-2'}>
             <Upload className="h-4 w-4 mr-2" /> Galeria
           </Button>
-          <input ref={inputRef} type="file" accept="image/*" capture="environment" onChange={(e) => handleFileSelect(slot, e)} className="hidden" />
+          <input ref={inputRef} type="file" accept="image/*" onChange={(e) => handleFileSelect(slot, e)} className="hidden" />
         </div>
       )}
     </div>

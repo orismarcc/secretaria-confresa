@@ -1006,6 +1006,28 @@ export function useSetOperatorSettlements() {
   });
 }
 
+/** Métricas do próprio operador: finalizados, horas e assentamentos atendidos. */
+export function useOperatorOwnStats(operatorId: string | undefined) {
+  return useQuery({
+    queryKey: ['operator_own_stats', operatorId],
+    queryFn: async () => {
+      if (!operatorId) return { total: 0, hours: 0, assentamentos: 0 };
+      const { data, error } = await supabase
+        .from('services')
+        .select('worked_hours, settlement_id')
+        .eq('operator_id', operatorId)
+        .eq('status', 'completed');
+      if (error) throw error;
+      const rows = (data ?? []) as any[];
+      const total = rows.length;
+      const hours = rows.reduce((s, r) => s + (Number(r.worked_hours) || 0), 0);
+      const assentamentos = new Set(rows.map((r) => r.settlement_id).filter(Boolean)).size;
+      return { total, hours, assentamentos };
+    },
+    enabled: !!operatorId,
+  });
+}
+
 // ============= OPERATOR GLEBA ACCESS (refina o assentamento) =============
 // Glebas liberadas ao operador. Sem glebas de um assentamento = assentamento
 // inteiro; com glebas = restrito a elas.

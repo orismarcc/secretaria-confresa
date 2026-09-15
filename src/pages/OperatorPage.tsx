@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/StatusBadge';
-import { MapPin, Phone, Calendar, Clock, GripVertical, Navigation, User, MessageCircle, RefreshCw } from 'lucide-react';
+import { MapPin, Phone, Calendar, Clock, GripVertical, Navigation, User, MessageCircle, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { OnlineIndicator } from '@/components/ConnectionStatus';
@@ -21,6 +21,7 @@ import {
   useOperatorSettlements,
   useOperatorGlebas,
   useGlebas,
+  useOperatorOwnStats,
 } from '@/hooks/useSupabaseData';
 import { enqueueOperatorAction, getPendingActions } from '@/lib/operatorQueue';
 import { useSyncOperatorActions, usePendingActionsCount } from '@/hooks/useOperatorQueue';
@@ -262,6 +263,7 @@ export default function OperatorPage() {
   const { data: allowedSettlementIds = [], isLoading: stLoading } = useOperatorSettlements(user?.id);
   const { data: allowedGlebaIds = [], isLoading: gLoading } = useOperatorGlebas(user?.id);
   const { data: glebas = [] } = useGlebas();
+  const { data: ownStats } = useOperatorOwnStats(user?.id);
   const { data: settlements = [] } = useSettlements();
   const { data: locations = [] } = useLocations();
 
@@ -503,6 +505,27 @@ export default function OperatorPage() {
             {pendingCount} registro{pendingCount > 1 ? 's' : ''} aguardando sincronização
             {isOnline ? ' — enviando…' : ' — será enviado quando o sinal voltar.'}
           </span>
+        </div>
+      )}
+
+      {/* Minhas métricas — atendimentos finalizados, horas e assentamentos */}
+      {ownStats && (
+        <div className="mb-4 grid grid-cols-3 gap-2">
+          <div className="rounded-lg border p-3 text-center">
+            <CheckCircle2 className="h-4 w-4 mx-auto text-success mb-1" />
+            <p className="text-2xl font-bold leading-none">{ownStats.total}</p>
+            <p className="text-[11px] text-muted-foreground leading-tight mt-1">atendimentos finalizados</p>
+          </div>
+          <div className="rounded-lg border p-3 text-center">
+            <Clock className="h-4 w-4 mx-auto text-primary mb-1" />
+            <p className="text-2xl font-bold leading-none">{ownStats.hours.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}</p>
+            <p className="text-[11px] text-muted-foreground leading-tight mt-1">horas realizadas</p>
+          </div>
+          <div className="rounded-lg border p-3 text-center">
+            <MapPin className="h-4 w-4 mx-auto text-blue-500 mb-1" />
+            <p className="text-2xl font-bold leading-none">{ownStats.assentamentos}</p>
+            <p className="text-[11px] text-muted-foreground leading-tight mt-1">assentamentos atendidos</p>
+          </div>
         </div>
       )}
 

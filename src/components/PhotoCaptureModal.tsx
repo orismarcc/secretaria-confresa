@@ -140,7 +140,7 @@ export function PhotoCaptureModal({
                   <Button variant="outline" onClick={() => fileInputRef.current?.click()} className={cameraSupported && !permDenied ? '' : 'col-span-2'}>
                     <Upload className="h-4 w-4 mr-2" /> Galeria
                   </Button>
-                  <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleFileSelect} className="hidden" />
+                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
                 </div>
               </>
             )}
