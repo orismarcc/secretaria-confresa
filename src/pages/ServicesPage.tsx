@@ -62,6 +62,8 @@ import {
   useMachinery,
   useOperatorMachineryMap,
   useOperatorSettlementsMap,
+  useOperatorGlebasMap,
+  useGlebas,
   useCreateService,
   useUpdateService,
   useDeleteService,
@@ -193,6 +195,12 @@ export default function ServicesPage() {
   const { data: machinery = [] } = useMachinery();
   const { data: operatorMachineryMap = {} } = useOperatorMachineryMap();
   const { data: operatorSettlementsMap = {} } = useOperatorSettlementsMap();
+  const { data: operatorGlebasMap = {} } = useOperatorGlebasMap();
+  const { data: glebasAll = [] } = useGlebas();
+  const glebaSettlementMap = useMemo(
+    () => Object.fromEntries((glebasAll as any[]).map((g) => [g.id, g.settlement_id])) as Record<string, string>,
+    [glebasAll],
+  );
   const { data: operators = [] } = useOperators();
   const { data: responsibleTechnicians = [] } = useResponsibleTechnicians();
   const createService = useCreateService();
@@ -641,6 +649,7 @@ export default function ServicesPage() {
     cpf: p.cpf,
     phone: p.phone || '',
     settlementId: p.settlement_id || '',
+    glebaId: p.gleba_id || null,
     locationId: p.location_id || '',
     locationName: p.location_name || '',
     demandTypeIds: p.producer_demands?.map((d: { demand_type_id: string }) => d.demand_type_id) || [],
@@ -1436,6 +1445,8 @@ export default function ServicesPage() {
         machinery={(machinery || []).filter((m: any) => m.is_active).map((m: any) => ({ id: m.id, name: m.name, patrimony_number: m.patrimony_number }))}
         operatorMachineryMap={operatorMachineryMap}
         operatorSettlementsMap={operatorSettlementsMap}
+        operatorGlebasMap={operatorGlebasMap}
+        glebaSettlementMap={glebaSettlementMap}
         responsibleTechnicians={(responsibleTechnicians as any[]).filter((t: any) => t.is_active).map((t: any) => ({ id: t.id, name: t.name, cargo: t.cargo }))}
         onSubmit={editingService ? handleEdit : handleCreate}
       />

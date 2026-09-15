@@ -135,6 +135,10 @@ interface ServiceFormProps {
   operatorMachineryMap?: Record<string, string[]>;
   /** operador → assentamento(s) liberado(s), p/ pré-selecionar o operador pelo produtor. */
   operatorSettlementsMap?: Record<string, string[]>;
+  /** operador → gleba(s) liberada(s), p/ refinar a pré-seleção por gleba. */
+  operatorGlebasMap?: Record<string, string[]>;
+  /** gleba → assentamento a que pertence. */
+  glebaSettlementMap?: Record<string, string>;
   responsibleTechnicians?: TechnicianOption[];
   onSubmit: (data: ServiceFormData) => void;
 }
@@ -304,6 +308,8 @@ export function ServiceForm({
   machinery = [],
   operatorMachineryMap = {},
   operatorSettlementsMap = {},
+  operatorGlebasMap = {},
+  glebaSettlementMap = {},
   responsibleTechnicians = [],
   onSubmit,
 }: ServiceFormProps) {
@@ -460,10 +466,21 @@ export function ServiceForm({
     if (!selectedProducer) return;
     const settlementId = (selectedProducer as any).settlementId;
     if (!settlementId) return;
-    const opId = Object.keys(operatorSettlementsMap).find(
+    const producerGleba = (selectedProducer as any).glebaId || (selectedProducer as any).gleba_id || null;
+    // Candidatos: operadores com este assentamento liberado.
+    const candidatos = Object.keys(operatorSettlementsMap).filter(
       (oid) => (operatorSettlementsMap[oid] || []).includes(settlementId)
         && operators.some((o) => o.id === oid),
     );
+    if (candidatos.length === 0) return;
+    // Refina por gleba: se o operador tem glebas neste assentamento, só serve se
+    // a gleba do produtor estiver entre elas; sem glebas no assentamento = serve.
+    const serve = (oid: string) => {
+      const opGlebasNoAssent = (operatorGlebasMap[oid] || []).filter((gid) => glebaSettlementMap[gid] === settlementId);
+      if (opGlebasNoAssent.length === 0) return true;
+      return !!producerGleba && opGlebasNoAssent.includes(producerGleba);
+    };
+    const opId = candidatos.find(serve) ?? candidatos[0];
     if (!opId) return;
     form.setValue('operatorId', opId);
     const machs = operatorMachineryMap[opId] || [];

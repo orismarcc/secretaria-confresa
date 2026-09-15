@@ -1025,6 +1025,24 @@ export function useOperatorGlebas(operatorId: string | undefined) {
   });
 }
 
+/** Mapa operador → glebas liberadas (para refinar o auto-preenchimento). */
+export function useOperatorGlebasMap() {
+  return useQuery({
+    queryKey: ['operator_glebas', 'all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('operator_glebas')
+        .select('operator_id, gleba_id');
+      if (error) throw error;
+      const map: Record<string, string[]> = {};
+      (data ?? []).forEach((r: any) => {
+        (map[r.operator_id] = map[r.operator_id] || []).push(r.gleba_id);
+      });
+      return map;
+    },
+  });
+}
+
 export function useSetOperatorGlebas() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
