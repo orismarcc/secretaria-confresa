@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { User, Clock, ClipboardList, Navigation, Calendar, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useServices, useOperatorDemandTypes, useOperatorSettlements, useOperatorMachinery } from '@/hooks/useSupabaseData';
+import { useServices, useOperatorDemandTypes, useOperatorSettlements, useOperatorMachinery, useOperatorGlebas, useGlebas } from '@/hooks/useSupabaseData';
 import { useOperators } from '@/hooks/useOperatorData';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -55,14 +55,30 @@ export default function FieldServicesPage() {
   const { data: allowedDemandTypeIds = [], isLoading: dtLoading } = useOperatorDemandTypes(uid);
   const { data: allowedSettlementIds = [], isLoading: stLoading } = useOperatorSettlements(uid);
   const { data: allowedMachineryIds = [], isLoading: mLoading } = useOperatorMachinery(uid);
+  const { data: allowedGlebaIds = [], isLoading: gLoading } = useOperatorGlebas(uid);
+  const { data: glebas = [] } = useGlebas();
 
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<OperatorGroup | null>(null);
 
-  const isLoading = servicesLoading || opsLoading || dtLoading || stLoading || mLoading;
+  const isLoading = servicesLoading || opsLoading || dtLoading || stLoading || mLoading || gLoading;
+
+  // Assentamentos com restrição de gleba (aqueles onde o assistente tem glebas
+  // selecionadas). Nesses, só vê produtores das glebas liberadas; nos demais, o
+  // assentamento inteiro.
+  const glebaRestriction = useMemo(() => {
+    const allowedGleba = new Set(allowedGlebaIds as string[]);
+    const glebaSettlement = new Map<string, string>((glebas as any[]).map((g) => [g.id, g.settlement_id]));
+    const restrictedSettlements = new Set<string>();
+    (allowedGlebaIds as string[]).forEach((gid) => {
+      const sid = glebaSettlement.get(gid);
+      if (sid) restrictedSettlements.add(sid);
+    });
+    return { allowedGleba, restrictedSettlements };
+  }, [allowedGlebaIds, glebas]);
 
   // Serviços visíveis. Para o assistente aplica-se a interseção:
-  // tipo de serviço ∩ maquinário ∩ assentamento (cada filtro só vale se houver seleção).
+  // tipo de serviço ∩ maquinário ∩ assentamento ∩ gleba.
   const visibleServices = useMemo(() => {
     if (!isAssistente) return services as any[];
     let vis = services as any[];
@@ -78,8 +94,17 @@ export default function FieldServicesPage() {
       const allow = new Set(allowedSettlementIds);
       vis = vis.filter((s) => s.settlement_id && allow.has(s.settlement_id));
     }
+    // Refina por gleba: em assentamentos com gleba selecionada, só produtores
+    // daquelas glebas. Nos demais assentamentos, sem restrição de gleba.
+    if (glebaRestriction.restrictedSettlements.size > 0) {
+      vis = vis.filter((s) => {
+        if (!glebaRestriction.restrictedSettlements.has(s.settlement_id)) return true;
+        const gid = s.producers?.gleba_id;
+        return gid && glebaRestriction.allowedGleba.has(gid);
+      });
+    }
     return vis;
-  }, [services, isAssistente, allowedDemandTypeIds, allowedMachineryIds, allowedSettlementIds]);
+  }, [services, isAssistente, allowedDemandTypeIds, allowedMachineryIds, allowedSettlementIds, glebaRestriction]);
 
   // Agrupa por operador: conta finalizados no ano e junta os pendentes relevantes.
   const groups = useMemo(() => {
@@ -106,10 +131,15 @@ export default function FieldServicesPage() {
     return groups.filter((g) => g.name.toLowerCase().includes(q));
   }, [groups, search]);
 
-  // Pendentes do operador selecionado (DAM paga / próximo), mais recentes primeiro.
+  // Pendentes do operador selecionado, na ordem: EM EXECUÇÃO > PRÓXIMOS >
+  // PENDENTES; dentro de cada grupo, os mais recentes primeiro.
+  const statusRank = (s: any) =>
+    s.status === 'in_progress' ? 0 : s.status === 'proximo' ? 1 : 2;
   const selectedServices = useMemo(() => {
     if (!selected) return [];
     return [...selected.pendentes].sort((a, b) => {
+      const r = statusRank(a) - statusRank(b);
+      if (r !== 0) return r;
       const da = new Date(a.scheduled_date || a.created_at || 0).getTime();
       const db = new Date(b.scheduled_date || b.created_at || 0).getTime();
       return db - da;

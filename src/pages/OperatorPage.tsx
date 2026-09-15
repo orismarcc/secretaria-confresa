@@ -19,6 +19,8 @@ import {
   useUpdateServicePositions,
   useOperatorDemandTypes,
   useOperatorSettlements,
+  useOperatorGlebas,
+  useGlebas,
 } from '@/hooks/useSupabaseData';
 import { enqueueOperatorAction, getPendingActions } from '@/lib/operatorQueue';
 import { useSyncOperatorActions, usePendingActionsCount } from '@/hooks/useOperatorQueue';
@@ -258,14 +260,28 @@ export default function OperatorPage() {
   const { data: pendingServicesRaw = [], isLoading: servicesLoading } = usePendingServices();
   const { data: allowedDemandTypeIds = [], isLoading: dtLoading } = useOperatorDemandTypes(user?.id);
   const { data: allowedSettlementIds = [], isLoading: stLoading } = useOperatorSettlements(user?.id);
+  const { data: allowedGlebaIds = [], isLoading: gLoading } = useOperatorGlebas(user?.id);
+  const { data: glebas = [] } = useGlebas();
   const { data: settlements = [] } = useSettlements();
   const { data: locations = [] } = useLocations();
 
-  const isLoading = servicesLoading || dtLoading || stLoading;
+  const isLoading = servicesLoading || dtLoading || stLoading || gLoading;
+
+  // Assentamentos com restrição de gleba: onde o operador tem glebas selecionadas.
+  const glebaRestriction = useMemo(() => {
+    const allowedGleba = new Set(allowedGlebaIds as string[]);
+    const glebaSettlement = new Map<string, string>((glebas as any[]).map((g) => [g.id, g.settlement_id]));
+    const restrictedSettlements = new Set<string>();
+    (allowedGlebaIds as string[]).forEach((gid) => {
+      const sid = glebaSettlement.get(gid);
+      if (sid) restrictedSettlements.add(sid);
+    });
+    return { allowedGleba, restrictedSettlements };
+  }, [allowedGlebaIds, glebas]);
 
   // Mostra apenas os atendimentos atribuídos a este operador (operator_id).
-  // Ainda respeita as restrições por tipo de serviço e por assentamento, se
-  // houver (lista vazia em qualquer uma = sem restrição naquela dimensão).
+  // Respeita restrições por tipo de serviço, assentamento e gleba (lista vazia
+  // em qualquer dimensão = sem restrição naquela dimensão).
   const visibleServices = useMemo(() => {
     let mine = (pendingServicesRaw as DbService[]).filter((s) => s.operator_id === user?.id);
     if (allowedDemandTypeIds.length > 0) {
@@ -276,8 +292,15 @@ export default function OperatorPage() {
       const allowedSt = new Set(allowedSettlementIds);
       mine = mine.filter((s) => !s.settlement_id || allowedSt.has(s.settlement_id));
     }
+    if (glebaRestriction.restrictedSettlements.size > 0) {
+      mine = mine.filter((s) => {
+        if (!s.settlement_id || !glebaRestriction.restrictedSettlements.has(s.settlement_id)) return true;
+        const gid = (s.producers as any)?.gleba_id;
+        return gid && glebaRestriction.allowedGleba.has(gid);
+      });
+    }
     return mine;
-  }, [pendingServicesRaw, allowedDemandTypeIds, allowedSettlementIds, user?.id]);
+  }, [pendingServicesRaw, allowedDemandTypeIds, allowedSettlementIds, glebaRestriction, user?.id]);
 
   // Ações ainda não sincronizadas (fila local). Sobrepostas à lista para que,
   // mesmo reabrindo o app OFFLINE no meio do fluxo, os já iniciados apareçam

@@ -40,12 +40,18 @@ interface OperatorSettlementOption {
   name: string;
 }
 
+interface OperatorGlebaOption {
+  id: string;
+  name: string;
+  settlement_id: string;
+}
+
 interface OperatorFormProps {
   defaultValues?: { name: string; email?: string; cpf?: string; avatarUrl?: string | null };
   onSubmit: (
     data:
-      | { name: string; email: string; password: string; cpf: string; avatarUrl: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; jobTitle?: string }
-      | { name: string; cpf: string; avatarUrl: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; jobTitle?: string }
+      | { name: string; email: string; password: string; cpf: string; avatarUrl: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; glebaIds: string[]; jobTitle?: string }
+      | { name: string; cpf: string; avatarUrl: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; glebaIds: string[]; jobTitle?: string }
   ) => Promise<void>;
   onCancel: () => void;
   isLoading: boolean;
@@ -68,6 +74,10 @@ interface OperatorFormProps {
   settlements?: OperatorSettlementOption[];
   /** Assentamentos já atribuídos ao operador (modo edição) */
   initialSettlementIds?: string[];
+  /** Glebas disponíveis (com o assentamento a que pertencem) */
+  glebas?: OperatorGlebaOption[];
+  /** Glebas já atribuídas ao operador (modo edição) */
+  initialGlebaIds?: string[];
 }
 
 export function OperatorForm({
@@ -82,6 +92,8 @@ export function OperatorForm({
   initialMachineryIds = [],
   settlements = [],
   initialSettlementIds = [],
+  glebas = [],
+  initialGlebaIds = [],
   roleOptions,
   initialRole,
   submitLabel,
@@ -100,6 +112,7 @@ export function OperatorForm({
   const [demandTypeIds, setDemandTypeIds] = useState<string[]>(initialDemandTypeIds);
   const [machineryIds, setMachineryIds] = useState<string[]>(initialMachineryIds);
   const [settlementIds, setSettlementIds] = useState<string[]>(initialSettlementIds);
+  const [glebaIds, setGlebaIds] = useState<string[]>(initialGlebaIds);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const toggleDemandType = (id: string) => {
@@ -113,7 +126,18 @@ export function OperatorForm({
     );
   };
   const toggleSettlement = (id: string) => {
-    setSettlementIds((prev) =>
+    setSettlementIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      // Ao desmarcar um assentamento, remove também as glebas dele.
+      if (prev.includes(id)) {
+        const glebasDoAssent = new Set(glebas.filter((g) => g.settlement_id === id).map((g) => g.id));
+        setGlebaIds((gs) => gs.filter((gid) => !glebasDoAssent.has(gid)));
+      }
+      return next;
+    });
+  };
+  const toggleGleba = (id: string) => {
+    setGlebaIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
   };
@@ -132,7 +156,7 @@ export function OperatorForm({
         setErrors(fieldErrors);
         return;
       }
-      await onSubmit({ name, email, password, cpf, avatarUrl, demandTypeIds, machineryIds, settlementIds, jobTitle: hasRoleSelect ? jobTitle : undefined });
+      await onSubmit({ name, email, password, cpf, avatarUrl, demandTypeIds, machineryIds, settlementIds, glebaIds, jobTitle: hasRoleSelect ? jobTitle : undefined });
     } else {
       const result = editSchema.safeParse({ name });
       if (!result.success) {
@@ -143,7 +167,7 @@ export function OperatorForm({
         setErrors(fieldErrors);
         return;
       }
-      await onSubmit({ name, cpf, avatarUrl, demandTypeIds, machineryIds, settlementIds });
+      await onSubmit({ name, cpf, avatarUrl, demandTypeIds, machineryIds, settlementIds, glebaIds });
     }
   };
 
@@ -340,6 +364,41 @@ export function OperatorForm({
               ? 'Nenhum selecionado — o operador poderá operar em todos os assentamentos.'
               : `${settlementIds.length} assentamento(s) selecionado(s). O operador só verá esses no login.`}
           </p>
+        </div>
+      )}
+
+      {/* Glebas (opcional) — só para os assentamentos selecionados que têm glebas.
+          Sem marcar nenhuma gleba de um assentamento = assentamento inteiro. */}
+      {showRestrictions && settlementIds.some((sid) => glebas.some((g) => g.settlement_id === sid)) && (
+        <div className="space-y-2">
+          <Label>Glebas (opcional)</Label>
+          <p className="text-xs text-muted-foreground -mt-1">
+            Restrinja a glebas específicas. Sem marcar nenhuma de um assentamento, o operador opera o assentamento inteiro.
+          </p>
+          <div className="max-h-52 overflow-y-auto rounded-md border p-2 space-y-3">
+            {settlementIds
+              .map((sid) => ({ sid, sName: settlements.find((s) => s.id === sid)?.name || '', gs: glebas.filter((g) => g.settlement_id === sid) }))
+              .filter((x) => x.gs.length > 0)
+              .map(({ sid, sName, gs }) => (
+                <div key={sid} className="space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{sName}</p>
+                  {gs.map((g) => (
+                    <label
+                      key={g.id}
+                      htmlFor={`gleba-${g.id}`}
+                      className="flex items-center gap-2.5 px-1.5 py-1 rounded hover:bg-muted/50 cursor-pointer"
+                    >
+                      <Checkbox
+                        id={`gleba-${g.id}`}
+                        checked={glebaIds.includes(g.id)}
+                        onCheckedChange={() => toggleGleba(g.id)}
+                      />
+                      <span className="text-sm">{g.name}</span>
+                    </label>
+                  ))}
+                </div>
+              ))}
+          </div>
         </div>
       )}
 

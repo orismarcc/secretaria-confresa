@@ -46,11 +46,14 @@ import {
   useSettlements,
   useOperatorSettlements,
   useSetOperatorSettlements,
+  useGlebas,
+  useOperatorGlebas,
+  useSetOperatorGlebas,
 } from '@/hooks/useSupabaseData';
 import {
   Plus, Pencil, Trash2, UserCog, BarChart3, CheckCircle,
   ClipboardList, HardHat, User, Briefcase, FileText, Loader2,
-  Eye, Landmark,
+  Eye, Landmark, RefreshCw,
 } from 'lucide-react';
 import {
   formatDocument,
@@ -238,11 +241,12 @@ export default function OperatorsPage() {
   const [deletingOperator, setDeletingOperator] = useState<Operator | null>(null);
   const [metricsOperator, setMetricsOperator] = useState<Operator | null>(null);
 
-  const { data: operators, isLoading: opLoading } = useOperators();
+  const { data: operators, isLoading: opLoading, isError: opError, refetch: refetchOperators } = useOperators();
   const { data: services = [] } = useServices();
   const { data: demandTypes = [] } = useDemandTypes();
   const { data: machinery = [] } = useMachinery();
   const { data: settlements = [] } = useSettlements();
+  const { data: glebas = [] } = useGlebas();
   const { data: profilesMap } = useProfilesMap();
   const { data: adminUsers = [], isLoading: adminsLoading } = useAdminUsers();
   const createOperator = useCreateOperator();
@@ -259,6 +263,7 @@ export default function OperatorsPage() {
   const setOperatorDemandTypes = useSetOperatorDemandTypes();
   const setOperatorMachinery = useSetOperatorMachinery();
   const setOperatorSettlements = useSetOperatorSettlements();
+  const setOperatorGlebas = useSetOperatorGlebas();
 
   // Tipos de serviço ofertáveis a operadores (exclui Entregas — fluxo próprio)
   const operatorDemandTypeOptions = useMemo(
@@ -284,6 +289,12 @@ export default function OperatorsPage() {
     [settlements],
   );
 
+  // Glebas ofertáveis (com o assentamento a que pertencem)
+  const operatorGlebaOptions = useMemo(
+    () => (glebas as any[]).map((g) => ({ id: g.id, name: g.name, settlement_id: g.settlement_id })),
+    [glebas],
+  );
+
   // Acessos, maquinários e assentamentos já atribuídos ao operador em edição
   const { data: editingOperatorDemandTypeIds = [], isLoading: editingDtLoading } =
     useOperatorDemandTypes(editingOperator?.id);
@@ -291,6 +302,8 @@ export default function OperatorsPage() {
     useOperatorMachinery(editingOperator?.id);
   const { data: editingOperatorSettlementIds = [], isLoading: editingSettlLoading } =
     useOperatorSettlements(editingOperator?.id);
+  const { data: editingOperatorGlebaIds = [], isLoading: editingGlebaLoading } =
+    useOperatorGlebas(editingOperator?.id);
   // Assentamentos selecionados do operador em foco no painel de detalhes ("olho").
   const { data: metricsOperatorSettlementIds = [] } = useOperatorSettlements(metricsOperator?.id);
   const metricsOperatorSettlementNames = useMemo(
@@ -354,15 +367,16 @@ export default function OperatorsPage() {
 
   // ── Operator helpers ───────────────────────────────────────────────────────
   const handleCreate = async (
-    data: { name: string; email: string; password: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[] }
+    data: { name: string; email: string; password: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; glebaIds: string[] }
   ) => {
-    const { demandTypeIds, machineryIds, settlementIds, cpf, avatarUrl, ...operatorData } = data;
+    const { demandTypeIds, machineryIds, settlementIds, glebaIds, cpf, avatarUrl, ...operatorData } = data;
     const newUser = await createOperator.mutateAsync(operatorData);
     if (newUser?.id) {
       if (cpf || avatarUrl) await updateUserProfile.mutateAsync({ id: newUser.id, cpf: cpf || undefined, avatar_url: avatarUrl ?? undefined });
       await setOperatorDemandTypes.mutateAsync({ operatorId: newUser.id, demandTypeIds });
       await setOperatorMachinery.mutateAsync({ operatorId: newUser.id, machineryIds });
       await setOperatorSettlements.mutateAsync({ operatorId: newUser.id, settlementIds });
+      await setOperatorGlebas.mutateAsync({ operatorId: newUser.id, glebaIds });
     }
     setIsFormOpen(false);
   };
@@ -372,7 +386,7 @@ export default function OperatorsPage() {
   // Todos são role='admin'; só o Assistente de Campo tem restrições (tipos/
   // maquinário/assentamentos) — os demais são admins plenos.
   const handleCreateInternal = async (
-    data: { name: string; email: string; password: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; jobTitle?: string }
+    data: { name: string; email: string; password: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; glebaIds: string[]; jobTitle?: string }
   ) => {
     const cargo = data.jobTitle || 'Assistente de Campo';
     const newUser = await createInternalUser.mutateAsync({
@@ -386,12 +400,13 @@ export default function OperatorsPage() {
         await setOperatorDemandTypes.mutateAsync({ operatorId: newUser.id, demandTypeIds: data.demandTypeIds });
         await setOperatorMachinery.mutateAsync({ operatorId: newUser.id, machineryIds: data.machineryIds });
         await setOperatorSettlements.mutateAsync({ operatorId: newUser.id, settlementIds: data.settlementIds });
+        await setOperatorGlebas.mutateAsync({ operatorId: newUser.id, glebaIds: data.glebaIds });
       }
     }
     setAssistFormOpen(false);
   };
 
-  const handleUpdate = async (data: { name: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[] }) => {
+  const handleUpdate = async (data: { name: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; glebaIds: string[] }) => {
     if (editingOperator) {
       await updateOperator.mutateAsync({ userId: editingOperator.id, name: data.name });
       await updateUserProfile.mutateAsync({ id: editingOperator.id, cpf: data.cpf ?? '', avatar_url: data.avatarUrl ?? null });
@@ -406,6 +421,10 @@ export default function OperatorsPage() {
       await setOperatorSettlements.mutateAsync({
         operatorId: editingOperator.id,
         settlementIds: data.settlementIds,
+      });
+      await setOperatorGlebas.mutateAsync({
+        operatorId: editingOperator.id,
+        glebaIds: data.glebaIds,
       });
       setEditingOperator(null);
     }
@@ -677,13 +696,27 @@ export default function OperatorsPage() {
 
         {/* ── Operadores tab ── */}
         <TabsContent value="operators">
-          <DataTable
-            data={operators || []}
-            columns={operatorColumns}
-            keyExtractor={(row) => row.id}
-            isLoading={opLoading}
-            emptyMessage="Nenhum operador cadastrado"
-          />
+          {opError ? (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-6 text-center space-y-3">
+              <p className="text-sm text-destructive font-medium">
+                Não foi possível carregar os operadores (falha de conexão ou sessão expirada).
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Isso não apaga nenhum operador — é só a listagem que não carregou. Tente recarregar; se persistir, saia e entre novamente (renova a sessão).
+              </p>
+              <Button variant="outline" size="sm" onClick={() => refetchOperators()}>
+                <RefreshCw className="h-4 w-4 mr-2" /> Recarregar
+              </Button>
+            </div>
+          ) : (
+            <DataTable
+              data={operators || []}
+              columns={operatorColumns}
+              keyExtractor={(row) => row.id}
+              isLoading={opLoading}
+              emptyMessage="Nenhum operador cadastrado"
+            />
+          )}
         </TabsContent>
 
         {/* ── Administradores tab ── */}
@@ -802,11 +835,12 @@ export default function OperatorsPage() {
           <OperatorForm
             onSubmit={handleCreate}
             onCancel={() => setIsFormOpen(false)}
-            isLoading={createOperator.isPending || setOperatorDemandTypes.isPending || setOperatorMachinery.isPending || setOperatorSettlements.isPending}
+            isLoading={createOperator.isPending || setOperatorDemandTypes.isPending || setOperatorMachinery.isPending || setOperatorSettlements.isPending || setOperatorGlebas.isPending}
             mode="create"
             demandTypes={operatorDemandTypeOptions}
             machinery={operatorMachineryOptions}
             settlements={operatorSettlementOptions}
+            glebas={operatorGlebaOptions}
           />
         </DialogContent>
       </Dialog>
@@ -824,13 +858,14 @@ export default function OperatorsPage() {
           <OperatorForm
             onSubmit={handleCreateInternal}
             onCancel={() => setAssistFormOpen(false)}
-            isLoading={createInternalUser.isPending || setOperatorDemandTypes.isPending || setOperatorMachinery.isPending || setOperatorSettlements.isPending}
+            isLoading={createInternalUser.isPending || setOperatorDemandTypes.isPending || setOperatorMachinery.isPending || setOperatorSettlements.isPending || setOperatorGlebas.isPending}
             mode="create"
             roleOptions={FUNCOES_EQUIPE}
             initialRole="Assistente de Campo"
             demandTypes={operatorDemandTypeOptions}
             machinery={operatorMachineryOptions}
             settlements={operatorSettlementOptions}
+            glebas={operatorGlebaOptions}
           />
         </DialogContent>
       </Dialog>
@@ -839,7 +874,7 @@ export default function OperatorsPage() {
         <DialogContent>
           <DialogHeader><DialogTitle>Editar Operador</DialogTitle></DialogHeader>
           {editingOperator && (
-            (editingDtLoading || editingMachLoading || editingSettlLoading) ? (
+            (editingDtLoading || editingMachLoading || editingSettlLoading || editingGlebaLoading) ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
@@ -849,7 +884,7 @@ export default function OperatorsPage() {
                 defaultValues={{ name: editingOperator.name, email: editingOperator.email, cpf: cpfOf(editingOperator.id), avatarUrl: avatarOf(editingOperator.id) }}
                 onSubmit={handleUpdate}
                 onCancel={() => setEditingOperator(null)}
-                isLoading={updateOperator.isPending || setOperatorDemandTypes.isPending || setOperatorMachinery.isPending || setOperatorSettlements.isPending}
+                isLoading={updateOperator.isPending || setOperatorDemandTypes.isPending || setOperatorMachinery.isPending || setOperatorSettlements.isPending || setOperatorGlebas.isPending}
                 mode="edit"
                 demandTypes={operatorDemandTypeOptions}
                 initialDemandTypeIds={editingOperatorDemandTypeIds}
@@ -857,6 +892,8 @@ export default function OperatorsPage() {
                 initialMachineryIds={editingOperatorMachineryIds}
                 settlements={operatorSettlementOptions}
                 initialSettlementIds={editingOperatorSettlementIds}
+                glebas={operatorGlebaOptions}
+                initialGlebaIds={editingOperatorGlebaIds}
               />
             )
           )}

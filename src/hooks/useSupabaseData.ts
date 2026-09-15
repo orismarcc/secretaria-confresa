@@ -671,7 +671,7 @@ export function usePendingServices() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('services')
-        .select('*, producers(name, phone, location_name, latitude, longitude), demand_types(name), settlements(name), locations(name), profiles!operator_id(name)')
+        .select('*, producers(name, phone, location_name, latitude, longitude, gleba_id), demand_types(name), settlements(name), locations(name), profiles!operator_id(name)')
         // exclui finalizados E cancelados — só atendimentos em aberto entram na fila
         .not('status', 'in', '("completed","cancelled")')
         .order('position', { ascending: true, nullsFirst: false }) // B-05: explicit NULLS LAST
@@ -1002,6 +1002,63 @@ export function useSetOperatorSettlements() {
     },
     onError: (error: Error) => {
       toast({ title: 'Erro ao salvar assentamentos do operador', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
+// ============= OPERATOR GLEBA ACCESS (refina o assentamento) =============
+// Glebas liberadas ao operador. Sem glebas de um assentamento = assentamento
+// inteiro; com glebas = restrito a elas.
+export function useOperatorGlebas(operatorId: string | undefined) {
+  return useQuery({
+    queryKey: ['operator_glebas', operatorId],
+    queryFn: async () => {
+      if (!operatorId) return [] as string[];
+      const { data, error } = await supabase
+        .from('operator_glebas')
+        .select('gleba_id')
+        .eq('operator_id', operatorId);
+      if (error) throw error;
+      return (data ?? []).map((r: any) => r.gleba_id as string);
+    },
+    enabled: !!operatorId,
+  });
+}
+
+export function useSetOperatorGlebas() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ operatorId, glebaIds }: { operatorId: string; glebaIds: string[] }) => {
+      const { data: existing } = await supabase
+        .from('operator_glebas')
+        .select('gleba_id')
+        .eq('operator_id', operatorId);
+
+      const { error: delErr } = await supabase
+        .from('operator_glebas')
+        .delete()
+        .eq('operator_id', operatorId);
+      if (delErr) throw delErr;
+
+      if (glebaIds.length > 0) {
+        const rows = glebaIds.map((id) => ({ operator_id: operatorId, gleba_id: id }));
+        const { error: insErr } = await supabase.from('operator_glebas').insert(rows);
+        if (insErr) {
+          if (existing && existing.length > 0) {
+            await supabase.from('operator_glebas').insert(
+              existing.map((e: any) => ({ operator_id: operatorId, gleba_id: e.gleba_id })),
+            );
+          }
+          throw insErr;
+        }
+      }
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['operator_glebas', variables.operatorId] });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao salvar glebas do operador', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
