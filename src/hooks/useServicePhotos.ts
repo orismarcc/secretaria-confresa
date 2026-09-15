@@ -26,21 +26,26 @@
          .order('created_at', { ascending: false });
        
        if (error) throw error;
-       
+
+       // Ignora eventos SEM foto (ex.: registro de GPS ao iniciar, com
+       // storage_path nulo) — senão a geração de URL pode derrubar TODAS as
+       // fotos (inclusive as de início/término da finalização).
+       const withFile = (data || []).filter((p) => !!p.storage_path);
+
        // Generate signed URLs for each photo
        const photosWithUrls: ServicePhotoData[] = await Promise.all(
-         (data || []).map(async (photo) => {
-           const { data: signedUrlData } = await supabase.storage
-             .from('service-photos')
-             .createSignedUrl(photo.storage_path, 3600); // 1 hour validity
-           
-           return {
-             ...photo,
-             url: signedUrlData?.signedUrl,
-           };
+         withFile.map(async (photo) => {
+           let url: string | undefined;
+           try {
+             const { data: signedUrlData } = await supabase.storage
+               .from('service-photos')
+               .createSignedUrl(photo.storage_path, 3600); // 1 hour validity
+             url = signedUrlData?.signedUrl;
+           } catch { /* uma foto com problema não derruba as demais */ }
+           return { ...photo, url };
          })
        );
-       
+
        return photosWithUrls;
      },
      enabled: !!serviceId,
