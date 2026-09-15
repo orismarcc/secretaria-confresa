@@ -981,6 +981,8 @@ export default function ServicesPage() {
       demandTypeId,
       servicesOnly: true,
       includeDamRevenue: isFullAdmin,
+      // Segue a aba atual: Ativos → relatório de ativos; Finalizados → finalizados.
+      scope: statusFilter === 'archived' ? 'completed' : 'active',
     });
   };
 
@@ -1021,8 +1023,8 @@ export default function ServicesPage() {
               Ativos <span className="bg-primary/20 text-primary px-2 py-0.5 rounded-full text-xs">{activeCount}</span>
             </TabsTrigger>
             <TabsTrigger value="archived" className="gap-2">
-              <Archive className="h-4 w-4" />
-              Arquivados <span className="bg-muted px-2 py-0.5 rounded-full text-xs">{archivedCount}</span>
+              <CheckCircle className="h-4 w-4" />
+              Finalizados <span className="bg-muted px-2 py-0.5 rounded-full text-xs">{archivedCount}</span>
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -1105,18 +1107,21 @@ export default function ServicesPage() {
         {/* Row 1: search + export */}
         <div className="flex gap-2 items-center flex-wrap">
           <SearchInput value={search} onChange={(v) => { setSearch(v); setCurrentPage(1); }} placeholder="Buscar por produtor..." className="flex-1 min-w-[140px]" />
-          {/* Downloads de relatório — restritos a admin pleno (Coordenador não baixa). */}
+          {/* Um único relatório em PDF — segue a aba (Ativos ou Finalizados).
+              Restrito a admin pleno (Coordenador não baixa). */}
           {isFullAdmin && (
-            <>
-              <Button variant="outline" size="sm" onClick={handleExportPDF} className="gap-1.5 shrink-0">
-                <FileDown className="h-4 w-4" />
-                <span className="hidden sm:inline">Lista (PDF)</span>
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleExportExecutive} className="gap-1.5 shrink-0" title="Relatório executivo (atendimentos finalizados) com o filtro atual">
-                <FileText className="h-4 w-4" />
-                <span className="hidden sm:inline">Relatório (PDF)</span>
-              </Button>
-            </>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportExecutive}
+              className="gap-1.5 shrink-0"
+              title={statusFilter === 'archived'
+                ? 'Relatório dos atendimentos finalizados (com o filtro atual)'
+                : 'Relatório dos atendimentos ativos (com o filtro atual)'}
+            >
+              <FileText className="h-4 w-4" />
+              <span className="hidden sm:inline">Relatório (PDF)</span>
+            </Button>
           )}
         </div>
 

@@ -75,6 +75,8 @@ export interface ExecutiveReportOptions {
   servicesOnly?: boolean;
   /** true = inclui o KPI "Arrecadado (DAMs pagas)". Restrito a admin pleno. */
   includeDamRevenue?: boolean;
+  /** 'completed' (padrão) = atendimentos finalizados; 'active' = ativos/pendentes. */
+  scope?: 'completed' | 'active';
 }
 
 // ─── Bar chart (vetorial) ──────────────────────────────────────────────────────
@@ -365,13 +367,17 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
     stById.get(id)?.name || embedded?.name || 'Sem assentamento';
 
   const servicesOnly = opts.servicesOnly ?? false;
+  const isActive = opts.scope === 'active';
   const includeServices = category === 'all' || category !== 'entregas';
-  const includeDeliveries = !servicesOnly && (category === 'all' || category === 'entregas');
+  const includeDeliveries = !servicesOnly && !isActive && (category === 'all' || category === 'entregas');
 
-  // ── Filtragem — apenas FINALIZADO ─────────────────────────────────────────
+  // ── Filtragem — FINALIZADO (padrão) ou ATIVO/PENDENTE ─────────────────────
+  const matchScope = (s: any) => isActive
+    ? (s.status !== 'completed' && s.status !== 'cancelled')
+    : s.status === 'completed';
   let compServices = includeServices
     ? (services as any[]).filter(
-        (s) => s.status === 'completed' && dtById.get(s.demand_type_id)?.category !== 'entregas',
+        (s) => matchScope(s) && dtById.get(s.demand_type_id)?.category !== 'entregas',
       )
     : [];
   if (category !== 'all' && category !== 'entregas') {
@@ -409,7 +415,7 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
   );
 
   const kpis: Kpi[] = [];
-  if (includeServices) kpis.push({ label: 'Atendimentos finalizados', value: fmtInt(compServices.length), color: GREEN });
+  if (includeServices) kpis.push({ label: isActive ? 'Atendimentos ativos' : 'Atendimentos finalizados', value: fmtInt(compServices.length), color: GREEN });
   if (includeDeliveries) {
     kpis.push({ label: 'Entregas realizadas', value: fmtInt(compDeliveries.length), color: BLUE });
     kpis.push({ label: 'Itens entregues', value: fmtInt(itensEntregues), color: BLUE });
@@ -418,7 +424,7 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
   if (includeServices && areaTrabalhada > 0)
     kpis.push({ label: 'Área trabalhada (ha)', value: fmtDec(areaTrabalhada), color: AMBER });
   if (includeServices && horasTrabalhadas > 0)
-    kpis.push({ label: 'Horas trabalhadas', value: `${fmtDec(horasTrabalhadas)} h`, color: AMBER });
+    kpis.push({ label: isActive ? 'Horas previstas' : 'Horas trabalhadas', value: `${fmtDec(horasTrabalhadas)} h`, color: AMBER });
   if (includeServices && combustivelConsumido > 0)
     kpis.push({ label: 'Combustível consumido', value: `${fmtDec(combustivelConsumido)} L`, color: BLUE });
   if (includeServices && arrecadadoDam > 0 && opts.includeDamRevenue)
@@ -436,7 +442,8 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
   const countByMonth = (rows: any[]) => {
     const map: Record<string, number> = {};
     rows.forEach((r) => {
-      const d = parseDate(r.completed_at);
+      // Ativos: agrupa pela data agendada; finalizados: pela data de finalização.
+      const d = parseDate(isActive ? r.scheduled_date : r.completed_at);
       if (!d) return;
       const k = format(startOfMonth(d), 'yyyy-MM');
       map[k] = (map[k] || 0) + 1;
@@ -479,7 +486,7 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
     doc.setFontSize(7.5);
     doc.setTextColor(130);
     doc.text(
-      `Trabalho realizado (finalizado) · Gerado em ${format(now, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`,
+      `${isActive ? 'Atendimentos ativos (pendentes)' : 'Trabalho realizado (finalizado)'} · Gerado em ${format(now, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`,
       pageWidth / 2,
       26,
       { align: 'center' },
@@ -496,7 +503,7 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
     // Gráfico mensal — omitido para Entregas (esporádicas, gaps longos de meses
     // tornam o gráfico vazio/sem utilidade). Mantido para atendimentos e "Tudo".
     if (category !== 'entregas' && chartSeries.some((s) => s.data.some((v) => v > 0))) {
-      y = sectionTitle(doc, M, y, 'Produção por mês (últimos 12 meses)');
+      y = sectionTitle(doc, M, y, isActive ? 'Agendados por mês (últimos 12 meses)' : 'Produção por mês (últimos 12 meses)');
       drawBarChart(doc, { x: M + 8, y: y + 2, w: contentW - 10, h: 42 }, months.map((m) => m.label), chartSeries);
       y += 2 + 42 + (chartSeries.length > 1 ? 13 : 8);
     }
