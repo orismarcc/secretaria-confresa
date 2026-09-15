@@ -889,6 +889,24 @@ export function useOperatorDemandTypes(operatorId: string | undefined) {
   });
 }
 
+/** Mapa operador → tipos de serviço liberados (para o auto-preenchimento). */
+export function useOperatorDemandTypesMap() {
+  return useQuery({
+    queryKey: ['operator_demand_types', 'all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('operator_demand_types')
+        .select('operator_id, demand_type_id');
+      if (error) throw error;
+      const map: Record<string, string[]> = {};
+      (data ?? []).forEach((r: any) => {
+        (map[r.operator_id] = map[r.operator_id] || []).push(r.demand_type_id);
+      });
+      return map;
+    },
+  });
+}
+
 export function useSetOperatorDemandTypes() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

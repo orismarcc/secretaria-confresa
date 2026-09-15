@@ -34,15 +34,18 @@ export interface EnqueueInput {
 
 export async function enqueueOperatorAction(input: EnqueueInput): Promise<OperatorAction> {
   const id = crypto.randomUUID();
+  // Guardamos a imagem como ArrayBuffer (não como Blob): em vários navegadores
+  // Android, Blobs no IndexedDB podem se invalidar entre sessões — a foto some
+  // e o upload "não acontece" mesmo tendo sido inserida. ArrayBuffer é estável.
   let blobKey: string | undefined;
   if (input.photoBlob) {
     blobKey = `blob-${id}`;
-    await set(blobKey, input.photoBlob, blobStore);
+    await set(blobKey, await input.photoBlob.arrayBuffer(), blobStore);
   }
   let startBlobKey: string | undefined;
   if (input.startPhotoBlob) {
     startBlobKey = `blob-${id}-start`;
-    await set(startBlobKey, input.startPhotoBlob, blobStore);
+    await set(startBlobKey, await input.startPhotoBlob.arrayBuffer(), blobStore);
   }
   const action: OperatorAction = {
     id,
@@ -71,7 +74,12 @@ export async function getPendingActions(): Promise<OperatorAction[]> {
 }
 
 export async function getActionBlob(blobKey: string): Promise<Blob | undefined> {
-  return get<Blob>(blobKey, blobStore);
+  const stored = await get<ArrayBuffer | Blob>(blobKey, blobStore);
+  if (!stored) return undefined;
+  // Novo formato: ArrayBuffer -> reconstrói o Blob. Compatível com o formato
+  // antigo (Blob), caso haja alguma ação pendente gravada antes desta mudança.
+  if (stored instanceof Blob) return stored;
+  return new Blob([stored], { type: 'image/jpeg' });
 }
 
 export async function deleteOperatorAction(action: OperatorAction): Promise<void> {

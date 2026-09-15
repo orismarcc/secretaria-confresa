@@ -39,6 +39,7 @@ import {
   Plus, Pencil, Trash2, Archive, CheckCircle, Eye,
   FileDown, FileText, FileSpreadsheet, ChevronLeft, ChevronRight, X, XCircle,
   Tractor, Truck, Scissors, Shovel, Stethoscope, Layers, Package, Wrench,
+  SlidersHorizontal,
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -63,6 +64,7 @@ import {
   useOperatorMachineryMap,
   useOperatorSettlementsMap,
   useOperatorGlebasMap,
+  useOperatorDemandTypesMap,
   useGlebas,
   useCreateService,
   useUpdateService,
@@ -196,6 +198,7 @@ export default function ServicesPage() {
   const { data: operatorMachineryMap = {} } = useOperatorMachineryMap();
   const { data: operatorSettlementsMap = {} } = useOperatorSettlementsMap();
   const { data: operatorGlebasMap = {} } = useOperatorGlebasMap();
+  const { data: operatorDemandTypesMap = {} } = useOperatorDemandTypesMap();
   const { data: glebasAll = [] } = useGlebas();
   const glebaSettlementMap = useMemo(
     () => Object.fromEntries((glebasAll as any[]).map((g) => [g.id, g.settlement_id])) as Record<string, string>,
@@ -1125,8 +1128,12 @@ export default function ServicesPage() {
           )}
         </div>
 
-        {/* Row 2: type + settlement + date range + clear */}
-        <div className="flex gap-2 items-center flex-wrap">
+        {/* Filtros — painel destacado (mais fácil de identificar) */}
+        <div className="rounded-lg border border-primary/25 bg-primary/[0.05] p-3 space-y-2.5">
+          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary">
+            <SlidersHorizontal className="h-4 w-4" /> Filtros
+          </div>
+          <div className="flex gap-2 items-center flex-wrap">
           {/* Demand type */}
           <Select value={demandTypeFilter} onValueChange={(v) => { setDemandTypeFilter(v); setCurrentPage(1); }}>
             <SelectTrigger className="w-[140px] sm:w-[170px]">
@@ -1237,6 +1244,7 @@ export default function ServicesPage() {
               Limpar
             </Button>
           )}
+          </div>
         </div>
 
         {/* Active category chip (navegação vinda da Análise) */}
@@ -1452,6 +1460,7 @@ export default function ServicesPage() {
         operatorSettlementsMap={operatorSettlementsMap}
         operatorGlebasMap={operatorGlebasMap}
         glebaSettlementMap={glebaSettlementMap}
+        operatorDemandTypesMap={operatorDemandTypesMap}
         responsibleTechnicians={(responsibleTechnicians as any[]).filter((t: any) => t.is_active).map((t: any) => ({ id: t.id, name: t.name, cargo: t.cargo }))}
         onSubmit={editingService ? handleEdit : handleCreate}
       />

@@ -139,6 +139,8 @@ interface ServiceFormProps {
   operatorGlebasMap?: Record<string, string[]>;
   /** gleba → assentamento a que pertence. */
   glebaSettlementMap?: Record<string, string>;
+  /** operador → tipo(s) de serviço liberado(s), p/ refinar a pré-seleção. */
+  operatorDemandTypesMap?: Record<string, string[]>;
   responsibleTechnicians?: TechnicianOption[];
   onSubmit: (data: ServiceFormData) => void;
 }
@@ -310,6 +312,7 @@ export function ServiceForm({
   operatorSettlementsMap = {},
   operatorGlebasMap = {},
   glebaSettlementMap = {},
+  operatorDemandTypesMap = {},
   responsibleTechnicians = [],
   onSubmit,
 }: ServiceFormProps) {
@@ -458,36 +461,45 @@ export function ServiceForm({
     }
   }, [isImplementos, form]);
 
-  // Auto-preenche o operador (e seu maquinário) ao escolher o produtor, com base
-  // no assentamento do produtor: pega o operador que tem aquele assentamento
-  // liberado no cadastro. Só em NOVOS atendimentos e pode ser trocado depois.
+  // Auto-preenche o operador (e seu maquinário) ao escolher o produtor E o tipo
+  // de serviço. Pega o operador que satisfaz, no cadastro: o assentamento do
+  // produtor, o tipo de serviço escolhido e (se houver) a gleba do produtor.
+  // Só em NOVOS atendimentos e pode ser trocado depois.
   useEffect(() => {
     if (service) return;                 // não mexe ao editar um atendimento existente
     if (!selectedProducer) return;
     const settlementId = (selectedProducer as any).settlementId;
     if (!settlementId) return;
     const producerGleba = (selectedProducer as any).glebaId || (selectedProducer as any).gleba_id || null;
-    // Candidatos: operadores com este assentamento liberado.
-    const candidatos = Object.keys(operatorSettlementsMap).filter(
-      (oid) => (operatorSettlementsMap[oid] || []).includes(settlementId)
-        && operators.some((o) => o.id === oid),
-    );
-    if (candidatos.length === 0) return;
-    // Refina por gleba: se o operador tem glebas neste assentamento, só serve se
-    // a gleba do produtor estiver entre elas; sem glebas no assentamento = serve.
-    const serve = (oid: string) => {
+    const demandTypeId = watchedDemandTypeId;
+
+    // Operador serve o TIPO de serviço? (sem restrição de tipo = serve todos)
+    const serveTipo = (oid: string) => {
+      const dts = operatorDemandTypesMap[oid] || [];
+      return dts.length === 0 || (!!demandTypeId && dts.includes(demandTypeId));
+    };
+    // Operador serve a GLEBA? (sem gleba no assentamento = assentamento inteiro)
+    const serveGleba = (oid: string) => {
       const opGlebasNoAssent = (operatorGlebasMap[oid] || []).filter((gid) => glebaSettlementMap[gid] === settlementId);
       if (opGlebasNoAssent.length === 0) return true;
       return !!producerGleba && opGlebasNoAssent.includes(producerGleba);
     };
-    const opId = candidatos.find(serve) ?? candidatos[0];
+
+    // Candidatos: têm o assentamento liberado E servem o tipo de serviço.
+    const candidatos = Object.keys(operatorSettlementsMap).filter(
+      (oid) => (operatorSettlementsMap[oid] || []).includes(settlementId)
+        && operators.some((o) => o.id === oid)
+        && serveTipo(oid),
+    );
+    if (candidatos.length === 0) return;
+    const opId = candidatos.find(serveGleba) ?? candidatos[0];
     if (!opId) return;
     form.setValue('operatorId', opId);
     const machs = operatorMachineryMap[opId] || [];
     const firstMach = machs.find((id) => machinery.some((m) => m.id === id));
     if (firstMach) form.setValue('machineryId', firstMach);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProducerId]);
+  }, [selectedProducerId, watchedDemandTypeId]);
 
   const handleSubmit = (data: ServiceFormData) => {
     onSubmit({ ...data, damReceiptFile: damReceiptFile || null, limestoneOrderFile: limestoneOrderFile || null } as any);

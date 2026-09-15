@@ -20,6 +20,7 @@ import {
   useDeleteMachineryRefuel,
   type MachineryRefuel,
 } from '@/hooks/useSupabaseData';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const FUEL_TYPES = ['Diesel S10', 'Diesel S500', 'Gasolina'] as const;
 
@@ -43,6 +44,9 @@ async function openReceipt(path: string) {
 export function MachineryRefuelDialog({
   open, onOpenChange, machineryId, machineryName, defaultFuelType,
 }: MachineryRefuelDialogProps) {
+  const { isAssistente } = useAuth();
+  // Assistente de Campo registra abastecimento, mas NÃO exclui.
+  const canDeleteRefuel = !isAssistente;
   const { data: refuels = [], isLoading } = useMachineryRefuels(machineryId ?? undefined);
   const createRefuel = useCreateMachineryRefuel();
   const deleteRefuel = useDeleteMachineryRefuel();
@@ -244,13 +248,15 @@ export function MachineryRefuelDialog({
                           <Receipt className="h-4 w-4 text-blue-500" />
                         </Button>
                       )}
-                      <Button
-                        type="button" variant="ghost" size="icon"
-                        className="text-destructive hover:text-destructive shrink-0"
-                        onClick={() => setToDelete(r)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {canDeleteRefuel && (
+                        <Button
+                          type="button" variant="ghost" size="icon"
+                          className="text-destructive hover:text-destructive shrink-0"
+                          onClick={() => setToDelete(r)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>
