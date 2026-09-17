@@ -98,21 +98,36 @@ export function useOperators() {
   return useQuery({
     queryKey: ['operators'],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+      // LISTAGEM por consulta DIRETA ao banco (RLS: admin lê user_roles e todos
+      // leem profiles) — igual às abas Equipe interna/Técnicos. Não depende da
+      // edge function, então funciona em qualquer rede/navegador (a edge function
+      // era bloqueada por proxy/CORS em alguns desktops). A criação/edição/
+      // exclusão continua pela edge function.
+      const { data: roles, error: rolesErr } = await supabase
+        .from('user_roles')
+        .select('user_id, is_active, created_at')
+        .eq('role', 'operator');
+      if (rolesErr) throw rolesErr;
 
-      const response = await fetch(FUNCTION_URL, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      const ids = (roles ?? []).map((r: any) => r.user_id);
+      if (ids.length === 0) return [] as Operator[];
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to fetch operators');
-      
-      return data.operators as Operator[];
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id, name, email, created_at')
+        .in('id', ids);
+      const byId = new Map<string, any>((profs ?? []).map((p: any) => [p.id, p]));
+
+      return (roles ?? []).map((r: any) => {
+        const p = byId.get(r.user_id);
+        return {
+          id: r.user_id,
+          name: p?.name || 'Sem nome',
+          email: p?.email || '',
+          created_at: p?.created_at || r.created_at,
+          is_active: r.is_active,
+        };
+      }) as Operator[];
     },
   });
 }
