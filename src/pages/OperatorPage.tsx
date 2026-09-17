@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/StatusBadge';
 import { MapPin, Phone, Calendar, Clock, GripVertical, Navigation, User, MessageCircle, RefreshCw, CheckCircle2, Banknote } from 'lucide-react';
@@ -281,6 +282,15 @@ export default function OperatorPage() {
   const { data: allowedGlebaIds = [], isLoading: gLoading } = useOperatorGlebas(user?.id);
   const { data: glebas = [] } = useGlebas();
   const { data: ownStats } = useOperatorOwnStats(user?.id);
+  // Métricas por ano — padrão no ano atual; seletor só se houver outros anos.
+  const currentYear = new Date().getFullYear();
+  const [statsYear, setStatsYear] = useState<number>(currentYear);
+  const statYearOptions = useMemo(() => {
+    const set = new Set<number>([currentYear, ...((ownStats?.years) ?? [])]);
+    return Array.from(set).sort((a, b) => b - a);
+  }, [ownStats, currentYear]);
+  const showYearSelect = ((ownStats?.years) ?? []).some((y) => y !== currentYear);
+  const yearStats = ownStats?.byYear?.[statsYear] ?? { total: 0, hours: 0, assentamentos: 0 };
   const { data: settlements = [] } = useSettlements();
   const { data: locations = [] } = useLocations();
 
@@ -525,23 +535,40 @@ export default function OperatorPage() {
         </div>
       )}
 
-      {/* Minhas métricas — atendimentos finalizados, horas e assentamentos */}
+      {/* Minhas métricas por ano — padrão no ano atual */}
       {ownStats && (
-        <div className="mb-4 grid grid-cols-3 gap-2">
-          <div className="rounded-lg border p-3 text-center">
-            <CheckCircle2 className="h-4 w-4 mx-auto text-success mb-1" />
-            <p className="text-2xl font-bold leading-none">{ownStats.total}</p>
-            <p className="text-[11px] text-muted-foreground leading-tight mt-1">atendimentos finalizados</p>
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Minhas métricas
+            </p>
+            {showYearSelect ? (
+              <Select value={String(statsYear)} onValueChange={(v) => setStatsYear(Number(v))}>
+                <SelectTrigger className="h-7 w-[92px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {statYearOptions.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            ) : (
+              <span className="text-xs font-medium text-muted-foreground">{currentYear}</span>
+            )}
           </div>
-          <div className="rounded-lg border p-3 text-center">
-            <Clock className="h-4 w-4 mx-auto text-primary mb-1" />
-            <p className="text-2xl font-bold leading-none">{ownStats.hours.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}</p>
-            <p className="text-[11px] text-muted-foreground leading-tight mt-1">horas realizadas</p>
-          </div>
-          <div className="rounded-lg border p-3 text-center">
-            <MapPin className="h-4 w-4 mx-auto text-blue-500 mb-1" />
-            <p className="text-2xl font-bold leading-none">{ownStats.assentamentos}</p>
-            <p className="text-[11px] text-muted-foreground leading-tight mt-1">assentamentos atendidos</p>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-lg border p-3 text-center">
+              <CheckCircle2 className="h-4 w-4 mx-auto text-success mb-1" />
+              <p className="text-2xl font-bold leading-none">{yearStats.total}</p>
+              <p className="text-[11px] text-muted-foreground leading-tight mt-1">atendimentos finalizados</p>
+            </div>
+            <div className="rounded-lg border p-3 text-center">
+              <Clock className="h-4 w-4 mx-auto text-primary mb-1" />
+              <p className="text-2xl font-bold leading-none">{yearStats.hours.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}</p>
+              <p className="text-[11px] text-muted-foreground leading-tight mt-1">horas realizadas</p>
+            </div>
+            <div className="rounded-lg border p-3 text-center">
+              <MapPin className="h-4 w-4 mx-auto text-blue-500 mb-1" />
+              <p className="text-2xl font-bold leading-none">{yearStats.assentamentos}</p>
+              <p className="text-[11px] text-muted-foreground leading-tight mt-1">assentamentos atendidos</p>
+            </div>
           </div>
         </div>
       )}

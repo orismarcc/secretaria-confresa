@@ -1055,23 +1055,34 @@ export function useSetOperatorSettlements() {
   });
 }
 
-/** Métricas do próprio operador: finalizados, horas e assentamentos atendidos. */
+export interface OperatorYearStats { total: number; hours: number; assentamentos: number; }
+/** Métricas do próprio operador AGRUPADAS POR ANO (finalizados, horas,
+ *  assentamentos). Retorna só os anos que têm atendimentos finalizados. */
 export function useOperatorOwnStats(operatorId: string | undefined) {
   return useQuery({
     queryKey: ['operator_own_stats', operatorId],
     queryFn: async () => {
-      if (!operatorId) return { total: 0, hours: 0, assentamentos: 0 };
+      if (!operatorId) return { byYear: {} as Record<number, OperatorYearStats>, years: [] as number[] };
       const { data, error } = await supabase
         .from('services')
-        .select('worked_hours, settlement_id')
+        .select('worked_hours, settlement_id, completed_at')
         .eq('operator_id', operatorId)
         .eq('status', 'completed');
       if (error) throw error;
-      const rows = (data ?? []) as any[];
-      const total = rows.length;
-      const hours = rows.reduce((s, r) => s + (Number(r.worked_hours) || 0), 0);
-      const assentamentos = new Set(rows.map((r) => r.settlement_id).filter(Boolean)).size;
-      return { total, hours, assentamentos };
+      const acc: Record<number, { total: number; hours: number; sett: Set<string> }> = {};
+      (data ?? []).forEach((r: any) => {
+        if (!r.completed_at) return;
+        const y = new Date(String(r.completed_at).replace(' ', 'T')).getFullYear();
+        if (!Number.isFinite(y)) return;
+        if (!acc[y]) acc[y] = { total: 0, hours: 0, sett: new Set() };
+        acc[y].total++;
+        acc[y].hours += Number(r.worked_hours) || 0;
+        if (r.settlement_id) acc[y].sett.add(r.settlement_id);
+      });
+      const years = Object.keys(acc).map(Number).sort((a, b) => b - a);
+      const byYear: Record<number, OperatorYearStats> = {};
+      years.forEach((y) => { byYear[y] = { total: acc[y].total, hours: acc[y].hours, assentamentos: acc[y].sett.size }; });
+      return { byYear, years };
     },
     enabled: !!operatorId,
   });
