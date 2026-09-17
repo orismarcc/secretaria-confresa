@@ -39,8 +39,9 @@ import {
   Plus, Pencil, Trash2, Archive, CheckCircle, Eye,
   FileDown, FileText, FileSpreadsheet, ChevronLeft, ChevronRight, X, XCircle,
   Tractor, Truck, Scissors, Shovel, Stethoscope, Layers, Package, Wrench,
-  SlidersHorizontal,
+  SlidersHorizontal, Users,
 } from 'lucide-react';
+import { ReassignOperatorDialog } from '@/components/ReassignOperatorDialog';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { generateExecutiveReport } from '@/lib/executiveReportPdf';
@@ -257,6 +258,7 @@ export default function ServicesPage() {
   const [comunicadoSource, setComunicadoSource] = useState<ComunicadoSource | null>(null);
 
   const [detailService, setDetailService] = useState<DbService | null>(null);
+  const [reassignOpen, setReassignOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
 
   // Auto-open detail sheet when ?detail=ID is in the URL (e.g. navigated from producer history).
@@ -744,6 +746,17 @@ export default function ServicesPage() {
       },
     },
     {
+      key: 'operador',
+      header: 'Operador',
+      className: 'hidden lg:table-cell',
+      render: (s: DbService) => {
+        const nome = (s as any).operador?.name as string | undefined;
+        return nome
+          ? <span className={`text-sm font-medium ${getUserColorClass(nome)}`}>{nome}</span>
+          : <span className="text-sm text-muted-foreground">—</span>;
+      },
+    },
+    {
       key: 'dates',
       header: 'Datas',
       render: (s: DbService) => {
@@ -1110,6 +1123,11 @@ export default function ServicesPage() {
         {/* Row 1: search + export */}
         <div className="flex gap-2 items-center flex-wrap">
           <SearchInput value={search} onChange={(v) => { setSearch(v); setCurrentPage(1); }} placeholder="Buscar por produtor..." className="flex-1 min-w-[140px]" />
+          {/* Reatribuir operador em massa (por assentamento/gleba) */}
+          <Button variant="outline" size="sm" onClick={() => setReassignOpen(true)} className="gap-1.5 shrink-0" title="Trocar o operador de todos os atendimentos de um assentamento/gleba">
+            <Users className="h-4 w-4" />
+            <span className="hidden sm:inline">Reatribuir operador</span>
+          </Button>
           {/* Um único relatório em PDF — segue a aba (Ativos ou Finalizados).
               Restrito a admin pleno (Coordenador não baixa). */}
           {isFullAdmin && (
@@ -1464,6 +1482,8 @@ export default function ServicesPage() {
         responsibleTechnicians={(responsibleTechnicians as any[]).filter((t: any) => t.is_active).map((t: any) => ({ id: t.id, name: t.name, cargo: t.cargo }))}
         onSubmit={editingService ? handleEdit : handleCreate}
       />
+
+      <ReassignOperatorDialog open={reassignOpen} onOpenChange={setReassignOpen} />
 
       {/* Delete Confirm */}
       <ConfirmDialog

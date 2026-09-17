@@ -889,6 +889,31 @@ export function useOperatorDemandTypes(operatorId: string | undefined) {
   });
 }
 
+/** Reatribui o operador de vários atendimentos (por id) para outro operador. */
+export function useReassignServicesOperator() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ serviceIds, toOperatorId }: { serviceIds: string[]; toOperatorId: string }) => {
+      if (serviceIds.length === 0) return { count: 0 };
+      const { error } = await supabase
+        .from('services')
+        .update({ operator_id: toOperatorId })
+        .in('id', serviceIds);
+      if (error) throw error;
+      return { count: serviceIds.length };
+    },
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['services'] });
+      queryClient.invalidateQueries({ queryKey: ['services', 'pending'] });
+      toast({ title: `${res.count} atendimento(s) reatribuído(s).` });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao reatribuir atendimentos', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
 /** Mapa operador → tipos de serviço liberados (para o auto-preenchimento). */
 export function useOperatorDemandTypesMap() {
   return useQuery({
