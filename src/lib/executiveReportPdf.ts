@@ -77,6 +77,10 @@ export interface ExecutiveReportOptions {
   includeDamRevenue?: boolean;
   /** 'completed' (padrão) = atendimentos finalizados; 'active' = ativos/pendentes. */
   scope?: 'completed' | 'active';
+  /** Nome da gleba filtrada (para o subtítulo). */
+  glebaName?: string;
+  /** Período filtrado (para o subtítulo), ex.: "01/09/2026 a 15/09/2026". */
+  periodo?: string;
 }
 
 // ─── Bar chart (vetorial) ──────────────────────────────────────────────────────
@@ -461,7 +465,9 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
     ? `${categoryLabel(category)} · ${demandTypeName}`
     : category === 'all' ? 'Todos os tipos' : category === 'entregas' ? 'Entregas' : categoryLabel(category);
   const filtroAssent = settlementId !== 'all' ? settlementName(settlementId) : 'Todos os assentamentos';
-  const subtitle = [filtroTipo, lotFilterName, filtroAssent].filter(Boolean).join(' · ');
+  const filtroGleba = opts.glebaName ? `Gleba: ${opts.glebaName}` : null;
+  const filtroPeriodo = opts.periodo ? `Período: ${opts.periodo}` : null;
+  const subtitle = [filtroTipo, lotFilterName, filtroAssent, filtroGleba, filtroPeriodo].filter(Boolean).join(' · ');
 
   // ── Montagem do documento ─────────────────────────────────────────────────
   const img = new Image();
@@ -589,14 +595,16 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
       }
     }
 
-    // Detalhe: atendimentos finalizados
+    // Detalhe por produtor — começa SEMPRE numa página nova (organização).
     if (includeServices && compServices.length > 0) {
-      if (y > 245) { doc.addPage(); y = 16; }
-      y = sectionTitle(doc, M, y, `Atendimentos finalizados (${compServices.length})`);
+      doc.addPage();
+      y = 16;
+      const dateField = isActive ? 'scheduled_date' : 'completed_at';
+      const dateHeader = isActive ? 'Agendado' : 'Finalizado';
+      y = sectionTitle(doc, M, y, `Atendimentos ${isActive ? 'ativos' : 'finalizados'} por produtor (${compServices.length})`);
       const body = compServices
         .slice()
-        // Ordem crescente de finalização (mais antigo primeiro).
-        .sort((a, b) => (parseDate(a.completed_at)?.getTime() || 0) - (parseDate(b.completed_at)?.getTime() || 0))
+        .sort((a, b) => (parseDate(a[dateField])?.getTime() || 0) - (parseDate(b[dateField])?.getTime() || 0))
         .map((s) => [
           prById.get(s.producer_id)?.name || s.producers?.name || 'N/A',
           dtById.get(s.demand_type_id)?.name || s.demand_types?.name || 'N/A',
@@ -604,11 +612,11 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
           (s as any).operador?.name || '-',
           s.worked_hours ? `${fmtDec(Number(s.worked_hours))} h` : '-',
           s.worked_area ? `${fmtDec(Number(s.worked_area))} ha` : '-',
-          fmtDate(s.completed_at),
+          fmtDate(s[dateField]),
         ]);
       autoTable(doc, {
         startY: y,
-        head: [['Produtor', 'Demanda', 'Assentamento', 'Operador', 'Horas', 'Área', 'Finalizado']],
+        head: [['Produtor', 'Demanda', 'Assentamento', 'Operador', 'Horas', 'Área', dateHeader]],
         body,
         styles: { fontSize: 7.5, cellPadding: 1.8 },
         headStyles: { fillColor: GREEN, textColor: 255, fontStyle: 'bold', fontSize: 7.5 },

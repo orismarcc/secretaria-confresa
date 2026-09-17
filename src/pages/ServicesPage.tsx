@@ -986,8 +986,17 @@ export default function ServicesPage() {
     const category = demandTypeFilter !== 'all'
       ? (catOfType.get(demandTypeFilter) || 'all')
       : categoryFilter;
+    // Gleba e período (quando filtrados) entram no subtítulo do relatório.
+    const glebaName = glebaFilter !== 'all'
+      ? ((glebas as any[]).find((g) => g.id === glebaFilter)?.name as string | undefined)
+      : undefined;
+    const periodo = (dateFrom || dateTo)
+      ? `${dateFrom ? dateFrom.split('-').reverse().join('/') : '…'} a ${dateTo ? dateTo.split('-').reverse().join('/') : '…'}`
+      : undefined;
     generateExecutiveReport({
-      services: services as any[],
+      // Passa a MESMA lista já filtrada da tela — o resumo respeita exatamente
+      // todos os filtros ativos (tipo, assentamento, gleba, período, DAM, busca).
+      services: filteredServices as any[],
       deliveries: [],
       producers: producers as any[],
       demandTypes: demandTypes as any[],
@@ -995,6 +1004,8 @@ export default function ServicesPage() {
       category,
       settlementId: settlementFilter,
       demandTypeId,
+      glebaName,
+      periodo,
       servicesOnly: true,
       includeDamRevenue: isFullAdmin,
       // Segue a aba atual: Ativos → relatório de ativos; Finalizados → finalizados.

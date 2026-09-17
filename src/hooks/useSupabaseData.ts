@@ -896,11 +896,17 @@ export function useReassignServicesOperator() {
   return useMutation({
     mutationFn: async ({ serviceIds, toOperatorId }: { serviceIds: string[]; toOperatorId: string }) => {
       if (serviceIds.length === 0) return { count: 0 };
-      const { error } = await supabase
-        .from('services')
-        .update({ operator_id: toOperatorId })
-        .in('id', serviceIds);
-      if (error) throw error;
+      // Atualiza em lotes para não estourar o tamanho da URL do PostgREST quando
+      // há muitos atendimentos. Se um lote falhar, aborta e propaga o erro.
+      const CHUNK = 150;
+      for (let i = 0; i < serviceIds.length; i += CHUNK) {
+        const slice = serviceIds.slice(i, i + CHUNK);
+        const { error } = await supabase
+          .from('services')
+          .update({ operator_id: toOperatorId })
+          .in('id', slice);
+        if (error) throw error;
+      }
       return { count: serviceIds.length };
     },
     onSuccess: (res) => {
