@@ -35,6 +35,9 @@ export function ReassignOperatorDialog({ open, onOpenChange }: ReassignOperatorD
   const [settlementId, setSettlementId] = useState('');
   const [glebaId, setGlebaId] = useState(NONE);
   const [toOp, setToOp] = useState('');
+  // Situação: 'active' (cadastrados, ainda não finalizados) OU 'completed'
+  // (finalizados). Nunca os dois juntos — um ou outro.
+  const [scope, setScope] = useState<'active' | 'completed'>('active');
   const [confirming, setConfirming] = useState(false);
 
   // Glebas do assentamento escolhido.
@@ -50,14 +53,16 @@ export function ReassignOperatorDialog({ open, onOpenChange }: ReassignOperatorD
       if (s.operator_id !== fromOp) return false;
       if (s.settlement_id !== settlementId) return false;
       if (glebaId !== NONE && s.producers?.gleba_id !== glebaId) return false;
-      return true;
+      // Situação: um OU outro, nunca ambos.
+      if (scope === 'completed') return s.status === 'completed';
+      return s.status !== 'completed' && s.status !== 'cancelled';
     });
-  }, [services, fromOp, settlementId, glebaId]);
+  }, [services, fromOp, settlementId, glebaId, scope]);
 
   const opName = (id: string) => (operators as any[]).find((o) => o.id === id)?.name || '—';
   const canPreview = !!fromOp && !!settlementId && !!toOp && fromOp !== toOp;
 
-  const reset = () => { setFromOp(''); setSettlementId(''); setGlebaId(NONE); setToOp(''); setConfirming(false); };
+  const reset = () => { setFromOp(''); setSettlementId(''); setGlebaId(NONE); setToOp(''); setScope('active'); setConfirming(false); };
   const close = (o: boolean) => { if (!o) reset(); onOpenChange(o); };
 
   const doReassign = async () => {
@@ -74,8 +79,9 @@ export function ReassignOperatorDialog({ open, onOpenChange }: ReassignOperatorD
             Reatribuir operador
           </DialogTitle>
           <DialogDescription>
-            Move os atendimentos de um assentamento (e gleba, opcional) de um operador para outro —
-            inclusive os já cadastrados/finalizados.
+            Move os atendimentos de um assentamento (e gleba, opcional) de um operador para outro.
+            Escolha a situação — <strong>cadastrados</strong> ou <strong>finalizados</strong> — para
+            não misturar quem fez os já concluídos com quem assume os em aberto.
           </DialogDescription>
         </DialogHeader>
 
@@ -88,6 +94,20 @@ export function ReassignOperatorDialog({ open, onOpenChange }: ReassignOperatorD
                 {(operators as any[]).map((o) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Situação dos atendimentos</Label>
+            <Select value={scope} onValueChange={(v) => { setScope(v as 'active' | 'completed'); setConfirming(false); }}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Cadastrados (ainda não finalizados)</SelectItem>
+                <SelectItem value="completed">Finalizados</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Só um dos dois: finalizados e cadastrados podem ter operadores diferentes.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -131,7 +151,8 @@ export function ReassignOperatorDialog({ open, onOpenChange }: ReassignOperatorD
                 <span className="font-semibold text-primary">{opName(toOp)}</span>
               </div>
               <p className="mt-1.5 text-muted-foreground">
-                <span className="text-2xl font-bold text-foreground">{matched.length}</span> atendimento(s) serão reatribuídos
+                <span className="text-2xl font-bold text-foreground">{matched.length}</span> atendimento(s)
+                {' '}<strong>{scope === 'completed' ? 'finalizados' : 'cadastrados'}</strong> serão reatribuídos
                 {glebaId !== NONE ? ' (gleba selecionada)' : ''}.
               </p>
             </div>
@@ -140,7 +161,7 @@ export function ReassignOperatorDialog({ open, onOpenChange }: ReassignOperatorD
           {confirming && matched.length > 0 && (
             <div className="flex items-start gap-2 rounded-lg border border-amber-400/50 bg-amber-500/10 p-2.5 text-xs text-amber-800 dark:text-amber-300">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-              Isso altera o operador nesses atendimentos (inclusive finalizados). A ação é reversível refazendo a reatribuição no sentido contrário.
+              Isso altera o operador nos atendimentos <strong>{scope === 'completed' ? 'finalizados' : 'cadastrados'}</strong> selecionados. A ação é reversível refazendo a reatribuição no sentido contrário.
             </div>
           )}
 
