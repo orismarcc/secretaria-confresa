@@ -17,10 +17,17 @@ const PROD_ORIGINS = [
     .filter(Boolean),
 ];
 
+// Qualquer alias/preview do app na Vercel (…​.vercel.app). Seguro: a função só
+// responde a um JWT de admin válido — o CORS aqui é defesa em profundidade, não
+// a autenticação. Isso evita que a lista de operadores quebre quando o app é
+// aberto por outro alias da Vercel (o problema recorrente).
+const VERCEL_ORIGIN = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i;
+
 function buildCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get("Origin") ?? "";
   const allowed = [...PROD_ORIGINS, ...DEV_ORIGINS];
-  const allowedOrigin = allowed.includes(origin) ? origin : (allowed[0] ?? "");
+  const isAllowed = allowed.includes(origin) || VERCEL_ORIGIN.test(origin);
+  const allowedOrigin = isAllowed ? origin : (allowed[0] ?? "");
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
