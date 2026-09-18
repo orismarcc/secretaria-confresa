@@ -282,15 +282,18 @@ export default function OperatorPage() {
   const { data: allowedGlebaIds = [], isLoading: gLoading } = useOperatorGlebas(user?.id);
   const { data: glebas = [] } = useGlebas();
   const { data: ownStats } = useOperatorOwnStats(user?.id);
-  // Métricas por ano — padrão no ano atual; seletor só se houver outros anos.
+  // Métricas por período — padrão no ano atual; seletor (com "Todos os
+  // períodos") só aparece se houver atendimentos de outros anos.
   const currentYear = new Date().getFullYear();
-  const [statsYear, setStatsYear] = useState<number>(currentYear);
+  const [statsPeriod, setStatsPeriod] = useState<'all' | number>(currentYear);
   const statYearOptions = useMemo(() => {
     const set = new Set<number>([currentYear, ...((ownStats?.years) ?? [])]);
     return Array.from(set).sort((a, b) => b - a);
   }, [ownStats, currentYear]);
   const showYearSelect = ((ownStats?.years) ?? []).some((y) => y !== currentYear);
-  const yearStats = ownStats?.byYear?.[statsYear] ?? { total: 0, hours: 0, assentamentos: 0 };
+  const yearStats = statsPeriod === 'all'
+    ? (ownStats?.all ?? { total: 0, hours: 0, assentamentos: 0 })
+    : (ownStats?.byYear?.[statsPeriod] ?? { total: 0, hours: 0, assentamentos: 0 });
   const { data: settlements = [] } = useSettlements();
   const { data: locations = [] } = useLocations();
 
@@ -543,10 +546,11 @@ export default function OperatorPage() {
               Minhas métricas
             </p>
             {showYearSelect ? (
-              <Select value={String(statsYear)} onValueChange={(v) => setStatsYear(Number(v))}>
-                <SelectTrigger className="h-7 w-[92px] text-xs"><SelectValue /></SelectTrigger>
+              <Select value={String(statsPeriod)} onValueChange={(v) => setStatsPeriod(v === 'all' ? 'all' : Number(v))}>
+                <SelectTrigger className="h-7 w-[150px] text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {statYearOptions.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                  <SelectItem value="all">Todos os períodos</SelectItem>
                 </SelectContent>
               </Select>
             ) : (

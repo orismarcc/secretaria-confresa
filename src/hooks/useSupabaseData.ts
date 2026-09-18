@@ -1062,7 +1062,7 @@ export function useOperatorOwnStats(operatorId: string | undefined) {
   return useQuery({
     queryKey: ['operator_own_stats', operatorId],
     queryFn: async () => {
-      if (!operatorId) return { byYear: {} as Record<number, OperatorYearStats>, years: [] as number[] };
+      if (!operatorId) return { byYear: {} as Record<number, OperatorYearStats>, years: [] as number[], all: { total: 0, hours: 0, assentamentos: 0 } as OperatorYearStats };
       const { data, error } = await supabase
         .from('services')
         .select('worked_hours, settlement_id, completed_at')
@@ -1070,8 +1070,14 @@ export function useOperatorOwnStats(operatorId: string | undefined) {
         .eq('status', 'completed');
       if (error) throw error;
       const acc: Record<number, { total: number; hours: number; sett: Set<string> }> = {};
+      // Total geral (todos os períodos) — assentamentos distintos de tudo.
+      const allSett = new Set<string>();
+      let allTotal = 0; let allHours = 0;
       (data ?? []).forEach((r: any) => {
-        if (!r.completed_at) return;
+        if (r.settlement_id) allSett.add(r.settlement_id);
+        allTotal++;
+        allHours += Number(r.worked_hours) || 0;
+        if (!r.completed_at) return; // sem data não entra na quebra por ano
         const y = new Date(String(r.completed_at).replace(' ', 'T')).getFullYear();
         if (!Number.isFinite(y)) return;
         if (!acc[y]) acc[y] = { total: 0, hours: 0, sett: new Set() };
@@ -1082,7 +1088,8 @@ export function useOperatorOwnStats(operatorId: string | undefined) {
       const years = Object.keys(acc).map(Number).sort((a, b) => b - a);
       const byYear: Record<number, OperatorYearStats> = {};
       years.forEach((y) => { byYear[y] = { total: acc[y].total, hours: acc[y].hours, assentamentos: acc[y].sett.size }; });
-      return { byYear, years };
+      const all: OperatorYearStats = { total: allTotal, hours: allHours, assentamentos: allSett.size };
+      return { byYear, years, all };
     },
     enabled: !!operatorId,
   });
