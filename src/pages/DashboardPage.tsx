@@ -62,6 +62,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { SortableServiceItem } from '@/components/SortableServiceItem';
+import { cn } from '@/lib/utils';
 import { useMaintenances } from '@/hooks/useMaintenanceData';
 import { useOperators } from '@/hooks/useOperatorData';
 
@@ -535,6 +536,12 @@ export default function DashboardPage() {
                           <User className="h-3 w-3 shrink-0" />
                           {service.operator_id ? (opNameById.get(service.operator_id) || 'Operador') : 'Sem operador'}
                         </p>
+                        <span className={cn(
+                          'inline-block mt-1 text-[9px] sm:text-[10px] font-semibold rounded px-1 py-0.5',
+                          (service as any).dam_paid ? 'bg-success/10 text-success' : 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+                        )}>
+                          DAM {(service as any).dam_paid ? 'paga' : 'não paga'}
+                        </span>
                         {service.scheduled_date && (
                           <p className="text-[10px] text-muted-foreground mt-1">
                             {format(new Date(service.scheduled_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR })}

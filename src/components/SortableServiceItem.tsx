@@ -16,6 +16,7 @@ interface ServiceData {
   scheduled_date: string;
   appointment_date?: string | null;
   worked_hours?: number | null;
+  dam_paid?: boolean | null;
   producers?: { name: string } | null;
   demand_types?: { name: string } | null;
 }
@@ -124,6 +125,12 @@ export function SortableServiceItem({
               <span className="ml-1 text-blue-600 font-medium">· {Number(service.worked_hours).toLocaleString('pt-BR')}h</span>
             )}
           </p>
+          <span className={cn(
+            'inline-block mt-0.5 text-[9px] sm:text-[10px] font-semibold rounded px-1 py-0.5',
+            service.dam_paid ? 'bg-success/10 text-success' : 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+          )}>
+            DAM {service.dam_paid ? 'paga' : 'não paga'}
+          </span>
           {hasAppointment && isToday && (
             <span className="text-[9px] sm:text-[10px] font-semibold text-primary uppercase tracking-wide">Hoje</span>
           )}
