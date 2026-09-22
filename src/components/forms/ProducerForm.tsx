@@ -36,6 +36,9 @@ import {
   onlyDigits,
   type DocType,
 } from '@/lib/documents';
+import { useGeolocation } from '@/hooks/useGeolocation';
+import { useToast } from '@/hooks/use-toast';
+import { MapPin, Loader2 } from 'lucide-react';
 
 const producerSchema = z.object({
   name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres').max(100, 'Nome muito longo'),
@@ -82,6 +85,10 @@ export function ProducerForm({
 }: ProducerFormProps) {
   // Tipo de documento: detectado pelo nº de dígitos (14 = CNPJ, senão CPF)
   const [docType, setDocType] = useState<DocType>('cpf');
+  // Marcar localização — usa o MESMO hook do início de atendimento do operador
+  // (com o ajuste de Android). Preenche latitude/longitude; opcional.
+  const { getCurrentPosition, isLoading: gpsLoading } = useGeolocation();
+  const { toast } = useToast();
 
   const form = useForm<ProducerFormData>({
     resolver: zodResolver(producerSchema),
@@ -97,6 +104,18 @@ export function ProducerForm({
       caf: (producer as any)?.caf || '',
     },
   });
+
+  // Captura a localização atual e preenche os campos (pode ser ajustada depois).
+  const handleMarkLocation = async () => {
+    try {
+      const { latitude, longitude } = await getCurrentPosition();
+      form.setValue('latitude', latitude.toFixed(6));
+      form.setValue('longitude', longitude.toFixed(6));
+      toast({ title: 'Localização marcada', description: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` });
+    } catch {
+      toast({ title: 'Não foi possível obter a localização', description: 'Verifique se a localização está ativa e permitida.', variant: 'destructive' });
+    }
+  };
 
   useEffect(() => {
     if (producer) {
@@ -367,6 +386,18 @@ export function ProducerForm({
               <p className="text-xs text-muted-foreground mt-2">
                 Exemplo: Latitude: -12.345678, Longitude: -45.678901
               </p>
+              {/* Marcar localização (opcional) — mesma captura do início de atendimento */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleMarkLocation}
+                disabled={gpsLoading}
+                className="mt-3 w-full sm:w-auto border-primary/40 text-primary hover:bg-primary/10 hover:text-primary"
+              >
+                {gpsLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <MapPin className="h-4 w-4 mr-2" />}
+                {gpsLoading ? 'Obtendo localização…' : 'Marcar localização atual'}
+              </Button>
             </div>
 
             <div className="flex justify-end gap-2 pt-4">
