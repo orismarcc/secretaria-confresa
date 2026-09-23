@@ -21,6 +21,7 @@ import {
   Landmark,
   History,
   Hammer,
+  Car,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -41,6 +42,7 @@ const adminNavItems = [
   { path: '/demand-types', label: 'Serviços', icon: FileText },
   { path: '/settlements', label: 'Assentamentos', icon: Landmark },
   { path: '/machinery', label: 'Frotas', icon: Wrench },
+  { path: '/transito', label: 'Trânsito', icon: Car },
   { path: '/maintenance', label: 'Manutenções', icon: Hammer },
   { path: '/patrimony', label: 'Patrimônio', icon: Building2 },
   { path: '/sefaz', label: 'SEFAZ', icon: FileText },
