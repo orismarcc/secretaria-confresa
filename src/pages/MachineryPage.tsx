@@ -19,7 +19,8 @@ import { Label } from '@/components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Plus, Pencil, Trash2, Wrench, Droplet, User } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, Pencil, Trash2, Wrench, Droplet, User, FileText, Car } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   useMachinery,
@@ -31,6 +32,8 @@ import {
 } from '@/hooks/useSupabaseData';
 import { useOperators } from '@/hooks/useOperatorData';
 import { MachineryRefuelDialog, FUEL_TYPES } from '@/components/MachineryRefuelDialog';
+import { FleetDocsDialog } from '@/components/FleetDocsDialog';
+import { FleetAlerts } from '@/components/FleetAlerts';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface MachineryItem {
@@ -39,6 +42,7 @@ interface MachineryItem {
   patrimony_number: string;
   chassis: string | null;
   fuel_type: string | null;
+  kind: string | null;
   is_active: boolean;
   created_at: string | null;
 }
@@ -70,19 +74,28 @@ export default function MachineryPage() {
   })();
 
   const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<'maquinario' | 'veiculo'>('maquinario');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<MachineryItem | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [toDelete, setToDelete] = useState<MachineryItem | null>(null);
   const [refuelMachine, setRefuelMachine] = useState<MachineryItem | null>(null);
+  const [docsMachine, setDocsMachine] = useState<MachineryItem | null>(null);
 
   // Form state
   const [formName, setFormName] = useState('');
   const [formPatrimony, setFormPatrimony] = useState('');
   const [formChassis, setFormChassis] = useState('');
   const [formFuel, setFormFuel] = useState('');
+  const [formKind, setFormKind] = useState<'maquinario' | 'veiculo'>('maquinario');
 
-  const filtered = machinery.filter((m: MachineryItem) =>
+  const kindOf = (m: MachineryItem) => (m.kind === 'veiculo' ? 'veiculo' : 'maquinario');
+  const maquinarios = machinery.filter((m: MachineryItem) => kindOf(m) === 'maquinario');
+  const veiculos = machinery.filter((m: MachineryItem) => kindOf(m) === 'veiculo');
+  const isVeiculoTab = tab === 'veiculo';
+  const singular = isVeiculoTab ? 'Veículo' : 'Maquinário';
+
+  const filtered = (isVeiculoTab ? veiculos : maquinarios).filter((m: MachineryItem) =>
     textIncludes(m.name, search) ||
     textIncludes(m.patrimony_number, search)
   );
@@ -93,6 +106,7 @@ export default function MachineryPage() {
     setFormPatrimony('');
     setFormChassis('');
     setFormFuel('');
+    setFormKind(tab); // novo item herda a aba atual
     setFormOpen(true);
   };
 
@@ -102,6 +116,7 @@ export default function MachineryPage() {
     setFormPatrimony(item.patrimony_number);
     setFormChassis(item.chassis || '');
     setFormFuel(item.fuel_type || '');
+    setFormKind(kindOf(item));
     setFormOpen(true);
   };
 
@@ -114,6 +129,7 @@ export default function MachineryPage() {
         patrimony_number: formPatrimony,
         chassis: formChassis || null,
         fuel_type: formFuel || null,
+        kind: formKind,
       });
     } else {
       createMachinery.mutate({
@@ -121,6 +137,7 @@ export default function MachineryPage() {
         patrimony_number: formPatrimony,
         chassis: formChassis || null,
         fuel_type: formFuel || null,
+        kind: formKind,
       });
     }
     setFormOpen(false);
@@ -141,10 +158,12 @@ export default function MachineryPage() {
   const columns = [
     {
       key: 'name',
-      header: 'Maquinário',
+      header: singular,
       render: (m: MachineryItem) => (
         <div className="flex items-center gap-2">
-          <Wrench className="h-4 w-4 text-muted-foreground" />
+          {kindOf(m) === 'veiculo'
+            ? <Car className="h-4 w-4 text-muted-foreground" />
+            : <Wrench className="h-4 w-4 text-muted-foreground" />}
           <span className="font-medium">{m.name}</span>
         </div>
       ),
@@ -213,6 +232,9 @@ export default function MachineryPage() {
       header: '',
       render: (m: MachineryItem) => (
         <div className="flex gap-1">
+          <Button variant="ghost" size="icon" onClick={() => setDocsMachine(m)} title="Documentação">
+            <FileText className="h-4 w-4 text-primary" />
+          </Button>
           <Button variant="ghost" size="icon" onClick={() => setRefuelMachine(m)} title="Abastecimento">
             <Droplet className="h-4 w-4 text-blue-500" />
           </Button>
@@ -239,7 +261,7 @@ export default function MachineryPage() {
   if (isLoading) {
     return (
       <AppLayout>
-        <PageHeader title="Maquinários" description="Gerenciar maquinários" />
+        <PageHeader title="Frotas" description="Maquinários, veículos e documentação" />
         <div className="space-y-4">
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-64 w-full" />
@@ -251,31 +273,59 @@ export default function MachineryPage() {
   return (
     <AppLayout>
       <PageHeader
-        title="Maquinários"
-        description="Gerenciar maquinários para os serviços"
-        action={canManage ? { label: 'Novo', onClick: openCreateForm, icon: <Plus className="h-4 w-4 mr-2" /> } : undefined}
+        title="Frotas"
+        description="Maquinários, veículos, abastecimento e documentação"
+        action={canManage ? { label: `Novo ${singular}`, onClick: openCreateForm, icon: <Plus className="h-4 w-4 mr-2" /> } : undefined}
       />
 
+      {/* Alertas de vencimento (documentos + CNH) */}
       <div className="mb-4">
-        <SearchInput value={search} onChange={setSearch} placeholder="Buscar maquinário..." className="max-w-md" />
+        <FleetAlerts />
+      </div>
+
+      <Tabs value={tab} onValueChange={(v) => setTab(v as 'maquinario' | 'veiculo')} className="mb-4">
+        <TabsList>
+          <TabsTrigger value="maquinario" className="gap-2">
+            <Wrench className="h-4 w-4" /> Maquinários
+            <span className="bg-muted px-1.5 py-0.5 rounded-full text-xs">{maquinarios.length}</span>
+          </TabsTrigger>
+          <TabsTrigger value="veiculo" className="gap-2">
+            <Car className="h-4 w-4" /> Veículos
+            <span className="bg-muted px-1.5 py-0.5 rounded-full text-xs">{veiculos.length}</span>
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      <div className="mb-4">
+        <SearchInput value={search} onChange={setSearch} placeholder={`Buscar ${singular.toLowerCase()}...`} className="max-w-md" />
       </div>
 
       <DataTable
         data={filtered}
         columns={columns}
         keyExtractor={(m) => m.id}
-        emptyMessage="Nenhum maquinário cadastrado"
+        emptyMessage={`Nenhum ${singular.toLowerCase()} cadastrado`}
       />
 
       {/* Form Dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editing ? 'Editar Maquinário' : 'Novo Maquinário'}</DialogTitle>
+            <DialogTitle>{editing ? `Editar ${singular}` : `Novo ${singular}`}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Nome do Maquinário *</Label>
+              <Label>Tipo</Label>
+              <Select value={formKind} onValueChange={(v) => setFormKind(v as 'maquinario' | 'veiculo')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="maquinario">Maquinário</SelectItem>
+                  <SelectItem value="veiculo">Veículo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="name">Nome do {singular} *</Label>
               <Input
                 id="name"
                 value={formName}
@@ -331,7 +381,7 @@ export default function MachineryPage() {
       <ConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        title="Excluir Maquinário"
+        title={`Excluir ${singular}`}
         description={`Tem certeza que deseja excluir "${toDelete?.name}"? Esta ação não pode ser desfeita.`}
         onConfirm={handleDelete}
         confirmLabel="Excluir"
@@ -344,6 +394,13 @@ export default function MachineryPage() {
         machineryId={refuelMachine?.id ?? null}
         machineryName={refuelMachine?.name}
         defaultFuelType={refuelMachine?.fuel_type}
+      />
+
+      <FleetDocsDialog
+        open={!!docsMachine}
+        onOpenChange={(o) => { if (!o) setDocsMachine(null); }}
+        machineryId={docsMachine?.id ?? null}
+        machineryName={docsMachine?.name}
       />
     </AppLayout>
   );

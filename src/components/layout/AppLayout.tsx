@@ -40,7 +40,7 @@ const adminNavItems = [
   { path: '/operators', label: 'Colaboradores', icon: UserCog },
   { path: '/demand-types', label: 'Serviços', icon: FileText },
   { path: '/settlements', label: 'Assentamentos', icon: Landmark },
-  { path: '/machinery', label: 'Maquinários', icon: Wrench },
+  { path: '/machinery', label: 'Frotas', icon: Wrench },
   { path: '/maintenance', label: 'Manutenções', icon: Hammer },
   { path: '/patrimony', label: 'Patrimônio', icon: Building2 },
   { path: '/sefaz', label: 'SEFAZ', icon: FileText },
@@ -55,7 +55,7 @@ const operatorNavItems = [
 // Assistente de Campo: acesso restrito a Atendimentos (por operador) e Maquinários.
 const assistenteNavItems = [
   { path: '/field-services', label: 'Atendimentos', icon: ClipboardList },
-  { path: '/machinery', label: 'Maquinários', icon: Wrench },
+  { path: '/machinery', label: 'Frotas', icon: Wrench },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {

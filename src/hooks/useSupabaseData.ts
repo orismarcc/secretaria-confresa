@@ -1305,7 +1305,7 @@ export function useCreateMachinery() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (item: { name: string; patrimony_number: string; chassis?: string | null; fuel_type?: string | null }) => {
+    mutationFn: async (item: { name: string; patrimony_number: string; chassis?: string | null; fuel_type?: string | null; kind?: string | null }) => {
       const { data, error } = await supabase
         .from('machinery')
         .insert(item)
@@ -1458,6 +1458,144 @@ export function useDeleteMachineryRefuel() {
     onError: (error: Error) => {
       toast({ title: 'Erro ao remover abastecimento', description: friendlyDbError(error), variant: 'destructive' });
     },
+  });
+}
+
+// ============= FROTA: DOCUMENTOS E CNH =============
+export interface FleetDocument {
+  id: string;
+  machinery_id: string;
+  doc_type: string;
+  description: string | null;
+  responsavel: string | null;
+  validade: string | null;
+  file_path: string | null;
+  created_at: string;
+}
+
+/** Documentos de um item da frota (mais recentes/urgentes primeiro). */
+export function useFleetDocuments(machineryId: string | undefined) {
+  return useQuery({
+    queryKey: ['fleet_documents', machineryId],
+    queryFn: async () => {
+      if (!machineryId) return [] as FleetDocument[];
+      const { data, error } = await supabase
+        .from('fleet_documents')
+        .select('id, machinery_id, doc_type, description, responsavel, validade, file_path, created_at')
+        .eq('machinery_id', machineryId)
+        .order('validade', { ascending: true, nullsFirst: false });
+      if (error) throw error;
+      return (data ?? []) as FleetDocument[];
+    },
+    enabled: !!machineryId,
+  });
+}
+
+/** Todos os documentos com validade — base para os alertas de vencimento. */
+export function useFleetDocumentsWithValidade() {
+  return useQuery({
+    queryKey: ['fleet_documents', 'validade'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('fleet_documents')
+        .select('id, machinery_id, doc_type, description, responsavel, validade, machinery(name, patrimony_number, kind)')
+        .not('validade', 'is', null)
+        .order('validade', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+}
+
+export function useCreateFleetDocument() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (item: { machinery_id: string; doc_type: string; description?: string | null; responsavel?: string | null; validade?: string | null; file_path?: string | null }) => {
+      const { data: auth } = await supabase.auth.getUser();
+      const { error } = await supabase.from('fleet_documents').insert({ ...item, created_by: auth?.user?.id ?? null });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      queryClient.invalidateQueries({ queryKey: ['fleet_documents', v.machinery_id] });
+      queryClient.invalidateQueries({ queryKey: ['fleet_documents', 'validade'] });
+      toast({ title: 'Documento salvo!' });
+    },
+    onError: (error: Error) => toast({ title: 'Erro ao salvar documento', description: friendlyDbError(error), variant: 'destructive' }),
+  });
+}
+
+export function useDeleteFleetDocument() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; machinery_id: string }) => {
+      const { error } = await supabase.from('fleet_documents').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      queryClient.invalidateQueries({ queryKey: ['fleet_documents', v.machinery_id] });
+      queryClient.invalidateQueries({ queryKey: ['fleet_documents', 'validade'] });
+      toast({ title: 'Documento removido.' });
+    },
+    onError: (error: Error) => toast({ title: 'Erro ao remover documento', description: friendlyDbError(error), variant: 'destructive' }),
+  });
+}
+
+// ── CNH dos operadores ──────────────────────────────────────────────────────
+export function useDriverLicense(operatorId: string | undefined) {
+  return useQuery({
+    queryKey: ['driver_license', operatorId],
+    queryFn: async () => {
+      if (!operatorId) return null;
+      const { data, error } = await supabase
+        .from('driver_licenses')
+        .select('operator_id, numero, categoria, validade')
+        .eq('operator_id', operatorId)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { operator_id: string; numero: string | null; categoria: string | null; validade: string | null } | null;
+    },
+    enabled: !!operatorId,
+  });
+}
+
+/** Todas as CNHs com validade + nome do operador — base para os alertas. */
+export function useDriverLicensesWithValidade() {
+  return useQuery({
+    queryKey: ['driver_licenses', 'validade'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('driver_licenses')
+        .select('operator_id, numero, categoria, validade')
+        .not('validade', 'is', null)
+        .order('validade', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+}
+
+export function useSetDriverLicense() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ operatorId, numero, categoria, validade }: { operatorId: string; numero?: string | null; categoria?: string | null; validade?: string | null }) => {
+      // Sem nada preenchido: remove o registro (mantém limpo).
+      if (!numero && !categoria && !validade) {
+        await supabase.from('driver_licenses').delete().eq('operator_id', operatorId);
+        return;
+      }
+      const { error } = await supabase.from('driver_licenses').upsert({
+        operator_id: operatorId, numero: numero || null, categoria: categoria || null, validade: validade || null, updated_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_d, v) => {
+      queryClient.invalidateQueries({ queryKey: ['driver_license', v.operatorId] });
+      queryClient.invalidateQueries({ queryKey: ['driver_licenses', 'validade'] });
+    },
+    onError: (error: Error) => toast({ title: 'Erro ao salvar CNH', description: friendlyDbError(error), variant: 'destructive' }),
   });
 }
 

@@ -50,8 +50,8 @@ interface OperatorFormProps {
   defaultValues?: { name: string; email?: string; cpf?: string; avatarUrl?: string | null };
   onSubmit: (
     data:
-      | { name: string; email: string; password: string; cpf: string; avatarUrl: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; glebaIds: string[]; jobTitle?: string }
-      | { name: string; cpf: string; avatarUrl: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; glebaIds: string[]; jobTitle?: string }
+      | { name: string; email: string; password: string; cpf: string; avatarUrl: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; glebaIds: string[]; jobTitle?: string; cnhNumero?: string; cnhCategoria?: string; cnhValidade?: string }
+      | { name: string; cpf: string; avatarUrl: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; glebaIds: string[]; jobTitle?: string; cnhNumero?: string; cnhCategoria?: string; cnhValidade?: string }
   ) => Promise<void>;
   onCancel: () => void;
   isLoading: boolean;
@@ -78,6 +78,8 @@ interface OperatorFormProps {
   glebas?: OperatorGlebaOption[];
   /** Glebas já atribuídas ao operador (modo edição) */
   initialGlebaIds?: string[];
+  /** CNH já cadastrada do operador (modo edição) */
+  initialCnh?: { numero?: string | null; categoria?: string | null; validade?: string | null } | null;
 }
 
 export function OperatorForm({
@@ -94,6 +96,7 @@ export function OperatorForm({
   initialSettlementIds = [],
   glebas = [],
   initialGlebaIds = [],
+  initialCnh,
   roleOptions,
   initialRole,
   submitLabel,
@@ -113,6 +116,9 @@ export function OperatorForm({
   const [machineryIds, setMachineryIds] = useState<string[]>(initialMachineryIds);
   const [settlementIds, setSettlementIds] = useState<string[]>(initialSettlementIds);
   const [glebaIds, setGlebaIds] = useState<string[]>(initialGlebaIds);
+  const [cnhNumero, setCnhNumero] = useState(initialCnh?.numero || '');
+  const [cnhCategoria, setCnhCategoria] = useState(initialCnh?.categoria || '');
+  const [cnhValidade, setCnhValidade] = useState((initialCnh?.validade || '').slice(0, 10));
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const toggleDemandType = (id: string) => {
@@ -156,7 +162,7 @@ export function OperatorForm({
         setErrors(fieldErrors);
         return;
       }
-      await onSubmit({ name, email, password, cpf, avatarUrl, demandTypeIds, machineryIds, settlementIds, glebaIds, jobTitle: hasRoleSelect ? jobTitle : undefined });
+      await onSubmit({ name, email, password, cpf, avatarUrl, demandTypeIds, machineryIds, settlementIds, glebaIds, jobTitle: hasRoleSelect ? jobTitle : undefined, cnhNumero, cnhCategoria, cnhValidade });
     } else {
       const result = editSchema.safeParse({ name });
       if (!result.success) {
@@ -167,7 +173,7 @@ export function OperatorForm({
         setErrors(fieldErrors);
         return;
       }
-      await onSubmit({ name, cpf, avatarUrl, demandTypeIds, machineryIds, settlementIds, glebaIds });
+      await onSubmit({ name, cpf, avatarUrl, demandTypeIds, machineryIds, settlementIds, glebaIds, cnhNumero, cnhCategoria, cnhValidade });
     }
   };
 
@@ -399,6 +405,19 @@ export function OperatorForm({
                 </div>
               ))}
           </div>
+        </div>
+      )}
+
+      {/* CNH (opcional) — usada para alertas de vencimento na Frota */}
+      {!hasRoleSelect && (
+        <div className="space-y-2">
+          <Label>CNH (opcional)</Label>
+          <div className="grid grid-cols-3 gap-2">
+            <Input value={cnhNumero} onChange={(e) => setCnhNumero(e.target.value)} placeholder="Número" />
+            <Input value={cnhCategoria} onChange={(e) => setCnhCategoria(e.target.value.toUpperCase())} placeholder="Categoria (ex.: D)" />
+            <Input type="date" value={cnhValidade} onChange={(e) => setCnhValidade(e.target.value)} title="Validade" />
+          </div>
+          <p className="text-xs text-muted-foreground">A validade alimenta os alertas de vencimento de CNH na página de Frotas.</p>
         </div>
       )}
 

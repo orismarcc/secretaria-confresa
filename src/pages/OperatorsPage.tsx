@@ -49,6 +49,8 @@ import {
   useGlebas,
   useOperatorGlebas,
   useSetOperatorGlebas,
+  useDriverLicense,
+  useSetDriverLicense,
 } from '@/hooks/useSupabaseData';
 import {
   Plus, Pencil, Trash2, UserCog, BarChart3, CheckCircle,
@@ -264,6 +266,7 @@ export default function OperatorsPage() {
   const setOperatorMachinery = useSetOperatorMachinery();
   const setOperatorSettlements = useSetOperatorSettlements();
   const setOperatorGlebas = useSetOperatorGlebas();
+  const setDriverLicense = useSetDriverLicense();
 
   // Tipos de serviço ofertáveis a operadores (exclui Entregas — fluxo próprio)
   const operatorDemandTypeOptions = useMemo(
@@ -304,6 +307,7 @@ export default function OperatorsPage() {
     useOperatorSettlements(editingOperator?.id);
   const { data: editingOperatorGlebaIds = [], isLoading: editingGlebaLoading } =
     useOperatorGlebas(editingOperator?.id);
+  const { data: editingOperatorCnh } = useDriverLicense(editingOperator?.id);
   // Assentamentos selecionados do operador em foco no painel de detalhes ("olho").
   const { data: metricsOperatorSettlementIds = [] } = useOperatorSettlements(metricsOperator?.id);
   const metricsOperatorSettlementNames = useMemo(
@@ -367,9 +371,9 @@ export default function OperatorsPage() {
 
   // ── Operator helpers ───────────────────────────────────────────────────────
   const handleCreate = async (
-    data: { name: string; email: string; password: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; glebaIds: string[] }
+    data: { name: string; email: string; password: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; glebaIds: string[]; cnhNumero?: string; cnhCategoria?: string; cnhValidade?: string }
   ) => {
-    const { demandTypeIds, machineryIds, settlementIds, glebaIds, cpf, avatarUrl, ...operatorData } = data;
+    const { demandTypeIds, machineryIds, settlementIds, glebaIds, cnhNumero, cnhCategoria, cnhValidade, cpf, avatarUrl, ...operatorData } = data;
     const newUser = await createOperator.mutateAsync(operatorData);
     if (newUser?.id) {
       if (cpf || avatarUrl) await updateUserProfile.mutateAsync({ id: newUser.id, cpf: cpf || undefined, avatar_url: avatarUrl ?? undefined });
@@ -377,6 +381,7 @@ export default function OperatorsPage() {
       await setOperatorMachinery.mutateAsync({ operatorId: newUser.id, machineryIds });
       await setOperatorSettlements.mutateAsync({ operatorId: newUser.id, settlementIds });
       await setOperatorGlebas.mutateAsync({ operatorId: newUser.id, glebaIds });
+      await setDriverLicense.mutateAsync({ operatorId: newUser.id, numero: cnhNumero, categoria: cnhCategoria, validade: cnhValidade });
     }
     setIsFormOpen(false);
   };
@@ -406,7 +411,7 @@ export default function OperatorsPage() {
     setAssistFormOpen(false);
   };
 
-  const handleUpdate = async (data: { name: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; glebaIds: string[] }) => {
+  const handleUpdate = async (data: { name: string; cpf?: string; avatarUrl?: string | null; demandTypeIds: string[]; machineryIds: string[]; settlementIds: string[]; glebaIds: string[]; cnhNumero?: string; cnhCategoria?: string; cnhValidade?: string }) => {
     if (editingOperator) {
       await updateOperator.mutateAsync({ userId: editingOperator.id, name: data.name });
       await updateUserProfile.mutateAsync({ id: editingOperator.id, cpf: data.cpf ?? '', avatar_url: data.avatarUrl ?? null });
@@ -425,6 +430,10 @@ export default function OperatorsPage() {
       await setOperatorGlebas.mutateAsync({
         operatorId: editingOperator.id,
         glebaIds: data.glebaIds,
+      });
+      await setDriverLicense.mutateAsync({
+        operatorId: editingOperator.id,
+        numero: data.cnhNumero, categoria: data.cnhCategoria, validade: data.cnhValidade,
       });
       setEditingOperator(null);
     }
@@ -894,6 +903,7 @@ export default function OperatorsPage() {
                 initialSettlementIds={editingOperatorSettlementIds}
                 glebas={operatorGlebaOptions}
                 initialGlebaIds={editingOperatorGlebaIds}
+                initialCnh={editingOperatorCnh}
               />
             )
           )}
