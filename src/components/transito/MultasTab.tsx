@@ -11,7 +11,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTable } from '@/components/DataTable';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, Pencil, Trash2, Paperclip, Upload, Loader2, AlertTriangle } from 'lucide-react';
-import { useMultas, useSaveMulta, useDeleteMulta, useCondutores, useViagens, useTermos, MULTA_STATUS, multaStatusLabel, type Multa } from '@/hooks/useTransito';
+import { useMultas, useSaveMulta, useDeleteMulta, useCondutores, useViagens, useTermos, MULTA_STATUS, multaStatusLabel, termoLabel, type Multa } from '@/hooks/useTransito';
 import { useMachinery } from '@/hooks/useSupabaseData';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -59,8 +59,28 @@ export function MultasTab() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Viagens/termos filtrados pelo veículo selecionado (vínculo coerente)
-  const viagensDoVeiculo = useMemo(() => (viagens as any[]).filter((v) => !f.machinery_id || v.machinery_id === f.machinery_id), [viagens, f.machinery_id]);
-  const termosDoVeiculo = useMemo(() => (termos as any[]).filter((t) => !f.machinery_id || t.machinery_id === f.machinery_id), [termos, f.machinery_id]);
+  const viagensDoVeiculo = useMemo(() => viagens.filter((v) => !f.machinery_id || v.machinery_id === f.machinery_id), [viagens, f.machinery_id]);
+  const termosDoVeiculo = useMemo(() => termos.filter((t) => !f.machinery_id || t.machinery_id === f.machinery_id), [termos, f.machinery_id]);
+
+  // Viagem escolhida → traz termo e condutor dela (encadeamento multa → viagem → termo → condutor).
+  const escolherViagem = (id: string) => {
+    const v = id !== NONE ? viagens.find((x) => x.id === id) : undefined;
+    setF((s) => ({
+      ...s, viagem_id: id,
+      termo_id: v?.termo_id || s.termo_id,
+      condutor_id: v?.condutor_id || s.condutor_id,
+      condutor_identificado: v?.condutor_id ? true : s.condutor_identificado,
+    }));
+  };
+  // Termo escolhido → traz o condutor responsável.
+  const escolherTermo = (id: string) => {
+    const t = id !== NONE ? termos.find((x) => x.id === id) : undefined;
+    setF((s) => ({
+      ...s, termo_id: id,
+      condutor_id: t?.condutor_id || s.condutor_id,
+      condutor_identificado: t?.condutor_id ? true : s.condutor_identificado,
+    }));
+  };
 
   const openNew = () => { setEditing(null); setF(empty); setFile(null); if (fileRef.current) fileRef.current.value = ''; setOpen(true); };
   const openEdit = (m: Multa) => {
@@ -160,21 +180,25 @@ export function MultasTab() {
               </div>
               <div className="space-y-1.5">
                 <Label>Viagem vinculada</Label>
-                <Select value={f.viagem_id} onValueChange={(v) => setF((s) => ({ ...s, viagem_id: v }))}>
+                <Select value={f.viagem_id} onValueChange={escolherViagem}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NONE}>Nenhuma</SelectItem>
-                    {viagensDoVeiculo.map((v) => <SelectItem key={v.id} value={v.id}>{(v.destino || 'viagem')}{v.nad ? ` — NAD ${v.nad}` : ''}</SelectItem>)}
+                    {viagensDoVeiculo.map((v) => (
+                      <SelectItem key={v.id} value={v.id}>
+                        {v.origem || '?'} → {v.destino || '?'}{v.data_saida ? ` · ${fmt(v.data_saida)}` : ''}{v.nad ? ` — NAD ${v.nad}` : ''}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Termo de responsabilidade</Label>
-                <Select value={f.termo_id} onValueChange={(v) => setF((s) => ({ ...s, termo_id: v }))}>
+                <Select value={f.termo_id} onValueChange={escolherTermo}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NONE}>Nenhum</SelectItem>
-                    {termosDoVeiculo.map((t) => <SelectItem key={t.id} value={t.id}>{t.condutores?.name || 'termo'}{t.data_inicio ? ` — ${fmt(t.data_inicio)}` : ''}</SelectItem>)}
+                    {termosDoVeiculo.map((t) => <SelectItem key={t.id} value={t.id}>{termoLabel(t)}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

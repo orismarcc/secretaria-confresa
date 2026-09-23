@@ -12,11 +12,13 @@ export interface Condutor {
 export interface Termo {
   id: string; machinery_id: string; condutor_id: string; data_inicio: string | null;
   data_fim: string | null; observacao: string | null; file_path: string | null;
+  origem: string | null; destino: string | null;
   machinery?: { name: string; patrimony_number: string } | null;
   condutores?: { name: string } | null;
 }
 export interface Viagem {
-  id: string; machinery_id: string; condutor_id: string | null; destino: string | null;
+  id: string; machinery_id: string; condutor_id: string | null; termo_id: string | null;
+  origem: string | null; destino: string | null;
   nad: string | null; finalidade: string | null; data_saida: string | null; data_retorno: string | null;
   status: string; observacao: string | null;
   machinery?: { name: string; patrimony_number: string } | null;
@@ -30,7 +32,7 @@ export interface Multa {
   data_limite_recurso: string | null; status: string; observacao: string | null; file_path: string | null;
   machinery?: { name: string; patrimony_number: string } | null;
   condutores?: { name: string } | null;
-  viagens?: { destino: string | null; nad: string | null } | null;
+  viagens?: { origem: string | null; destino: string | null; nad: string | null } | null;
 }
 
 export const MULTA_STATUS: { value: string; label: string }[] = [
@@ -49,6 +51,12 @@ export const VIAGEM_STATUS: { value: string; label: string }[] = [
 ];
 export const multaStatusLabel = (v: string) => MULTA_STATUS.find((s) => s.value === v)?.label || v;
 export const viagemStatusLabel = (v: string) => VIAGEM_STATUS.find((s) => s.value === v)?.label || v;
+
+/** Rótulo de termo para seletores: "Condutor — Veículo · Origem → Destino". */
+export function termoLabel(t: Termo) {
+  const trajeto = t.origem || t.destino ? ` · ${t.origem || '?'} → ${t.destino || '?'}` : '';
+  return `${t.condutores?.name || 'condutor'} — ${t.machinery?.name || 'veículo'}${trajeto}`;
+}
 
 // ─── CONDUTORES ──────────────────────────────────────────────────────────────
 export function useCondutores() {
@@ -98,7 +106,7 @@ export function useTermos() {
     queryKey: ['termos'],
     queryFn: async () => {
       const { data, error } = await supabase.from('termos_responsabilidade')
-        .select('id, machinery_id, condutor_id, data_inicio, data_fim, observacao, file_path, machinery(name, patrimony_number), condutores(name)')
+        .select('id, machinery_id, condutor_id, data_inicio, data_fim, observacao, file_path, origem, destino, machinery(name, patrimony_number), condutores(name)')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return (data ?? []) as any as Termo[];
@@ -131,7 +139,7 @@ export function useViagens() {
     queryKey: ['viagens'],
     queryFn: async () => {
       const { data, error } = await supabase.from('viagens')
-        .select('id, machinery_id, condutor_id, destino, nad, finalidade, data_saida, data_retorno, status, observacao, machinery(name, patrimony_number), condutores(name)')
+        .select('id, machinery_id, condutor_id, termo_id, origem, destino, nad, finalidade, data_saida, data_retorno, status, observacao, machinery(name, patrimony_number), condutores(name)')
         .order('data_saida', { ascending: false, nullsFirst: false });
       if (error) throw error;
       return (data ?? []) as any as Viagem[];
@@ -164,7 +172,7 @@ export function useMultas() {
     queryKey: ['multas'],
     queryFn: async () => {
       const { data, error } = await supabase.from('multas')
-        .select('*, machinery(name, patrimony_number), condutores(name), viagens(destino, nad)')
+        .select('*, machinery(name, patrimony_number), condutores(name), viagens(origem, destino, nad)')
         .order('data', { ascending: false, nullsFirst: false });
       if (error) throw error;
       return (data ?? []) as any as Multa[];

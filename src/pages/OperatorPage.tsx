@@ -10,6 +10,8 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { OnlineIndicator } from '@/components/ConnectionStatus';
 import { FinalizePhotosModal } from '@/components/FinalizePhotosModal';
+import { OperatorCompletedList } from '@/components/OperatorCompletedList';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,6 +25,7 @@ import {
   useOperatorGlebas,
   useGlebas,
   useOperatorOwnStats,
+  useOperatorCompletedServices,
 } from '@/hooks/useSupabaseData';
 import { enqueueOperatorAction, getPendingActions } from '@/lib/operatorQueue';
 import { useSyncOperatorActions, usePendingActionsCount } from '@/hooks/useOperatorQueue';
@@ -282,6 +285,8 @@ export default function OperatorPage() {
   const { data: allowedGlebaIds = [], isLoading: gLoading } = useOperatorGlebas(user?.id);
   const { data: glebas = [] } = useGlebas();
   const { data: ownStats } = useOperatorOwnStats(user?.id);
+  const [view, setView] = useState<'abertos' | 'finalizados'>('abertos');
+  const { data: completedServices = [], isLoading: completedLoading } = useOperatorCompletedServices(user?.id);
   // Métricas por período — padrão no ano atual; seletor (com "Todos os
   // períodos") só aparece se houver atendimentos de outros anos.
   const currentYear = new Date().getFullYear();
@@ -577,7 +582,21 @@ export default function OperatorPage() {
         </div>
       )}
 
-      {totalServices === 0 ? (
+      <Tabs value={view} onValueChange={(v) => setView(v as 'abertos' | 'finalizados')} className="mb-4">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="abertos" className="gap-2">
+            A realizar
+            <span className="bg-muted px-1.5 py-0.5 rounded-full text-xs">{totalServices}</span>
+          </TabsTrigger>
+          <TabsTrigger value="finalizados" className="gap-2">
+            <CheckCircle2 className="h-4 w-4" /> Finalizados
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {view === 'finalizados' ? (
+        <OperatorCompletedList services={completedServices} isLoading={completedLoading} />
+      ) : totalServices === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             Nenhum atendimento pendente

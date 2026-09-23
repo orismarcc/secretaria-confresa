@@ -1095,6 +1095,41 @@ export function useOperatorOwnStats(operatorId: string | undefined) {
   });
 }
 
+// Atendimentos finalizados pelo próprio operador — resumo enxuto. Colunas
+// explícitas de propósito: nada de CPF/documentos do produtor nesta tela.
+export interface OperatorCompletedService {
+  id: string;
+  completed_at: string | null;
+  scheduled_date: string | null;
+  worked_hours: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  demand_types: { name: string } | null;
+  settlements: { name: string } | null;
+  locations: { name: string } | null;
+  producers: { name: string; location_name: string | null } | null;
+}
+
+export function useOperatorCompletedServices(operatorId: string | undefined) {
+  return useQuery({
+    queryKey: ['operator_completed_services', operatorId],
+    queryFn: async () => {
+      if (!operatorId) return [] as OperatorCompletedService[];
+      const { data, error } = await supabase
+        .from('services')
+        .select('id, completed_at, scheduled_date, worked_hours, latitude, longitude, demand_types(name), settlements(name), locations(name), producers(name, location_name)')
+        .eq('operator_id', operatorId)
+        .eq('status', 'completed')
+        .order('completed_at', { ascending: false, nullsFirst: false })
+        .limit(500);
+      if (error) throw error;
+      return (data ?? []) as unknown as OperatorCompletedService[];
+    },
+    enabled: !!operatorId,
+    staleTime: 1000 * 60,
+  });
+}
+
 // ============= OPERATOR GLEBA ACCESS (refina o assentamento) =============
 // Glebas liberadas ao operador. Sem glebas de um assentamento = assentamento
 // inteiro; com glebas = restrito a elas.

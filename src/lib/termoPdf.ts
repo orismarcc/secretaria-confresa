@@ -15,6 +15,8 @@ export interface TermoPdfData {
   matricula?: string | null;
   cnh?: string | null;
   cnhCategoria?: string | null;
+  origem?: string | null;     // "Cidade/UF"
+  destino?: string | null;    // "Cidade/UF"
   dataInicio?: string | null; // yyyy-mm-dd
   dataFim?: string | null;
   finalidade?: string | null;
@@ -86,7 +88,9 @@ export function buildTermoResponsabilidadePdf(d: TermoPdfData): { blob: Blob; fi
   y += 4;
 
   // Período e finalidade
-  para('3. PERÍODO E FINALIDADE', { bold: true, size: 11, gap: 4 });
+  para('3. TRAJETO, PERÍODO E FINALIDADE', { bold: true, size: 11, gap: 4 });
+  labeled('Local de saída:', d.origem || '______________________ / ____');
+  labeled('Destino:', d.destino || '______________________ / ____');
   labeled('Período de cessão:', `${fmtData(d.dataInicio)} a ${fmtData(d.dataFim)}`);
   if (d.finalidade) labeled('Finalidade:', d.finalidade);
   y += 6;

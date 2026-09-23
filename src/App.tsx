@@ -32,11 +32,31 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-function ProtectedRoute({ children, adminOnly = false, fullAdminOnly = false, assistenteOk = false }: { children: React.ReactNode; adminOnly?: boolean; fullAdminOnly?: boolean; assistenteOk?: boolean }) {
+const Loading = () => <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
+
+// Página inicial por perfil: equipe interna → Dashboard; Assistente de Campo →
+// Atendimentos; operador → Meus Atendimentos.
+function homeFor(isAdmin: boolean, isAssistente: boolean) {
+  if (!isAdmin) return '/operator';
+  return isAssistente ? '/field-services' : '/dashboard';
+}
+
+// Só decide o destino DEPOIS de carregar o papel do usuário — antes, com o papel
+// ainda nulo, a equipe interna caía em /operator.
+function HomeRedirect() {
+  const { isAuthenticated, isLoading, hasRole, isAssistente } = useAuth();
+  if (isLoading) return <Loading />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return <Navigate to={homeFor(hasRole('admin'), isAssistente)} replace />;
+}
+
+function ProtectedRoute({ children, adminOnly = false, fullAdminOnly = false, assistenteOk = false, operatorOnly = false }: { children: React.ReactNode; adminOnly?: boolean; fullAdminOnly?: boolean; assistenteOk?: boolean; operatorOnly?: boolean }) {
   const { isAuthenticated, isLoading, hasRole, isFullAdmin, isAssistente } = useAuth();
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
+  if (isLoading) return <Loading />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  // Área do operador: equipe interna é levada à sua página inicial.
+  if (operatorOnly && hasRole('admin')) return <Navigate to={homeFor(true, isAssistente)} replace />;
   if ((adminOnly || fullAdminOnly) && !hasRole('admin')) return <Navigate to="/operator" replace />;
   // Assistente de Campo: só acessa as áreas liberadas (Maquinários e Atendimentos por operador).
   if (isAssistente && !assistenteOk) return <Navigate to="/field-services" replace />;
@@ -47,14 +67,13 @@ function ProtectedRoute({ children, adminOnly = false, fullAdminOnly = false, as
 }
 
 function AppRoutes() {
-  const { isAuthenticated, hasRole, isAssistente } = useAuth();
-  // Destino inicial: Assistente de Campo vai direto para a área dele.
-  const adminHome = isAssistente ? '/field-services' : '/dashboard';
+  const { isAuthenticated } = useAuth();
 
   return (
     <Routes>
-      <Route path="/login" element={isAuthenticated ? <Navigate to={hasRole('admin') ? adminHome : '/operator'} replace /> : <LoginPage />} />
-      <Route path="/" element={<Navigate to={isAuthenticated ? (hasRole('admin') ? adminHome : '/operator') : '/login'} replace />} />
+      {/* Não autenticado: LoginPage permanece montada mesmo durante a tentativa de login. */}
+      <Route path="/login" element={isAuthenticated ? <HomeRedirect /> : <LoginPage />} />
+      <Route path="/" element={<HomeRedirect />} />
 
       {/* Admin Routes */}
       <Route path="/dashboard" element={<ProtectedRoute adminOnly><DashboardPage /></ProtectedRoute>} />
@@ -79,7 +98,7 @@ function AppRoutes() {
       <Route path="/settings" element={<ProtectedRoute assistenteOk><SettingsPage /></ProtectedRoute>} />
 
       {/* Operator Route */}
-      <Route path="/operator" element={<ProtectedRoute><OperatorPage /></ProtectedRoute>} />
+      <Route path="/operator" element={<ProtectedRoute operatorOnly><OperatorPage /></ProtectedRoute>} />
 
       <Route path="*" element={<NotFound />} />
     </Routes>

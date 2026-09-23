@@ -97,6 +97,8 @@ export function useSyncOperatorActions() {
       if (synced > 0) {
         queryClient.invalidateQueries({ queryKey: ['services'] });
         queryClient.invalidateQueries({ queryKey: ['services', 'pending'] });
+        queryClient.invalidateQueries({ queryKey: ['operator_completed_services'] });
+        queryClient.invalidateQueries({ queryKey: ['operator_own_stats'] });
       }
     },
   });

@@ -8,15 +8,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTable } from '@/components/DataTable';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Pencil, Trash2, Paperclip, Upload, Loader2, FileDown, FileSignature } from 'lucide-react';
+import { Plus, Pencil, Trash2, Paperclip, Upload, Loader2, FileDown, FileSignature, ArrowRight } from 'lucide-react';
 import { useTermos, useSaveTermo, useDeleteTermo, useCondutores, type Termo } from '@/hooks/useTransito';
 import { useMachinery } from '@/hooks/useSupabaseData';
 import { gerarTermoResponsabilidadePdf } from '@/lib/termoPdf';
+import { CidadeUfInput, normalizeCidadeUf } from '@/components/transito/CidadeUfInput';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const fmt = (iso?: string | null) => (iso ? format(new Date(iso.slice(0, 10) + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : '—');
-const empty = { machinery_id: '', condutor_id: '', data_inicio: '', data_fim: '', finalidade: '', observacao: '' };
+const empty = { machinery_id: '', condutor_id: '', origem: 'Confresa/MT', destino: '', data_inicio: '', data_fim: '', finalidade: '', observacao: '' };
 
 async function openFile(path: string) {
   const { data } = await supabase.storage.from('fleet-docs').createSignedUrl(path, 3600);
@@ -35,7 +36,7 @@ export function TermosTab() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Termo | null>(null);
   const [toDelete, setToDelete] = useState<Termo | null>(null);
-  const [f, setF] = useState<typeof empty & { finalidade?: string }>(empty);
+  const [f, setF] = useState<typeof empty>(empty);
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -43,7 +44,7 @@ export function TermosTab() {
   const openNew = () => { setEditing(null); setF(empty); setFile(null); if (fileRef.current) fileRef.current.value = ''; setOpen(true); };
   const openEdit = (t: Termo) => {
     setEditing(t);
-    setF({ machinery_id: t.machinery_id, condutor_id: t.condutor_id, data_inicio: (t.data_inicio || '').slice(0, 10), data_fim: (t.data_fim || '').slice(0, 10), finalidade: '', observacao: t.observacao || '' });
+    setF({ machinery_id: t.machinery_id, condutor_id: t.condutor_id, origem: t.origem || '', destino: t.destino || '', data_inicio: (t.data_inicio || '').slice(0, 10), data_fim: (t.data_fim || '').slice(0, 10), finalidade: '', observacao: t.observacao || '' });
     setFile(null); if (fileRef.current) fileRef.current.value = '';
     setOpen(true);
   };
@@ -63,6 +64,7 @@ export function TermosTab() {
       }
       await save.mutateAsync({
         id: editing?.id, machinery_id: f.machinery_id, condutor_id: f.condutor_id,
+        origem: normalizeCidadeUf(f.origem), destino: normalizeCidadeUf(f.destino),
         data_inicio: f.data_inicio || null, data_fim: f.data_fim || null,
         observacao: f.observacao || null, file_path,
       });
@@ -78,6 +80,7 @@ export function TermosTab() {
     gerarTermoResponsabilidadePdf({
       veiculo: v.name, patrimonio: v.patrimony_number, placa: v.placa ?? null,
       condutor: c.name, cpf: c.cpf, matricula: c.matricula, cnh: c.cnh_numero, cnhCategoria: c.cnh_categoria,
+      origem: normalizeCidadeUf(f.origem), destino: normalizeCidadeUf(f.destino),
       dataInicio: f.data_inicio || null, dataFim: f.data_fim || null,
       finalidade: f.finalidade || null, observacao: f.observacao || null,
     });
@@ -88,7 +91,10 @@ export function TermosTab() {
       <span className="inline-flex items-center gap-2 font-medium"><FileSignature className="h-4 w-4 text-muted-foreground" />{t.condutores?.name || '—'}</span>
     ) },
     { key: 'veiculo', header: 'Veículo', render: (t: Termo) => t.machinery?.name || '—' },
-    { key: 'periodo', header: 'Período', className: 'hidden sm:table-cell', render: (t: Termo) => `${fmt(t.data_inicio)} — ${fmt(t.data_fim)}` },
+    { key: 'trajeto', header: 'Trajeto', className: 'hidden sm:table-cell', render: (t: Termo) => (t.origem || t.destino) ? (
+      <span className="inline-flex items-center gap-1.5 flex-wrap text-sm">{t.origem || '—'}<ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />{t.destino || '—'}</span>
+    ) : '—' },
+    { key: 'periodo', header: 'Período', className: 'hidden md:table-cell', render: (t: Termo) => `${fmt(t.data_inicio)} — ${fmt(t.data_fim)}` },
     { key: 'assinado', header: 'Assinado', render: (t: Termo) => t.file_path
       ? <button className="inline-flex items-center gap-1 text-blue-600 text-sm" onClick={() => openFile(t.file_path!)}><Paperclip className="h-3.5 w-3.5" />ver</button>
       : <span className="text-xs text-muted-foreground">pendente</span> },
@@ -126,6 +132,15 @@ export function TermosTab() {
                   <SelectContent>{(condutores as any[]).map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Local de saída (Cidade/UF)</Label>
+              <CidadeUfInput value={f.origem} onChange={(v) => setF((s) => ({ ...s, origem: v }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Destino (Cidade/UF)</Label>
+              <CidadeUfInput value={f.destino} onChange={(v) => setF((s) => ({ ...s, destino: v }))} />
+              {editing && <p className="text-[11px] text-muted-foreground">Alterações no termo são aplicadas às viagens vinculadas a ele.</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Início da cessão</Label><Input type="date" value={f.data_inicio} onChange={(e) => setF((s) => ({ ...s, data_inicio: e.target.value }))} /></div>
