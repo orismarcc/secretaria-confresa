@@ -20,7 +20,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Pencil, Trash2, Wrench, Droplet, User, FileText, Car } from 'lucide-react';
+import { Plus, Pencil, Trash2, Wrench, Droplet, User, FileText, Car, Users, Route, AlertTriangle, FileSignature } from 'lucide-react';
+import { CondutoresTab } from '@/components/transito/CondutoresTab';
+import { ViagensTab } from '@/components/transito/ViagensTab';
+import { MultasTab } from '@/components/transito/MultasTab';
+import { TermosTab } from '@/components/transito/TermosTab';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   useMachinery,
@@ -49,6 +53,8 @@ interface MachineryItem {
 
 const NO_FUEL = '__none__';
 
+type TabValue = 'maquinario' | 'veiculo' | 'condutores' | 'viagens' | 'multas' | 'termos';
+
 export default function MachineryPage() {
   const { isAssistente } = useAuth();
   // Assistente de Campo: só vê e ABASTECE — não cria/edita/exclui maquinário.
@@ -74,7 +80,7 @@ export default function MachineryPage() {
   })();
 
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<'maquinario' | 'veiculo'>('maquinario');
+  const [tab, setTab] = useState<TabValue>('maquinario');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<MachineryItem | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -92,6 +98,7 @@ export default function MachineryPage() {
   const kindOf = (m: MachineryItem) => (m.kind === 'veiculo' ? 'veiculo' : 'maquinario');
   const maquinarios = machinery.filter((m: MachineryItem) => kindOf(m) === 'maquinario');
   const veiculos = machinery.filter((m: MachineryItem) => kindOf(m) === 'veiculo');
+  const isFleetTab = tab === 'maquinario' || tab === 'veiculo';
   const isVeiculoTab = tab === 'veiculo';
   const singular = isVeiculoTab ? 'Veículo' : 'Maquinário';
 
@@ -106,7 +113,7 @@ export default function MachineryPage() {
     setFormPatrimony('');
     setFormChassis('');
     setFormFuel('');
-    setFormKind(tab); // novo item herda a aba atual
+    setFormKind(isVeiculoTab ? 'veiculo' : 'maquinario'); // novo item herda a aba atual
     setFormOpen(true);
   };
 
@@ -275,16 +282,18 @@ export default function MachineryPage() {
       <PageHeader
         title="Frotas"
         description="Maquinários, veículos, abastecimento e documentação"
-        action={canManage ? { label: `Novo ${singular}`, onClick: openCreateForm, icon: <Plus className="h-4 w-4 mr-2" /> } : undefined}
+        action={(isFleetTab && canManage) ? { label: `Novo ${singular}`, onClick: openCreateForm, icon: <Plus className="h-4 w-4 mr-2" /> } : undefined}
       />
 
       {/* Alertas de vencimento (documentos + CNH) */}
-      <div className="mb-4">
-        <FleetAlerts />
-      </div>
+      {isFleetTab && (
+        <div className="mb-4">
+          <FleetAlerts />
+        </div>
+      )}
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as 'maquinario' | 'veiculo')} className="mb-4">
-        <TabsList>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as TabValue)} className="mb-4">
+        <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="maquinario" className="gap-2">
             <Wrench className="h-4 w-4" /> Maquinários
             <span className="bg-muted px-1.5 py-0.5 rounded-full text-xs">{maquinarios.length}</span>
@@ -293,19 +302,34 @@ export default function MachineryPage() {
             <Car className="h-4 w-4" /> Veículos
             <span className="bg-muted px-1.5 py-0.5 rounded-full text-xs">{veiculos.length}</span>
           </TabsTrigger>
+          {canManage && (
+            <>
+              <TabsTrigger value="condutores" className="gap-2"><Users className="h-4 w-4" /> Condutores</TabsTrigger>
+              <TabsTrigger value="viagens" className="gap-2"><Route className="h-4 w-4" /> Viagens</TabsTrigger>
+              <TabsTrigger value="multas" className="gap-2"><AlertTriangle className="h-4 w-4" /> Multas</TabsTrigger>
+              <TabsTrigger value="termos" className="gap-2"><FileSignature className="h-4 w-4" /> Termos</TabsTrigger>
+            </>
+          )}
         </TabsList>
       </Tabs>
 
-      <div className="mb-4">
-        <SearchInput value={search} onChange={setSearch} placeholder={`Buscar ${singular.toLowerCase()}...`} className="max-w-md" />
-      </div>
+      {isFleetTab ? (
+        <>
+          <div className="mb-4">
+            <SearchInput value={search} onChange={setSearch} placeholder={`Buscar ${singular.toLowerCase()}...`} className="max-w-md" />
+          </div>
 
-      <DataTable
-        data={filtered}
-        columns={columns}
-        keyExtractor={(m) => m.id}
-        emptyMessage={`Nenhum ${singular.toLowerCase()} cadastrado`}
-      />
+          <DataTable
+            data={filtered}
+            columns={columns}
+            keyExtractor={(m) => m.id}
+            emptyMessage={`Nenhum ${singular.toLowerCase()} cadastrado`}
+          />
+        </>
+      ) : tab === 'condutores' ? <CondutoresTab />
+        : tab === 'viagens' ? <ViagensTab />
+        : tab === 'multas' ? <MultasTab />
+        : <TermosTab />}
 
       {/* Form Dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>

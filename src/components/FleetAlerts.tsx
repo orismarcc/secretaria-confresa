@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { AlertTriangle, ShieldCheck, FileWarning, IdCard } from 'lucide-react';
 import { useFleetDocumentsWithValidade, useDriverLicensesWithValidade } from '@/hooks/useSupabaseData';
+import { useCondutores } from '@/hooks/useTransito';
 import { useOperators } from '@/hooks/useOperatorData';
 import { statusVencimento, vencClasses, vencLabel, fleetDocLabel } from '@/lib/vencimento';
 import { cn } from '@/lib/utils';
@@ -12,6 +13,7 @@ import { ptBR } from 'date-fns/locale';
 export function FleetAlerts() {
   const { data: docs = [] } = useFleetDocumentsWithValidade();
   const { data: cnhs = [] } = useDriverLicensesWithValidade();
+  const { data: condutores = [] } = useCondutores();
   const { data: operators = [] } = useOperators();
 
   const opName = useMemo(() => {
@@ -42,8 +44,19 @@ export function FleetAlerts() {
         validade: c.validade, order: st.dias ?? 0,
       });
     });
+    (condutores as any[]).forEach((c) => {
+      if (!c.cnh_validade) return;
+      const st = statusVencimento(c.cnh_validade);
+      if (st.status === 'ok') return;
+      items.push({
+        key: `cond-${c.id}`,
+        titulo: `CNH · ${c.name}`,
+        sub: `Condutor${c.cnh_categoria ? ` · Cat. ${c.cnh_categoria}` : ''}`,
+        validade: c.cnh_validade, order: st.dias ?? 0,
+      });
+    });
     return items.sort((a, b) => a.order - b.order);
-  }, [docs, cnhs, opName]);
+  }, [docs, cnhs, condutores, opName]);
 
   const vencidos = alertas.filter((a) => statusVencimento(a.validade).status === 'vencido').length;
 
@@ -70,7 +83,7 @@ export function FleetAlerts() {
       <div className="grid gap-2 sm:grid-cols-2">
         {alertas.map((a) => {
           const st = statusVencimento(a.validade);
-          const isCnh = a.key.startsWith('cnh-');
+          const isCnh = a.key.startsWith('cnh-') || a.key.startsWith('cond-');
           return (
             <div key={a.key} className={cn('rounded-lg p-2.5 flex items-start gap-2', vencClasses(st.status))}>
               {isCnh ? <IdCard className="h-4 w-4 shrink-0 mt-0.5" /> : <FileWarning className="h-4 w-4 shrink-0 mt-0.5" />}
