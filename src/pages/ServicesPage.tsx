@@ -71,7 +71,9 @@ import {
   useUpdateService,
   useDeleteService,
   useResponsibleTechnicians,
+  useAllProducerProperties,
 } from '@/hooks/useSupabaseData';
+import { PRINCIPAL_PROPERTY } from '@/components/forms/ServiceForm';
 import { useOperators } from '@/hooks/useOperatorData';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -207,6 +209,12 @@ export default function ServicesPage() {
   );
   const { data: operators = [] } = useOperators();
   const { data: responsibleTechnicians = [] } = useResponsibleTechnicians();
+  const { data: producerProperties = [] } = useAllProducerProperties();
+  // Propriedade ADICIONAL escolhida no formulário (null = principal).
+  const extraPropertyOf = (propertyId?: string) =>
+    propertyId && propertyId !== PRINCIPAL_PROPERTY
+      ? producerProperties.find((pp) => pp.id === propertyId) ?? null
+      : null;
   const createService = useCreateService();
   const updateService = useUpdateService();
   const deleteService = useDeleteService();
@@ -420,13 +428,16 @@ export default function ServicesPage() {
       limestoneOrderUrl = await uploadLimestoneOrder(data.limestoneOrderFile, 'new-' + Date.now());
     }
 
+    const extraProp = extraPropertyOf(data.propertyId);
     createService.mutate({
       producer_id: data.producerId,
       demand_type_id: data.demandTypeId,
       status: data.status || 'pending',
       purpose: data.purpose || undefined,
-      settlement_id: producer?.settlement_id || data.settlementId,
-      location_id: producer?.location_id || data.locationId,
+      // Propriedade adicional: o local vem dela (o banco também garante o assentamento).
+      settlement_id: extraProp ? extraProp.settlement_id : (producer?.settlement_id || data.settlementId),
+      location_id: extraProp ? null : (producer?.location_id || data.locationId),
+      ...(extraProp ? { property_id: extraProp.id } : {}),
       scheduled_date: data.scheduledDate,
       ...(data.appointmentDate ? { appointment_date: data.appointmentDate } : {}),
       ...(completedAt ? { completed_at: completedAt } : {}),
@@ -483,12 +494,15 @@ export default function ServicesPage() {
       if (uploaded) limestoneOrderUrl = uploaded;
     }
 
+    const extraProp = extraPropertyOf(data.propertyId);
     updateService.mutate({
       id: editingService.id,
       producer_id: data.producerId,
       demand_type_id: data.demandTypeId,
-      settlement_id: producer?.settlement_id || editingService.settlement_id,
-      location_id: producer?.location_id || editingService.location_id,
+      settlement_id: extraProp ? extraProp.settlement_id : (producer?.settlement_id || editingService.settlement_id),
+      location_id: extraProp ? null : (producer?.location_id || editingService.location_id),
+      // Só toca na coluna se há propriedade adicional agora ou antes (volta à principal = null).
+      ...((extraProp || (editingService as any).property_id) ? { property_id: extraProp ? extraProp.id : null } : {}),
       scheduled_date: data.scheduledDate,
       ...(data.appointmentDate ? { appointment_date: data.appointmentDate } : {}),
       purpose: data.purpose || null,
@@ -617,6 +631,7 @@ export default function ServicesPage() {
     return {
       id: s.id,
       producerId: s.producer_id,
+      propertyId: (s as any).property_id || null,
       demandTypeId: s.demand_type_id,
       settlementId: s.settlement_id || '',
       locationId: s.location_id || '',
@@ -884,8 +899,13 @@ export default function ServicesPage() {
   const detailDemandType = detailService ? demandTypes.find(d => d.id === detailService.demand_type_id) : null;
   const detailSettlement = detailService ? settlements.find(s => s.id === detailService.settlement_id) : null;
   const detailLocation = detailService ? locations.find(l => l.id === detailService.location_id) : null;
+  // Atendimento de propriedade ADICIONAL: local, coordenadas e gleba vêm da
+  // propriedade (já sobrepostos em detailService.producers), não do cadastro.
+  const detailProperty = (detailService as any)?.property as { name: string | null } | null | undefined;
   const detailGleba = detailService
-    ? ((detailProducerFull as any)?.glebas?.name || (detailService.producers as any)?.glebas?.name || null)
+    ? (detailProperty
+        ? ((detailService.producers as any)?.glebas?.name || null)
+        : ((detailProducerFull as any)?.glebas?.name || (detailService.producers as any)?.glebas?.name || null))
     : null;
 
   // ── export ────────────────────────────────────────────────────────────────
@@ -1363,9 +1383,15 @@ export default function ServicesPage() {
                 name: detailProducerFull.name,
                 cpf: detailProducerFull.cpf,
                 phone: detailProducerFull.phone || detailService.producers?.phone || undefined,
-                location_name: detailProducerFull.location_name || detailService.producers?.location_name || undefined,
-                latitude: detailProducerFull.latitude ?? detailService.producers?.latitude ?? undefined,
-                longitude: detailProducerFull.longitude ?? detailService.producers?.longitude ?? undefined,
+                ...(detailProperty ? {
+                  location_name: [detailProperty.name, detailService.producers?.location_name].filter(Boolean).join(' — ') || undefined,
+                  latitude: detailService.producers?.latitude ?? undefined,
+                  longitude: detailService.producers?.longitude ?? undefined,
+                } : {
+                  location_name: detailProducerFull.location_name || detailService.producers?.location_name || undefined,
+                  latitude: detailProducerFull.latitude ?? detailService.producers?.latitude ?? undefined,
+                  longitude: detailProducerFull.longitude ?? detailService.producers?.longitude ?? undefined,
+                }),
               } : detailService.producers ? {
                 name: detailService.producers.name,
                 cpf: '',
@@ -1491,6 +1517,7 @@ export default function ServicesPage() {
         glebaSettlementMap={glebaSettlementMap}
         operatorDemandTypesMap={operatorDemandTypesMap}
         responsibleTechnicians={(responsibleTechnicians as any[]).filter((t: any) => t.is_active).map((t: any) => ({ id: t.id, name: t.name, cargo: t.cargo }))}
+        producerProperties={producerProperties}
         onSubmit={editingService ? handleEdit : handleCreate}
       />
 

@@ -64,10 +64,13 @@ async function pushAction(action: OperatorAction): Promise<void> {
   }
 
   // NÃO sobrescreve latitude/longitude — foram gravadas ao Iniciar.
+  // Quem finaliza passa a ser o operador do atendimento (operadores que dividem
+  // o assentamento podem concluir o serviço iniciado/cadastrado pelo colega).
   const { error: sErr } = await supabase.from('services').update({
     status: 'completed',
     completed_at: action.capturedAt,
     sync_status: 'synced',
+    ...(action.operatorId ? { operator_id: action.operatorId } : {}),
   }).eq('id', action.serviceId);
   if (sErr) throw sErr;
 }

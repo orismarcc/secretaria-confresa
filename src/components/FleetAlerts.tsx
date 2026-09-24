@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { AlertTriangle, ShieldCheck, FileWarning, IdCard } from 'lucide-react';
-import { useFleetDocumentsWithValidade, useDriverLicensesWithValidade } from '@/hooks/useSupabaseData';
+import { useFleetDocumentsWithValidade, useDriverLicensesWithValidade, useMachinery } from '@/hooks/useSupabaseData';
+import { vinculoLabel } from '@/lib/vinculo';
 import { useCondutores } from '@/hooks/useTransito';
 import { useOperators } from '@/hooks/useOperatorData';
 import { statusVencimento, vencClasses, vencLabel, fleetDocLabel } from '@/lib/vencimento';
@@ -14,6 +15,7 @@ export function FleetAlerts() {
   const { data: docs = [] } = useFleetDocumentsWithValidade();
   const { data: cnhs = [] } = useDriverLicensesWithValidade();
   const { data: condutores = [] } = useCondutores();
+  const { data: machinery = [] } = useMachinery();
   const { data: operators = [] } = useOperators();
 
   const opName = useMemo(() => {
@@ -55,8 +57,20 @@ export function FleetAlerts() {
         validade: c.cnh_validade, order: st.dias ?? 0,
       });
     });
+    // Término do vínculo de itens cedidos, locados ou de consórcio.
+    (machinery as any[]).forEach((m) => {
+      if (!m.is_active || !m.vinculo || m.vinculo === 'proprio' || !m.vinculo_fim) return;
+      const st = statusVencimento(m.vinculo_fim);
+      if (st.status === 'ok') return;
+      items.push({
+        key: `vinc-${m.id}`,
+        titulo: `${m.name} · Término do vínculo`,
+        sub: `${vinculoLabel(m.vinculo)}${m.vinculo_origem ? ` · ${m.vinculo_origem}` : ''}`,
+        validade: m.vinculo_fim, order: st.dias ?? 0,
+      });
+    });
     return items.sort((a, b) => a.order - b.order);
-  }, [docs, cnhs, condutores, opName]);
+  }, [docs, cnhs, condutores, machinery, opName]);
 
   const vencidos = alertas.filter((a) => statusVencimento(a.validade).status === 'vencido').length;
 

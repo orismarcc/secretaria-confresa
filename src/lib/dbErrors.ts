@@ -23,6 +23,11 @@ export function friendlyDbError(error: unknown): string {
     return 'Já existe um cadastro com este CPF/CNPJ. Use a busca para localizá-lo.';
   }
 
+  // Remoção bloqueada por vínculo (ex.: propriedade com atendimentos)
+  if (/update or delete on table .* violates foreign key constraint/i.test(msg)) {
+    return 'Não é possível remover: há registros vinculados (ex.: atendimentos). Altere-os antes de remover.';
+  }
+
   // Permissão / RLS / sessão expirada
   if (
     code === '42501' ||

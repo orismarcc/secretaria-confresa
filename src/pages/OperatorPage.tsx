@@ -87,6 +87,8 @@ interface OperatorCardBodyProps {
   onStart: (service: DbService) => void;
   onFinalize: (service: DbService) => void;
   isStarting?: boolean;
+  /** Nome do colega em cujo nome o atendimento está (assentamento compartilhado). */
+  sharedFrom?: string | null;
 }
 
 function OperatorCardBody({
@@ -96,6 +98,7 @@ function OperatorCardBody({
   onStart,
   onFinalize,
   isStarting,
+  sharedFrom,
 }: OperatorCardBodyProps) {
   const canStart = service.status === 'pending' || service.status === 'proximo';
   // Só finaliza depois de iniciar (passa por "em execução").
@@ -119,7 +122,12 @@ function OperatorCardBody({
         </div>
         <div className="flex flex-col items-end gap-1">
           <StatusBadge status={service.status as 'pending' | 'in_progress' | 'completed'} />
-          {service.status === 'in_progress' && service.profiles?.name && (
+          {sharedFrom ? (
+            <span className="flex items-center gap-1 text-xs text-violet-700 dark:text-violet-400 text-right">
+              <User className="h-3 w-3 shrink-0" />
+              {service.status === 'in_progress' ? 'Em execução por' : 'Cadastrado para'} {sharedFrom}
+            </span>
+          ) : service.status === 'in_progress' && service.profiles?.name && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <User className="h-3 w-3" />
               {service.profiles.name}
@@ -316,11 +324,17 @@ export default function OperatorPage() {
     return { allowedGleba, restrictedSettlements };
   }, [allowedGlebaIds, glebas]);
 
-  // Mostra apenas os atendimentos atribuídos a este operador (operator_id).
-  // Respeita restrições por tipo de serviço, assentamento e gleba (lista vazia
-  // em qualquer dimensão = sem restrição naquela dimensão).
+  // Mostra os atendimentos atribuídos a este operador (operator_id) e também os
+  // de COLEGAS nos assentamentos em que ele está cadastrado explicitamente
+  // (operadores que dividem o assentamento). Ao iniciar/finalizar um desses, o
+  // atendimento passa para quem executou — regra espelhada no banco
+  // (operator_shares_service). Respeita restrições por tipo de serviço,
+  // assentamento e gleba (lista vazia = sem restrição naquela dimensão).
   const visibleServices = useMemo(() => {
-    let mine = (pendingServicesRaw as DbService[]).filter((s) => s.operator_id === user?.id);
+    const mySettlements = new Set(allowedSettlementIds as string[]);
+    let mine = (pendingServicesRaw as DbService[]).filter((s) =>
+      s.operator_id === user?.id ||
+      (!!s.operator_id && !!s.settlement_id && mySettlements.has(s.settlement_id)));
     if (allowedDemandTypeIds.length > 0) {
       const allowedDt = new Set(allowedDemandTypeIds);
       mine = mine.filter((s) => allowedDt.has(s.demand_type_id));
@@ -426,6 +440,10 @@ export default function OperatorPage() {
   }, [queryClient]);
 
   const openFinalize = (service: DbService) => setFinalize({ open: true, service });
+
+  // Atendimento em nome de um colega (assentamento compartilhado): nome dele.
+  const sharedFromOf = (service: DbService) =>
+    service.operator_id && service.operator_id !== user?.id ? (service.profiles?.name || 'outro operador') : null;
 
   // Iniciar: tenta captar o GPS automaticamente (não trava se falhar) e enfileira
   // a ação de início. Sem foto. O GPS captado alimenta o mapa "em execução".
@@ -626,6 +644,7 @@ export default function OperatorPage() {
                       locationName={service.producers?.location_name || location?.name || service.locations?.name || 'N/A'}
                       onStart={handleStart}
                       onFinalize={openFinalize}
+                      sharedFrom={sharedFromOf(service)}
                     />
                   );
                 })}
@@ -668,6 +687,7 @@ export default function OperatorPage() {
                           onStart={handleStart}
                           onFinalize={openFinalize}
                           isStarting={startingId === service.id}
+                          sharedFrom={sharedFromOf(service)}
                         />
                       );
                     })}

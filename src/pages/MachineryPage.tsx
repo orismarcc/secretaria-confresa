@@ -35,6 +35,11 @@ import { MachineryRefuelDialog, FUEL_TYPES } from '@/components/MachineryRefuelD
 import { FleetDocsDialog } from '@/components/FleetDocsDialog';
 import { FleetAlerts } from '@/components/FleetAlerts';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { VINCULOS, vinculoLabel, vinculoOrigemLabel, vinculoBadgeClass, type Vinculo } from '@/lib/vinculo';
+import { statusVencimento, vencClasses, vencLabel } from '@/lib/vencimento';
+import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
 
 interface MachineryItem {
   id: string;
@@ -43,6 +48,10 @@ interface MachineryItem {
   chassis: string | null;
   fuel_type: string | null;
   kind: string | null;
+  vinculo?: string | null;
+  vinculo_origem?: string | null;
+  vinculo_inicio?: string | null;
+  vinculo_fim?: string | null;
   is_active: boolean;
   created_at: string | null;
 }
@@ -51,6 +60,7 @@ const NO_FUEL = '__none__';
 
 export default function MachineryPage() {
   const { isAssistente } = useAuth();
+  const { toast } = useToast();
   // Assistente de Campo: só vê e ABASTECE — não cria/edita/exclui maquinário.
   const canManage = !isAssistente;
   const { data: machinery = [], isLoading } = useMachinery();
@@ -88,6 +98,11 @@ export default function MachineryPage() {
   const [formChassis, setFormChassis] = useState('');
   const [formFuel, setFormFuel] = useState('');
   const [formKind, setFormKind] = useState<'maquinario' | 'veiculo'>('maquinario');
+  const [formVinculo, setFormVinculo] = useState<Vinculo>('proprio');
+  const [formVinculoOrigem, setFormVinculoOrigem] = useState('');
+  const [formVinculoInicio, setFormVinculoInicio] = useState('');
+  const [formVinculoFim, setFormVinculoFim] = useState('');
+  const isProprio = formVinculo === 'proprio';
 
   const kindOf = (m: MachineryItem) => (m.kind === 'veiculo' ? 'veiculo' : 'maquinario');
   const maquinarios = machinery.filter((m: MachineryItem) => kindOf(m) === 'maquinario');
@@ -107,6 +122,10 @@ export default function MachineryPage() {
     setFormChassis('');
     setFormFuel('');
     setFormKind(isVeiculoTab ? 'veiculo' : 'maquinario'); // novo item herda a aba atual
+    setFormVinculo('proprio');
+    setFormVinculoOrigem('');
+    setFormVinculoInicio('');
+    setFormVinculoFim('');
     setFormOpen(true);
   };
 
@@ -117,11 +136,32 @@ export default function MachineryPage() {
     setFormChassis(item.chassis || '');
     setFormFuel(item.fuel_type || '');
     setFormKind(kindOf(item));
+    setFormVinculo(((item.vinculo as Vinculo) || 'proprio'));
+    setFormVinculoOrigem(item.vinculo_origem || '');
+    setFormVinculoInicio((item.vinculo_inicio || '').slice(0, 10));
+    setFormVinculoFim((item.vinculo_fim || '').slice(0, 10));
     setFormOpen(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Não próprio (cedido/locado/consórcio): data de admissão obrigatória;
+    // término/validade opcional (vazio = prazo indeterminado).
+    if (!isProprio && !formVinculoInicio) {
+      toast({ title: 'Informe a data de admissão', description: 'Obrigatória para itens cedidos, locados ou de consórcio.', variant: 'destructive' });
+      return;
+    }
+    if (!isProprio && formVinculoFim && formVinculoFim < formVinculoInicio) {
+      toast({ title: 'Datas inválidas', description: 'O término não pode ser antes da admissão.', variant: 'destructive' });
+      return;
+    }
+    // Próprio: limpa os dados de vínculo (evita datas "órfãs" se o tipo mudou).
+    const vinculoFields = {
+      vinculo: formVinculo,
+      vinculo_origem: isProprio ? null : (formVinculoOrigem.trim() || null),
+      vinculo_inicio: isProprio ? null : (formVinculoInicio || null),
+      vinculo_fim: isProprio ? null : (formVinculoFim || null),
+    };
     if (editing) {
       updateMachinery.mutate({
         id: editing.id,
@@ -130,6 +170,7 @@ export default function MachineryPage() {
         chassis: formChassis || null,
         fuel_type: formFuel || null,
         kind: formKind,
+        ...vinculoFields,
       });
     } else {
       createMachinery.mutate({
@@ -138,6 +179,7 @@ export default function MachineryPage() {
         chassis: formChassis || null,
         fuel_type: formFuel || null,
         kind: formKind,
+        ...vinculoFields,
       });
     }
     setFormOpen(false);
@@ -175,10 +217,26 @@ export default function MachineryPage() {
       render: (m: MachineryItem) => m.patrimony_number,
     },
     {
-      key: 'chassis',
-      header: 'Chassi',
+      key: 'vinculo',
+      header: 'Vínculo',
       className: 'hidden lg:table-cell',
-      render: (m: MachineryItem) => m.chassis || '—',
+      render: (m: MachineryItem) => {
+        const fim = m.vinculo && m.vinculo !== 'proprio' ? m.vinculo_fim : null;
+        const st = fim ? statusVencimento(fim) : null;
+        return (
+          <div className="space-y-1">
+            <Badge variant="outline" className={cn('text-xs', vinculoBadgeClass(m.vinculo))}>{vinculoLabel(m.vinculo)}</Badge>
+            {m.vinculo && m.vinculo !== 'proprio' && m.vinculo_origem && (
+              <p className="text-[11px] text-muted-foreground truncate max-w-[180px]">{m.vinculo_origem}</p>
+            )}
+            {fim && st && (
+              <span className={cn('block w-fit text-[11px] font-medium rounded-full px-2 py-0.5', vencClasses(st.status))}>
+                até {format(new Date(fim.slice(0, 10) + 'T12:00:00'), 'dd/MM/yyyy')} — {vencLabel(fim)}
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'operator',
@@ -309,7 +367,7 @@ export default function MachineryPage() {
 
       {/* Form Dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? `Editar ${singular}` : `Novo ${singular}`}</DialogTitle>
           </DialogHeader>
@@ -344,6 +402,39 @@ export default function MachineryPage() {
                 required
               />
             </div>
+            <div className="space-y-2">
+              <Label>Vínculo</Label>
+              <Select value={formVinculo} onValueChange={(v) => setFormVinculo(v as Vinculo)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {VINCULOS.map((v) => <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {!isProprio && (
+              <div className="space-y-3 rounded-lg border p-3">
+                <div className="space-y-2">
+                  <Label htmlFor="vinculo-origem">{vinculoOrigemLabel(formVinculo)} (opcional)</Label>
+                  <Input
+                    id="vinculo-origem"
+                    value={formVinculoOrigem}
+                    onChange={(e) => setFormVinculoOrigem(e.target.value)}
+                    placeholder="De quem é o item"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="vinculo-inicio">Data de admissão *</Label>
+                    <Input id="vinculo-inicio" type="date" value={formVinculoInicio} onChange={(e) => setFormVinculoInicio(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="vinculo-fim">Término / validade</Label>
+                    <Input id="vinculo-fim" type="date" value={formVinculoFim} min={formVinculoInicio || undefined} onChange={(e) => setFormVinculoFim(e.target.value)} />
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground">Deixe o término vazio se o prazo for indeterminado.</p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="chassis">Chassi (opcional)</Label>
               <Input

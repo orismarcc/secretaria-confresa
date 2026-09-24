@@ -655,10 +655,104 @@ export function useServices() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('services')
-        .select('*, producers(name, phone, location_name, latitude, longitude, gleba_id, glebas(name)), demand_types(name), settlements(name), locations(name), machinery(name, patrimony_number), profiles!created_by(name), operador:profiles!operator_id(name), responsible_technicians(name)')
+        .select(`*, producers(name, phone, location_name, latitude, longitude, gleba_id, glebas(name)), demand_types(name), settlements(name), locations(name), machinery(name, patrimony_number), profiles!created_by(name), operador:profiles!operator_id(name), responsible_technicians(name), ${PROPERTY_EMBED}`)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data;
+      return applyPropertyOverlay(data);
+    },
+  });
+}
+
+// ============= PROPRIEDADES DO PRODUTOR =============
+// A propriedade PRINCIPAL continua no cadastro do produtor; as ADICIONAIS ficam
+// em producer_properties. Atendimento com property_id é de uma propriedade
+// adicional: nas consultas de atendimentos, os dados de local dessa propriedade
+// (localidade, coordenadas, gleba) substituem os do produtor em `producers`, de
+// modo que mapa, filtros de gleba e restrições do operador usem o lugar certo.
+const PROPERTY_EMBED = 'property:producer_properties(name, settlement_id, location_name, latitude, longitude, gleba_id, glebas(name))';
+
+function applyPropertyOverlay<T>(rows: T[] | null): T[] {
+  return (rows ?? []).map((r: any) => {
+    const prop = r?.property;
+    if (!prop || !r.producers) return r;
+    return {
+      ...r,
+      producers: {
+        ...r.producers,
+        location_name: prop.location_name ?? null,
+        latitude: prop.latitude ?? null,
+        longitude: prop.longitude ?? null,
+        gleba_id: prop.gleba_id ?? null,
+        ...('glebas' in r.producers ? { glebas: prop.glebas ?? null } : {}),
+      },
+    };
+  });
+}
+
+export interface ProducerProperty {
+  id: string;
+  producer_id: string;
+  name: string | null;
+  settlement_id: string;
+  gleba_id: string | null;
+  location_name: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+const PROPERTY_COLUMNS = 'id, producer_id, name, settlement_id, gleba_id, location_name, latitude, longitude';
+
+/** Propriedades adicionais de todos os produtores (para o formulário de atendimento). */
+export function useAllProducerProperties() {
+  return useQuery({
+    queryKey: ['producer_properties'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('producer_properties' as any)
+        .select(PROPERTY_COLUMNS)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as unknown as ProducerProperty[];
+    },
+  });
+}
+
+export function useSaveProducerProperty() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (item: Omit<ProducerProperty, 'id'> & { id?: string }) => {
+      const { id, ...rest } = item;
+      const { error } = id
+        ? await supabase.from('producer_properties' as any).update(rest).eq('id', id)
+        : await supabase.from('producer_properties' as any).insert(rest);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['producer_properties'] });
+      queryClient.invalidateQueries({ queryKey: ['services'] });
+      toast({ title: 'Propriedade salva!' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao salvar propriedade', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
+export function useDeleteProducerProperty() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('producer_properties' as any).delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['producer_properties'] });
+      toast({ title: 'Propriedade removida.' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao remover propriedade', description: friendlyDbError(error), variant: 'destructive' });
     },
   });
 }
@@ -669,14 +763,15 @@ export function usePendingServices() {
   return useQuery({
     queryKey: ['services', 'pending'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: rawData, error } = await supabase
         .from('services')
-        .select('*, producers(name, phone, location_name, latitude, longitude, gleba_id), demand_types(name), settlements(name), locations(name), profiles!operator_id(name)')
+        .select(`*, producers(name, phone, location_name, latitude, longitude, gleba_id), demand_types(name), settlements(name), locations(name), profiles!operator_id(name), ${PROPERTY_EMBED}`)
         // exclui finalizados E cancelados — só atendimentos em aberto entram na fila
         .not('status', 'in', '("completed","cancelled")')
         .order('position', { ascending: true, nullsFirst: false }) // B-05: explicit NULLS LAST
         .order('scheduled_date', { ascending: true });
       if (error) throw error;
+      const data = applyPropertyOverlay(rawData);
       // Guarda a última lista sincronizada para o operador ver/usar OFFLINE.
       try { localStorage.setItem(PENDING_CACHE_KEY, JSON.stringify({ at: Date.now(), data })); } catch { /* storage cheio/bloqueado */ }
       return data;
@@ -726,7 +821,8 @@ export function useCreateService() {
       producer_id: string;
       demand_type_id: string;
       settlement_id?: string;
-      location_id?: string;
+      location_id?: string | null;
+      property_id?: string | null;
       scheduled_date: string;
       appointment_date?: string | null;
       completed_at?: string | null;
@@ -916,6 +1012,39 @@ export function useReassignServicesOperator() {
     },
     onError: (error: Error) => {
       toast({ title: 'Erro ao reatribuir atendimentos', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
+/**
+ * Atendimentos SEM operador (operator_id nulo) numa situação: 'active'
+ * (cadastrados, não finalizados/cancelados) ou 'completed' (finalizados).
+ * Filtra no servidor e pagina — não depende do limite de linhas da lista geral.
+ */
+export function useUnassignedServices(scope: 'active' | 'completed', enabled: boolean) {
+  return useQuery({
+    queryKey: ['services', 'unassigned', scope],
+    enabled,
+    queryFn: async () => {
+      const PAGE = 1000;
+      const out: any[] = [];
+      for (let from = 0; ; from += PAGE) {
+        let q = supabase
+          .from('services')
+          .select(`id, status, scheduled_date, completed_at, settlement_id, demand_type_id, producer_id, producers(name, gleba_id), demand_types(name), settlements(name), ${PROPERTY_EMBED}`)
+          .is('operator_id', null);
+        q = scope === 'completed'
+          ? q.eq('status', 'completed')
+          : q.not('status', 'in', '("completed","cancelled")');
+        const { data, error } = await q
+          .order('scheduled_date', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        out.push(...(data ?? []));
+        if (!data || data.length < PAGE) break;
+      }
+      return applyPropertyOverlay(out);
     },
   });
 }
@@ -1117,13 +1246,13 @@ export function useOperatorCompletedServices(operatorId: string | undefined) {
       if (!operatorId) return [] as OperatorCompletedService[];
       const { data, error } = await supabase
         .from('services')
-        .select('id, completed_at, scheduled_date, worked_hours, latitude, longitude, demand_types(name), settlements(name), locations(name), producers(name, location_name)')
+        .select(`id, completed_at, scheduled_date, worked_hours, latitude, longitude, demand_types(name), settlements(name), locations(name), producers(name, location_name), ${PROPERTY_EMBED}`)
         .eq('operator_id', operatorId)
         .eq('status', 'completed')
         .order('completed_at', { ascending: false, nullsFirst: false })
         .limit(500);
       if (error) throw error;
-      return (data ?? []) as unknown as OperatorCompletedService[];
+      return applyPropertyOverlay(data) as unknown as OperatorCompletedService[];
     },
     enabled: !!operatorId,
     staleTime: 1000 * 60,
@@ -1285,7 +1414,7 @@ export function useServicesByProducer(producerId: string | undefined) {
       if (!producerId) return [];
       const { data, error } = await supabase
         .from('services')
-        .select('*, demand_types(name, category), settlements(name), profiles!operator_id(name)')
+        .select('*, demand_types(name, category), settlements(name), profiles!operator_id(name), property:producer_properties(name, location_name)')
         .eq('producer_id', producerId)
         .order('scheduled_date', { ascending: false });
       if (error) throw error;
@@ -1340,7 +1469,10 @@ export function useCreateMachinery() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (item: { name: string; patrimony_number: string; chassis?: string | null; fuel_type?: string | null; kind?: string | null }) => {
+    mutationFn: async (item: {
+      name: string; patrimony_number: string; chassis?: string | null; fuel_type?: string | null; kind?: string | null;
+      vinculo?: string; vinculo_origem?: string | null; vinculo_inicio?: string | null; vinculo_fim?: string | null;
+    }) => {
       const { data, error } = await supabase
         .from('machinery')
         .insert(item)

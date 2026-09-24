@@ -37,9 +37,15 @@ import { format } from 'date-fns';
 import { Check, ChevronsUpDown, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { normalizeText } from '@/lib/text';
+import type { ProducerProperty } from '@/hooks/useSupabaseData';
+
+/** Valor do seletor de propriedade que representa a propriedade PRINCIPAL. */
+export const PRINCIPAL_PROPERTY = '__principal__';
 
 const serviceSchema = z.object({
   producerId: z.string().min(1, 'Selecione um produtor'),
+  // '' = não escolhido; PRINCIPAL_PROPERTY = propriedade do cadastro; id = adicional.
+  propertyId: z.string().optional(),
   demandTypeId: z.string().min(1, 'Selecione o tipo de demanda'),
   workedArea: z.coerce.number().min(0, 'Área não pode ser negativa').optional(),
   scheduledDate: z.string().min(1, 'Selecione a data'),
@@ -92,6 +98,7 @@ interface ServiceFormProps {
   isAdmin?: boolean;
   service?: {
     producerId: string;
+    propertyId?: string | null;
     demandTypeId: string;
     workedArea?: number;
     scheduledDate: Date;
@@ -142,6 +149,8 @@ interface ServiceFormProps {
   /** operador → tipo(s) de serviço liberado(s), p/ refinar a pré-seleção. */
   operatorDemandTypesMap?: Record<string, string[]>;
   responsibleTechnicians?: TechnicianOption[];
+  /** Propriedades ADICIONAIS de todos os produtores (a principal está no produtor). */
+  producerProperties?: ProducerProperty[];
   onSubmit: (data: ServiceFormData) => void;
 }
 
@@ -314,6 +323,7 @@ export function ServiceForm({
   glebaSettlementMap = {},
   operatorDemandTypesMap = {},
   responsibleTechnicians = [],
+  producerProperties = [],
   onSubmit,
 }: ServiceFormProps) {
   const [hasAppointment, setHasAppointment] = useState(false);
@@ -324,6 +334,7 @@ export function ServiceForm({
     resolver: zodResolver(serviceSchema),
     defaultValues: {
       producerId: '',
+      propertyId: '',
       demandTypeId: '',
       workedArea: 0,
       scheduledDate: format(new Date(), 'yyyy-MM-dd'),
@@ -376,6 +387,27 @@ export function ServiceForm({
     : 0;
   const selectedProducer = producers.find((p) => p.id === selectedProducerId);
 
+  // Propriedades adicionais do produtor escolhido. Havendo alguma, é obrigatório
+  // dizer em qual propriedade será o atendimento (principal ou adicional).
+  const watchedPropertyId = form.watch('propertyId') || '';
+  const extraProperties = useMemo(
+    () => producerProperties.filter((pp) => pp.producer_id === selectedProducerId),
+    [producerProperties, selectedProducerId],
+  );
+  const hasMultipleProperties = extraProperties.length > 0;
+  const selectedExtraProperty = extraProperties.find((pp) => pp.id === watchedPropertyId) || null;
+  // Local efetivo do atendimento: a propriedade adicional escolhida ou a principal.
+  const effectiveSettlementId: string | null = selectedExtraProperty
+    ? selectedExtraProperty.settlement_id
+    : ((selectedProducer as any)?.settlementId || null);
+  const effectiveGlebaId: string | null = selectedExtraProperty
+    ? selectedExtraProperty.gleba_id
+    : ((selectedProducer as any)?.glebaId || (selectedProducer as any)?.gleba_id || null);
+  const effectiveLocationName: string = selectedExtraProperty
+    ? (selectedExtraProperty.location_name || '')
+    : (selectedProducer?.locationName || '');
+  const settlementName = (id?: string | null) => settlements.find((st) => st.id === id)?.name || '—';
+
   // Mantém fuel_liters sincronizado com o cálculo (para a DAM já vir preenchida).
   // Só sobrescreve quando distância E consumo estão preenchidos — assim, ao editar
   // um atendimento antigo (sem esses campos), o valor de litros existente é preservado.
@@ -392,6 +424,7 @@ export function ServiceForm({
       setHasAppointment(!!apptDate);
       form.reset({
         producerId: service.producerId,
+        propertyId: service.propertyId || PRINCIPAL_PROPERTY,
         demandTypeId: service.demandTypeId,
         workedArea: service.workedArea || 0,
         scheduledDate: format(new Date(service.scheduledDate), 'yyyy-MM-dd'),
@@ -422,6 +455,7 @@ export function ServiceForm({
       setHasAppointment(false);
       form.reset({
         producerId: '',
+        propertyId: '',
         demandTypeId: '',
         workedArea: 0,
         scheduledDate: format(new Date(), 'yyyy-MM-dd'),
@@ -468,9 +502,11 @@ export function ServiceForm({
   useEffect(() => {
     if (service) return;                 // não mexe ao editar um atendimento existente
     if (!selectedProducer) return;
-    const settlementId = (selectedProducer as any).settlementId;
+    // Com várias propriedades, espera a escolha para saber o assentamento/gleba.
+    if (hasMultipleProperties && !watchedPropertyId) return;
+    const settlementId = effectiveSettlementId;
     if (!settlementId) return;
-    const producerGleba = (selectedProducer as any).glebaId || (selectedProducer as any).gleba_id || null;
+    const producerGleba = effectiveGlebaId;
     const demandTypeId = watchedDemandTypeId;
 
     // Operador serve o TIPO de serviço? (sem restrição de tipo = serve todos)
@@ -499,9 +535,15 @@ export function ServiceForm({
     const firstMach = machs.find((id) => machinery.some((m) => m.id === id));
     if (firstMach) form.setValue('machineryId', firstMach);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProducerId, watchedDemandTypeId]);
+  }, [selectedProducerId, watchedDemandTypeId, watchedPropertyId]);
 
   const handleSubmit = (data: ServiceFormData) => {
+    if (hasMultipleProperties && !data.propertyId) {
+      form.setError('propertyId', { message: 'Selecione em qual propriedade será o atendimento' });
+      return;
+    }
+    // Sem propriedades adicionais, o atendimento é sempre na principal.
+    if (!hasMultipleProperties) data = { ...data, propertyId: PRINCIPAL_PROPERTY };
     onSubmit({ ...data, damReceiptFile: damReceiptFile || null, limestoneOrderFile: limestoneOrderFile || null } as any);
     form.reset();
     setDamReceiptFile(null);
@@ -539,13 +581,49 @@ export function ServiceForm({
                       <ProducerCombobox
                         producers={producers}
                         value={field.value}
-                        onChange={field.onChange}
+                        onChange={(v) => {
+                          if (v !== field.value) form.setValue('propertyId', '');
+                          field.onChange(v);
+                        }}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              {/* Propriedade — só quando o produtor tem mais de uma */}
+              {selectedProducer && hasMultipleProperties && (
+                <FormField
+                  control={form.control}
+                  name="propertyId"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>Propriedade do atendimento *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || undefined}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={`Este produtor tem ${extraProperties.length + 1} propriedades — selecione`} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value={PRINCIPAL_PROPERTY}>
+                            Principal — {settlementName((selectedProducer as any).settlementId)}
+                            {selectedProducer.locationName ? ` · ${selectedProducer.locationName}` : ''}
+                          </SelectItem>
+                          {extraProperties.map((pp) => (
+                            <SelectItem key={pp.id} value={pp.id}>
+                              {pp.name ? `${pp.name} — ` : ''}{settlementName(pp.settlement_id)}
+                              {pp.location_name ? ` · ${pp.location_name}` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               {/* Producer Info Display */}
               {selectedProducer && (
@@ -556,13 +634,11 @@ export function ServiceForm({
                     </div>
                     <div>
                       <strong>Assentamento:</strong>{' '}
-                      {settlements.find(
-                        (s) => s.id === selectedProducer.settlementId
-                      )?.name}
+                      {hasMultipleProperties && !watchedPropertyId ? '—' : settlementName(effectiveSettlementId)}
                     </div>
                     <div>
                       <strong>Localidade:</strong>{' '}
-                      {selectedProducer.locationName || 'Não informada'}
+                      {hasMultipleProperties && !watchedPropertyId ? '—' : (effectiveLocationName || 'Não informada')}
                     </div>
                   </div>
                 </div>

@@ -21,6 +21,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useServicesByProducer, useDeliveriesByProducer } from '@/hooks/useSupabaseData';
 import { StatusBadge } from '@/components/StatusBadge';
+import { ProducerPropertiesSection } from '@/components/ProducerPropertiesSection';
 
 function isDamOverdue(s: any): boolean {
   if (!s.dam_issued || s.dam_paid || s.status === 'cancelled') return false;
@@ -309,6 +310,18 @@ export function ProducerDetailSheet({
 
           <Separator />
 
+          {/* Propriedades (principal + adicionais) */}
+          <ProducerPropertiesSection
+            producerId={producer.id}
+            principal={{
+              settlementName: settlement?.name,
+              glebaName: (producer as any).glebaName ?? null,
+              locationName: producer.locationName,
+            }}
+          />
+
+          <Separator />
+
           {/* Tipos de demanda */}
           <div>
             <p className="text-sm text-muted-foreground mb-2">Tipos de Demanda</p>
@@ -437,6 +450,11 @@ export function ProducerDetailSheet({
                               {s.demand_types?.name || 'N/A'}
                             </p>
                           </div>
+                          {s.property && (
+                            <p className="text-[11px] text-muted-foreground truncate">
+                              Propriedade: {[s.property.name, s.settlements?.name, s.property.location_name].filter(Boolean).join(' · ')}
+                            </p>
+                          )}
                           {isCompleted && completedAt ? (
                             <p className="text-xs font-semibold text-success mt-0.5">
                               ✓ Finalizado em {completedAt}
