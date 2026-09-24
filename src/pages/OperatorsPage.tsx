@@ -55,8 +55,9 @@ import {
 import {
   Plus, Pencil, Trash2, UserCog, BarChart3, CheckCircle,
   ClipboardList, HardHat, User, Briefcase, FileText, Loader2,
-  Eye, Landmark, RefreshCw,
+  Eye, Landmark, RefreshCw, FileDown,
 } from 'lucide-react';
+import { generateExecutiveReport } from '@/lib/executiveReportPdf';
 import {
   formatDocument,
   formatCpf,
@@ -768,6 +769,35 @@ export default function OperatorsPage() {
                   <p className="text-sm text-muted-foreground">{metricsOperator.email}</p>
                 </div>
               </div>
+              {/* Relatório do Operador — mesmo PDF padrão (Relatório de Atividades),
+                  só com os atendimentos finalizados DESTE operador. */}
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                disabled={metricsData.total === 0}
+                onClick={() => generateExecutiveReport({
+                  services: (services as any[]).filter((s) => s.operator_id === metricsOperator.id),
+                  deliveries: [],
+                  producers: [],
+                  demandTypes: demandTypes as any[],
+                  settlements: settlements as any[],
+                  category: 'all',
+                  settlementId: 'all',
+                  servicesOnly: true,
+                  includeDamRevenue: isFullAdmin,
+                  scope: 'completed',
+                  operator: {
+                    name: metricsOperator.name,
+                    extraKpis: [
+                      { label: 'Dias de operação', value: String((metricsData as any).dias ?? 0) },
+                      { label: 'Assentamentos atendidos', value: String((metricsData as any).assentamentosAtendidos ?? 0) },
+                    ],
+                  },
+                })}
+              >
+                <FileDown className="h-4 w-4" />
+                Relatório do Operador (PDF)
+              </Button>
               <Separator />
               <Card className="bg-gradient-to-br from-primary/10 to-primary/5">
                 <CardContent className="p-6 flex items-center gap-4">

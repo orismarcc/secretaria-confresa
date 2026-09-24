@@ -31,6 +31,10 @@ function categoryLabel(value: string | null | undefined): string {
 
 function parseDate(d: string | null | undefined): Date | null {
   if (!d) return null;
+  // Data pura (AAAA-MM-DD, ex.: agendamento): lê como data LOCAL. Antes virava
+  // meia-noite UTC e, em Confresa (UTC−4), aparecia como o dia anterior.
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12);
   const date = new Date(d.includes('T') ? d : d.replace(' ', 'T'));
   return isNaN(date.getTime()) ? null : date;
 }
@@ -81,6 +85,12 @@ export interface ExecutiveReportOptions {
   glebaName?: string;
   /** Período filtrado (para o subtítulo), ex.: "01/09/2026 a 15/09/2026". */
   periodo?: string;
+  /**
+   * Relatório de UM operador (Colaboradores → detalhes): mesmo layout, com
+   * título próprio, nome no subtítulo, indicadores extras no Resumo e a seção
+   * "Atendimentos por tipo de serviço". `services` já deve vir só dele.
+   */
+  operator?: { name: string; extraKpis?: { label: string; value: string }[] };
 }
 
 // ─── Bar chart (vetorial) ──────────────────────────────────────────────────────
@@ -320,9 +330,50 @@ function drawKpis(doc: jsPDF, x: number, y: number, w: number, kpis: Kpi[]): num
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(110);
-    doc.text(k.label.toUpperCase(), bx + 5, cy + 16);
+    // Rótulo que cabe: exatamente como sempre (uma linha em cy+16). Só o que
+    // ultrapassa a largura útil do card (4 por linha) quebra em duas linhas,
+    // mantendo fonte, cor e alinhamento, sem sair do card.
+    const label = k.label.toUpperCase();
+    const maxW = boxW - 5 - 2;
+    if (doc.getTextWidth(label) <= maxW) {
+      doc.text(label, bx + 5, cy + 16);
+    } else {
+      const lines = (doc.splitTextToSize(label, maxW) as string[]).slice(0, 2);
+      doc.text(lines[0], bx + 5, cy + 15);
+      if (lines[1]) doc.text(lines[1], bx + 5, cy + 18.1);
+    }
   });
   return cy + boxH;
+}
+
+/**
+ * Coluna "Assentamento" com a GLEBA embaixo, menor e em cinza. A altura da
+ * linha já reserva o espaço (didParseCell); o assentamento é desenhado pela
+ * tabela e a gleba é desenhada à parte, no rodapé da célula (didDrawCell).
+ */
+function settlementGlebaHooks(col: number, mains: string[], subs: (string | null)[], baseFont: number) {
+  const SUB_FONT = baseFont - 1.3;
+  const target = (d: any) => d.section === 'body' && d.column.index === col && !!subs[d.row.index];
+  const innerW = (d: any) => d.cell.width - d.cell.padding('left') - d.cell.padding('right');
+  return {
+    didParseCell: (d: any) => {
+      if (target(d)) d.cell.text = [mains[d.row.index], subs[d.row.index] as string];
+    },
+    willDrawCell: (d: any) => {
+      if (target(d)) d.cell.text = d.doc.splitTextToSize(mains[d.row.index], innerW(d));
+    },
+    didDrawCell: (d: any) => {
+      if (!target(d)) return;
+      const doc = d.doc as jsPDF;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(SUB_FONT);
+      doc.setTextColor(115);
+      const lines = doc.splitTextToSize(subs[d.row.index] as string, innerW(d)) as string[];
+      const lh = SUB_FONT * 0.3528 * 1.15; // pt → mm
+      let ty = d.cell.y + d.cell.height - d.cell.padding('bottom') - 0.4 - (lines.length - 1) * lh;
+      lines.forEach((ln) => { doc.text(ln, d.cell.x + d.cell.padding('left'), ty); ty += lh; });
+    },
+  };
 }
 
 function sectionTitle(doc: jsPDF, x: number, y: number, text: string): number {
@@ -370,6 +421,14 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
   const settlementName = (id: string | null | undefined, embedded?: any) =>
     stById.get(id)?.name || embedded?.name || 'Sem assentamento';
 
+  // Gleba do registro: a consulta de atendimentos já traz em row.producers a
+  // gleba da PROPRIEDADE atendida (principal ou adicional) — inclusive nula.
+  // Sem esse dado embutido, usa a gleba do cadastro do produtor.
+  const glebaOf = (row: any): string | null => {
+    const p = row?.producers;
+    if (p && 'glebas' in p) return p.glebas?.name || null;
+    return prById.get(row?.producer_id)?.glebas?.name || null;
+  };
   const servicesOnly = opts.servicesOnly ?? false;
   const isActive = opts.scope === 'active';
   const includeServices = category === 'all' || category !== 'entregas';
@@ -424,15 +483,18 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
     kpis.push({ label: 'Entregas realizadas', value: fmtInt(compDeliveries.length), color: BLUE });
     kpis.push({ label: 'Itens entregues', value: fmtInt(itensEntregues), color: BLUE });
   }
-  kpis.push({ label: 'Produtores atendidos', value: fmtInt(produtoresSet.size), color: AMBER });
+  kpis.push({ label: isActive ? 'Produtores a serem atendidos' : 'Produtores atendidos', value: fmtInt(produtoresSet.size), color: AMBER });
   if (includeServices && areaTrabalhada > 0)
     kpis.push({ label: 'Área trabalhada (ha)', value: fmtDec(areaTrabalhada), color: AMBER });
   if (includeServices && horasTrabalhadas > 0)
     kpis.push({ label: isActive ? 'Horas previstas' : 'Horas trabalhadas', value: `${fmtDec(horasTrabalhadas)} h`, color: AMBER });
   if (includeServices && combustivelConsumido > 0)
-    kpis.push({ label: 'Combustível consumido', value: `${fmtDec(combustivelConsumido)} L`, color: BLUE });
+    kpis.push({ label: isActive ? 'Combustível a ser consumido' : 'Combustível consumido', value: `${fmtDec(combustivelConsumido)} L`, color: BLUE });
   if (includeServices && arrecadadoDam > 0 && opts.includeDamRevenue)
     kpis.push({ label: 'Arrecadado (DAMs pagas)', value: fmtBRL(arrecadadoDam), color: GREEN });
+  if (opts.operator?.extraKpis?.length) {
+    kpis.splice(1, 0, ...opts.operator.extraKpis.map((k) => ({ ...k, color: GREEN })));
+  }
 
   // ── Série mensal (últimos 12 meses) ───────────────────────────────────────
   const now = new Date();
@@ -467,7 +529,8 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
   const filtroAssent = settlementId !== 'all' ? settlementName(settlementId) : 'Todos os assentamentos';
   const filtroGleba = opts.glebaName ? `Gleba: ${opts.glebaName}` : null;
   const filtroPeriodo = opts.periodo ? `Período: ${opts.periodo}` : null;
-  const subtitle = [filtroTipo, lotFilterName, filtroAssent, filtroGleba, filtroPeriodo].filter(Boolean).join(' · ');
+  const filtroOperador = opts.operator ? `Operador: ${opts.operator.name}` : null;
+  const subtitle = [filtroOperador, filtroTipo, lotFilterName, filtroAssent, filtroGleba, filtroPeriodo].filter(Boolean).join(' · ');
 
   // ── Montagem do documento ─────────────────────────────────────────────────
   const img = new Image();
@@ -484,7 +547,7 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
     doc.setFontSize(15);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(GREEN[0], GREEN[1], GREEN[2]);
-    doc.text('Relatório de Atividades', pageWidth / 2, 15, { align: 'center' });
+    doc.text(opts.operator ? 'Relatório do Operador' : 'Relatório de Atividades', pageWidth / 2, 15, { align: 'center' });
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(90);
@@ -512,6 +575,35 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
       y = sectionTitle(doc, M, y, isActive ? 'Agendados por mês (últimos 12 meses)' : 'Produção por mês (últimos 12 meses)');
       drawBarChart(doc, { x: M + 8, y: y + 2, w: contentW - 10, h: 42 }, months.map((m) => m.label), chartSeries);
       y += 2 + 42 + (chartSeries.length > 1 ? 13 : 8);
+    }
+
+    // Atendimentos por tipo de serviço — relatório do operador (como na ficha dele)
+    if (opts.operator && includeServices && compServices.length > 0) {
+      const byType: Record<string, { name: string; n: number; horas: number; area: number }> = {};
+      compServices.forEach((sv) => {
+        const name = dtById.get(sv.demand_type_id)?.name || sv.demand_types?.name || 'Desconhecido';
+        if (!byType[name]) byType[name] = { name, n: 0, horas: 0, area: 0 };
+        byType[name].n++;
+        byType[name].horas += Number(sv.worked_hours) || 0;
+        byType[name].area += Number(sv.worked_area) || 0;
+      });
+      const rowsType = Object.values(byType).sort((a, b) => b.n - a.n);
+      if (y > 235) { doc.addPage(); y = 16; }
+      y = sectionTitle(doc, M, y, 'Atendimentos por tipo de serviço');
+      autoTable(doc, {
+        startY: y,
+        head: [['Tipo de serviço', 'Atendimentos', 'Horas', 'Área (ha)']],
+        body: rowsType.map((r) => [
+          r.name, fmtInt(r.n),
+          r.horas > 0 ? `${fmtDec(r.horas)} h` : '-',
+          r.area > 0 ? fmtDec(r.area) : '-',
+        ]),
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: GREEN, textColor: 255, fontStyle: 'bold', fontSize: 8 },
+        alternateRowStyles: { fillColor: [245, 250, 245] },
+        margin: { left: M, right: M },
+      });
+      y = (doc as any).lastAutoTable.finalY + 8;
     }
 
     // Resumo por assentamento (só quando "Todos")
@@ -602,26 +694,31 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
       const dateField = isActive ? 'scheduled_date' : 'completed_at';
       const dateHeader = isActive ? 'Agendado' : 'Finalizado';
       y = sectionTitle(doc, M, y, `Atendimentos ${isActive ? 'ativos' : 'finalizados'} por produtor (${compServices.length})`);
-      const body = compServices
+      const sorted = compServices
         .slice()
-        .sort((a, b) => (parseDate(a[dateField])?.getTime() || 0) - (parseDate(b[dateField])?.getTime() || 0))
-        .map((s) => [
+        .sort((a, b) => (parseDate(a[dateField])?.getTime() || 0) - (parseDate(b[dateField])?.getTime() || 0));
+      const assentNames = sorted.map((s) => settlementName(s.settlement_id, s.settlements));
+      const glebaNames = sorted.map(glebaOf);
+      // No relatório do operador a coluna "Operador" seria sempre o mesmo nome.
+      const showOperatorCol = !opts.operator;
+      const body = sorted.map((s, i) => [
           prById.get(s.producer_id)?.name || s.producers?.name || 'N/A',
           dtById.get(s.demand_type_id)?.name || s.demand_types?.name || 'N/A',
-          settlementName(s.settlement_id, s.settlements),
-          (s as any).operador?.name || '-',
+          assentNames[i],
+          ...(showOperatorCol ? [(s as any).operador?.name || '-'] : []),
           s.worked_hours ? `${fmtDec(Number(s.worked_hours))} h` : '-',
           s.worked_area ? `${fmtDec(Number(s.worked_area))} ha` : '-',
           fmtDate(s[dateField]),
         ]);
       autoTable(doc, {
         startY: y,
-        head: [['Produtor', 'Demanda', 'Assentamento', 'Operador', 'Horas', 'Área', dateHeader]],
+        head: [['Produtor', 'Demanda', glebaNames.some(Boolean) ? 'Assentamento / Gleba' : 'Assentamento', ...(showOperatorCol ? ['Operador'] : []), 'Horas', 'Área', dateHeader]],
         body,
         styles: { fontSize: 7.5, cellPadding: 1.8 },
         headStyles: { fillColor: GREEN, textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
         alternateRowStyles: { fillColor: [245, 250, 245] },
         margin: { left: M, right: M },
+        ...settlementGlebaHooks(2, assentNames, glebaNames, 7.5),
       });
       y = (doc as any).lastAutoTable.finalY + 8;
     }
@@ -630,10 +727,13 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
     if (includeDeliveries && compDeliveries.length > 0) {
       if (y > 245) { doc.addPage(); y = 16; }
       y = sectionTitle(doc, M, y, `Entregas realizadas (${compDeliveries.length})`);
-      const body = compDeliveries
+      const sortedDel = compDeliveries
         .slice()
-        .sort((a, b) => (parseDate(b.completed_at)?.getTime() || 0) - (parseDate(a.completed_at)?.getTime() || 0))
-        .map((d) => {
+        .sort((a, b) => (parseDate(b.completed_at)?.getTime() || 0) - (parseDate(a.completed_at)?.getTime() || 0));
+      const delAssent = sortedDel.map((d) => settlementName(d.settlement_id, d.settlements));
+      const delGleba = sortedDel.map(glebaOf);
+      const body = sortedDel
+        .map((d, i) => {
           const lotes = ((d.delivery_items ?? []) as any[])
             .filter((it) => deliveryLotId === 'all' || it.lot_id === deliveryLotId)
             .map((it) => it.delivery_lots?.name)
@@ -644,18 +744,19 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
             dtById.get(d.demand_type_id)?.name || d.demand_types?.name || 'N/A',
             lotes || '-',
             fmtInt(deliveryQty(d, deliveryLotId)),
-            settlementName(d.settlement_id, d.settlements),
+            delAssent[i],
             fmtDate(d.completed_at),
           ];
         });
       autoTable(doc, {
         startY: y,
-        head: [['Produtor', 'Tipo', 'Lote', 'Qtd', 'Assentamento', 'Finalizado']],
+        head: [['Produtor', 'Tipo', 'Lote', 'Qtd', delGleba.some(Boolean) ? 'Assentamento / Gleba' : 'Assentamento', 'Finalizado']],
         body,
         styles: { fontSize: 7.5, cellPadding: 1.8 },
         headStyles: { fillColor: BLUE, textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
         alternateRowStyles: { fillColor: [244, 248, 255] },
         margin: { left: M, right: M },
+        ...settlementGlebaHooks(4, delAssent, delGleba, 7.5),
       });
       y = (doc as any).lastAutoTable.finalY + 8;
     }
@@ -678,7 +779,9 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
     const tipoSlug = demandTypeName ? slug(demandTypeName) : category === 'all' ? 'geral' : category;
     const loteSlug = lotFilterName ? '-' + slug(lotFilterName) : '';
     const assentSlug = settlementId !== 'all' ? '-' + slug(settlementName(settlementId)) : '';
-    doc.save(`relatorio-atividades-${tipoSlug}${loteSlug}${assentSlug}-${format(now, 'yyyy-MM-dd')}.pdf`);
+    doc.save(opts.operator
+      ? `relatorio-operador-${slug(opts.operator.name)}-${format(now, 'yyyy-MM-dd')}.pdf`
+      : `relatorio-atividades-${tipoSlug}${loteSlug}${assentSlug}-${format(now, 'yyyy-MM-dd')}.pdf`);
   };
   img.src = logoTransparent;
 }
