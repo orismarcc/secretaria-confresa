@@ -49,6 +49,20 @@ function openInMaps(lat: number, lng: number) {
   }
 }
 
+/**
+ * Data de finalização com HORÁRIO quando ele é real. Finalização pelo app do
+ * operador (ou "agora" no painel) grava o instante exato; finalização com data
+ * escolhida manualmente no painel grava 12:00:00.000 UTC fixo — nesse caso não
+ * há horário real e mostramos só a data (sem inventar "08:00").
+ */
+function completedAtLabel(raw: string): string {
+  const d = new Date(raw.replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return raw;
+  const manualDateOnly = d.getUTCHours() === 12 && d.getUTCMinutes() === 0
+    && d.getUTCSeconds() === 0 && d.getUTCMilliseconds() === 0;
+  return format(d, manualDateOnly ? 'dd/MM/yyyy' : "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+}
+
 interface ServiceDetailViewProps {
   service: {
     id: string;
@@ -459,7 +473,7 @@ export function ServiceDetailView({
                 <div>
                   <p className="text-sm text-muted-foreground">Finalizado em</p>
                   <p className="font-medium">
-                    {format(new Date(service.completed_at!.replace(' ', 'T')), "dd/MM/yyyy", { locale: ptBR })}
+                    {completedAtLabel(service.completed_at!)}
                   </p>
                 </div>
               </div>
