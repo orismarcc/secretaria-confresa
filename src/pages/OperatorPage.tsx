@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/StatusBadge';
-import { MapPin, Phone, Calendar, Clock, GripVertical, Navigation, User, MessageCircle, RefreshCw, CheckCircle2, Banknote } from 'lucide-react';
+import { MapPin, Phone, Calendar, Clock, GripVertical, Navigation, User, Users, ChevronDown, MessageCircle, RefreshCw, CheckCircle2, Banknote } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { OnlineIndicator } from '@/components/ConnectionStatus';
@@ -102,7 +102,7 @@ function OperatorCardBody({
 }: OperatorCardBodyProps) {
   const canStart = service.status === 'pending' || service.status === 'proximo';
   // Só finaliza depois de iniciar (passa por "em execução").
-  const canFinalize = service.status === 'in_progress';
+  const canFinalize = service.status === 'in_progress' && !sharedFrom;
   const horas = Number(service.worked_hours) || 0;
 
   return (
@@ -132,14 +132,10 @@ function OperatorCardBody({
       </div>
 
       {/* Atendimento do colega (assentamento compartilhado): quem está e o que acontece ao agir */}
-      {sharedFrom && (
+      {sharedFrom && service.status !== 'in_progress' && (
         <div className="mb-3 flex items-start gap-2 rounded-md border border-violet-300/60 bg-violet-500/10 px-2.5 py-1.5 text-xs text-violet-800 dark:text-violet-300">
           <User className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-          <span>
-            {service.status === 'in_progress'
-              ? <>Em execução por <strong>{sharedFrom}</strong> — se você finalizar, o atendimento passa para você.</>
-              : <>Cadastrado para <strong>{sharedFrom}</strong> — se você iniciar, o atendimento passa para você.</>}
-          </span>
+          <span>Cadastrado para <strong>{sharedFrom}</strong> — se você iniciar, o atendimento passa para você.</span>
         </div>
       )}
 
@@ -226,6 +222,52 @@ function OperatorCardBody({
           </Button>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Em execução por colegas (recolhido, sem ações) ──────────────────────────
+// Atendimentos que OUTRO operador do mesmo assentamento está executando. Ficam
+// recolhidos e sem botões para não confundir: só quem iniciou pode finalizar.
+
+function ColleagueInProgressSection({ items }: {
+  items: { service: DbService; local: string; who: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-lg border border-dashed bg-muted/30">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-left"
+      >
+        <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+        <span className="flex-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Em execução por outros operadores
+          <span className="ml-2 font-bold">{items.length}</span>
+        </span>
+        <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', open && 'rotate-180')} />
+      </button>
+      {!open && (
+        <p className="px-3 pb-2.5 -mt-1 text-[11px] text-muted-foreground">
+          Apenas para consulta — só quem iniciou pode finalizar.
+        </p>
+      )}
+      {open && (
+        <div className="border-t divide-y">
+          {items.map(({ service, local, who }) => (
+            <div key={service.id} className="px-3 py-2 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground/80 truncate">{service.producers?.name || 'Produtor'}</p>
+              <p className="text-xs truncate">{service.demand_types?.name || 'Serviço'} · {local}</p>
+              <p className="mt-0.5 flex items-center gap-1 text-xs text-violet-700 dark:text-violet-400">
+                <User className="h-3 w-3 shrink-0" />
+                <span className="truncate">Em execução por <strong>{who}</strong></span>
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -413,9 +455,16 @@ export default function OperatorPage() {
     });
   }, [overlaidServices]);
 
+  // Em execução: os MEUS (ou sem operador) primeiro, com ações. Os de colegas
+  // ficam à parte, recolhidos e sem ações — só quem iniciou pode finalizar
+  // (regra também garantida no banco).
   const inProgressServices = useMemo(
-    () => sortedServices.filter((s) => s.status === 'in_progress'),
-    [sortedServices],
+    () => sortedServices.filter((s) => s.status === 'in_progress' && (!s.operator_id || s.operator_id === user?.id)),
+    [sortedServices, user?.id],
+  );
+  const colleagueInProgress = useMemo(
+    () => sortedServices.filter((s) => s.status === 'in_progress' && !!s.operator_id && s.operator_id !== user?.id),
+    [sortedServices, user?.id],
   );
   const nextServices = useMemo(
     () =>
@@ -549,7 +598,13 @@ export default function OperatorPage() {
     );
   }
 
-  const totalServices = sortedServices.length;
+  // Só o que o operador pode agir (não conta os em execução por colegas).
+  const totalServices = sortedServices.length - colleagueInProgress.length;
+  const localOf = (service: DbService) => {
+    const settlement = settlements.find((st) => st.id === service.settlement_id);
+    const location = locations.find((l) => l.id === service.location_id);
+    return `${settlement?.name || service.settlements?.name || 'N/A'} - ${service.producers?.location_name || location?.name || service.locations?.name || 'N/A'}`;
+  };
 
   return (
     <AppLayout>
@@ -621,14 +676,16 @@ export default function OperatorPage() {
 
       {view === 'finalizados' ? (
         <OperatorCompletedList services={completedServices} isLoading={completedLoading} />
-      ) : totalServices === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            Nenhum atendimento pendente
-          </CardContent>
-        </Card>
       ) : (
         <div className="space-y-6">
+          {totalServices === 0 && (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                Nenhum atendimento pendente
+              </CardContent>
+            </Card>
+          )}
+
           {/* ── Em Execução ─────────────────────────────────────────── */}
           {inProgressServices.length > 0 && (
             <div className="space-y-3">
@@ -657,6 +714,17 @@ export default function OperatorPage() {
                 })}
               </div>
             </div>
+          )}
+
+          {/* ── Em execução por colegas: recolhido, depois dos meus ──── */}
+          {colleagueInProgress.length > 0 && (
+            <ColleagueInProgressSection
+              items={colleagueInProgress.map((service) => ({
+                service,
+                local: localOf(service),
+                who: service.profiles?.name || 'outro operador',
+              }))}
+            />
           )}
 
           {/* ── Próximos Atendimentos ────────────────────────────────── */}
