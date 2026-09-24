@@ -5,11 +5,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/StatusBadge';
-import { MapPin, Phone, Calendar, Clock, GripVertical, Navigation, User, Users, ChevronDown, MessageCircle, RefreshCw, CheckCircle2, Banknote } from 'lucide-react';
+import { MapPin, Phone, Calendar, Clock, GripVertical, Navigation, User, Users, ChevronDown, MessageCircle, RefreshCw, CheckCircle2, Banknote, Truck } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { OnlineIndicator } from '@/components/ConnectionStatus';
 import { FinalizePhotosModal } from '@/components/FinalizePhotosModal';
+import { SinglePhotoModal } from '@/components/SinglePhotoModal';
+import { isLogisticsCategory } from '@/lib/logistica';
 import { OperatorCompletedList } from '@/components/OperatorCompletedList';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useGeolocation } from '@/hooks/useGeolocation';
@@ -71,8 +73,10 @@ interface DbService {
   worked_hours?: number | null;
   dam_paid?: boolean | null;
   dam_issued?: boolean | null;
+  /** Logística: momento em que o carregamento foi registrado ("Entrega"). */
+  loaded_at?: string | null;
   producers?: { name: string; phone?: string | null; location_name?: string | null; latitude?: number | null; longitude?: number | null } | null;
-  demand_types?: { name: string } | null;
+  demand_types?: { name: string; category?: string | null } | null;
   settlements?: { name: string } | null;
   locations?: { name: string } | null;
   profiles?: { name: string } | null;
@@ -89,6 +93,10 @@ interface OperatorCardBodyProps {
   isStarting?: boolean;
   /** Nome do colega em cujo nome o atendimento está (assentamento compartilhado). */
   sharedFrom?: string | null;
+  /** Logística: registrar o carregamento ("Entrega"). */
+  onLoad?: (service: DbService) => void;
+  /** Texto de espera (ex.: obtendo localização) — bloqueia os botões. */
+  busyLabel?: string | null;
 }
 
 function OperatorCardBody({
@@ -99,10 +107,17 @@ function OperatorCardBody({
   onFinalize,
   isStarting,
   sharedFrom,
+  onLoad,
+  busyLabel,
 }: OperatorCardBodyProps) {
   const canStart = service.status === 'pending' || service.status === 'proximo';
-  // Só finaliza depois de iniciar (passa por "em execução").
-  const canFinalize = service.status === 'in_progress' && !sharedFrom;
+  // Só finaliza depois de iniciar (passa por "em execução") e só o que é seu.
+  const isMineInProgress = service.status === 'in_progress' && !sharedFrom;
+  // Logística (calcário/insumos): antes de finalizar, registra o carregamento.
+  const isLogistics = isLogisticsCategory(service.demand_types?.category);
+  const needsLoad = isLogistics && isMineInProgress && !service.loaded_at;
+  const canFinalize = isMineInProgress && !needsLoad;
+  const loadedAt = service.loaded_at ? new Date(String(service.loaded_at).replace(' ', 'T')) : null;
   const horas = Number(service.worked_hours) || 0;
 
   return (
@@ -137,6 +152,24 @@ function OperatorCardBody({
           <User className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           <span>Cadastrado para <strong>{sharedFrom}</strong> — se você iniciar, o atendimento passa para você.</span>
         </div>
+      )}
+
+      {/* Logística em execução: diz ao operador qual é o próximo passo */}
+      {isLogistics && isMineInProgress && (
+        needsLoad ? (
+          <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-300/70 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-800 dark:text-amber-300">
+            <Truck className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            <span>No local de carregamento, toque em <strong>Entrega</strong> e tire a foto do caminhão sendo carregado.</span>
+          </div>
+        ) : (
+          <div className="mb-3 flex items-start gap-2 rounded-md border border-emerald-300/70 bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-800 dark:text-emerald-300">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            <span>
+              Carregado{loadedAt && !Number.isNaN(loadedAt.getTime()) ? ` às ${format(loadedAt, 'HH:mm')}` : ''}.
+              {' '}Na propriedade do produtor, toque em <strong>Finalizar</strong> e tire a foto da entrega.
+            </span>
+          </div>
+        )
       )}
 
       <div className="grid gap-2 text-sm mb-4">
@@ -208,18 +241,32 @@ function OperatorCardBody({
             </a>
           </Button>
         )}
-        {canStart && (
-          <Button className="flex-1" onClick={() => onStart(service)} disabled={isStarting}>
-            {isStarting ? 'Iniciando…' : 'Iniciar'}
-          </Button>
-        )}
-        {canFinalize && (
-          <Button
-            className="flex-1 bg-success hover:bg-success/90"
-            onClick={() => onFinalize(service)}
-          >
-            Finalizar
-          </Button>
+        {busyLabel ? (
+          <Button className="flex-1" disabled>{busyLabel}</Button>
+        ) : (
+          <>
+            {canStart && (
+              <Button className="flex-1" onClick={() => onStart(service)} disabled={isStarting}>
+                {isStarting ? 'Iniciando…' : 'Iniciar'}
+              </Button>
+            )}
+            {needsLoad && onLoad && (
+              <Button
+                className="flex-1 bg-amber-600 hover:bg-amber-600/90 text-white"
+                onClick={() => onLoad(service)}
+              >
+                <Truck className="h-4 w-4 mr-2" /> Entrega
+              </Button>
+            )}
+            {canFinalize && (
+              <Button
+                className="flex-1 bg-success hover:bg-success/90"
+                onClick={() => onFinalize(service)}
+              >
+                Finalizar
+              </Button>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -413,11 +460,14 @@ export default function OperatorPage() {
   const overlaidServices = useMemo(() => {
     const startIds = new Set(pendingActions.filter((a) => a.type === 'start').map((a) => a.serviceId));
     const finishIds = new Set(pendingActions.filter((a) => a.type === 'finish').map((a) => a.serviceId));
+    // Carregamento registrado offline: libera o Finalizar mesmo sem sinal.
+    const loadedAt = new Map(pendingActions.filter((a) => a.type === 'load').map((a) => [a.serviceId, a.capturedAt]));
     return visibleServices
       .filter((s) => !finishIds.has(s.id))
       .map((s) => (startIds.has(s.id)
         ? { ...s, status: 'in_progress', operator_id: user?.id ?? s.operator_id, profiles: s.profiles ?? { name: '' } }
-        : s));
+        : s))
+      .map((s) => (loadedAt.has(s.id) && !s.loaded_at ? { ...s, loaded_at: loadedAt.get(s.id) } : s));
   }, [visibleServices, pendingActions, user?.id]);
 
   const updatePositions = useUpdateServicePositions();
@@ -431,6 +481,12 @@ export default function OperatorPage() {
   const [finalize, setFinalize] = useState<{ open: boolean; service: DbService | null }>({
     open: false, service: null,
   });
+  // Logística: modal de UMA foto — 'load' (Entrega = carregamento) ou 'finish'.
+  const [photoStep, setPhotoStep] = useState<{ open: boolean; mode: 'load' | 'finish'; service: DbService | null }>({
+    open: false, mode: 'load', service: null,
+  });
+  // Card aguardando GPS depois da foto (bloqueia botões e mostra o motivo).
+  const [busy, setBusy] = useState<{ id: string; label: string } | null>(null);
 
   // Sincroniza a fila offline ao (re)conectar e ao montar.
   useEffect(() => {
@@ -495,7 +551,14 @@ export default function OperatorPage() {
     };
   }, [queryClient]);
 
-  const openFinalize = (service: DbService) => setFinalize({ open: true, service });
+  const openFinalize = (service: DbService) => {
+    if (isLogisticsCategory(service.demand_types?.category)) {
+      setPhotoStep({ open: true, mode: 'finish', service });
+    } else {
+      setFinalize({ open: true, service });
+    }
+  };
+  const openLoad = (service: DbService) => setPhotoStep({ open: true, mode: 'load', service });
 
   // Atendimento em nome de um colega (assentamento compartilhado): nome dele.
   const sharedFromOf = (service: DbService) =>
@@ -564,6 +627,51 @@ export default function OperatorPage() {
     toast({
       title: 'Atendimento finalizado',
       description: isOnline ? undefined : 'Salvo no aparelho — sincroniza quando o sinal voltar.',
+    });
+
+    syncActions.mutate();
+  };
+
+  // Logística: foto obrigatória + GPS automático. 'load' registra o carregamento
+  // (o atendimento segue em execução); 'finish' finaliza com o GPS da entrega.
+  const handlePhotoStepConfirm = async (photo: Blob) => {
+    const { mode, service } = photoStep;
+    if (!service) return;
+    setBusy({ id: service.id, label: 'Obtendo localização…' });
+    let coords: { latitude: number; longitude: number } | null = null;
+    try { coords = await getCurrentPosition(); } catch { /* sem GPS: registra mesmo assim */ }
+
+    try {
+      await enqueueOperatorAction({
+        serviceId: service.id,
+        operatorId: user?.id ?? null,
+        type: mode === 'load' ? 'load' : 'finish',
+        photoBlob: photo,
+        latitude: coords?.latitude ?? null,
+        longitude: coords?.longitude ?? null,
+      });
+    } finally {
+      setBusy(null);
+    }
+
+    if (mode === 'load') {
+      const now = new Date().toISOString();
+      queryClient.setQueryData<DbService[]>(['services', 'pending'], (old = []) =>
+        old.map((s) => (s.id === service.id ? { ...s, loaded_at: now } : s)),
+      );
+    } else {
+      queryClient.setQueryData<DbService[]>(['services', 'pending'], (old = []) =>
+        old.filter((s) => s.id !== service.id),
+      );
+    }
+    queryClient.invalidateQueries({ queryKey: ['operator_queue_count'] });
+    queryClient.invalidateQueries({ queryKey: ['operator_queue_actions'] });
+
+    toast({
+      title: mode === 'load' ? 'Carregamento registrado' : 'Entrega finalizada',
+      description: !coords
+        ? 'Registrado sem localização (GPS indisponível).'
+        : (isOnline ? undefined : 'Salvo no aparelho — sincroniza quando o sinal voltar.'),
     });
 
     syncActions.mutate();
@@ -709,6 +817,8 @@ export default function OperatorPage() {
                       onStart={handleStart}
                       onFinalize={openFinalize}
                       sharedFrom={sharedFromOf(service)}
+                      onLoad={openLoad}
+                      busyLabel={busy?.id === service.id ? busy.label : null}
                     />
                   );
                 })}
@@ -763,6 +873,8 @@ export default function OperatorPage() {
                           onFinalize={openFinalize}
                           isStarting={startingId === service.id}
                           sharedFrom={sharedFromOf(service)}
+                          onLoad={openLoad}
+                          busyLabel={busy?.id === service.id ? busy.label : null}
                         />
                       );
                     })}
@@ -780,6 +892,22 @@ export default function OperatorPage() {
         producerName={finalize.service?.producers?.name}
         demandName={finalize.service?.demand_types?.name}
         onConfirm={handleFinalizeConfirm}
+      />
+
+      <SinglePhotoModal
+        open={photoStep.open}
+        onOpenChange={(o) => setPhotoStep((st) => ({ ...st, open: o }))}
+        title={photoStep.mode === 'load' ? 'Entrega — carregamento' : 'Finalizar entrega'}
+        subtitle={[photoStep.service?.producers?.name, photoStep.service?.demand_types?.name].filter(Boolean).join(' — ')}
+        photoLabel={photoStep.mode === 'load' ? 'Foto do caminhão sendo carregado' : 'Foto da entrega na propriedade'}
+        hint={photoStep.mode === 'load'
+          ? 'Ao confirmar, a localização do local de carregamento é registrada automaticamente.'
+          : 'Ao confirmar, a localização da entrega (propriedade do produtor) é registrada automaticamente e o atendimento é finalizado.'}
+        confirmLabel={photoStep.mode === 'load' ? 'Registrar carregamento' : 'Finalizar'}
+        confirmClassName={photoStep.mode === 'load'
+          ? 'flex-1 bg-amber-600 hover:bg-amber-600/90 text-white'
+          : 'flex-1 bg-success hover:bg-success/90'}
+        onConfirm={handlePhotoStepConfirm}
       />
     </AppLayout>
   );

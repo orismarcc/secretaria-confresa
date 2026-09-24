@@ -1,4 +1,4 @@
-// Fila offline das ações do operador (Iniciar / Finalizar) com foto e GPS.
+// Fila offline das ações do operador (Iniciar / Entrega / Finalizar) com foto e GPS.
 // Guarda tudo no IndexedDB (idb-keyval): se o operador perder sinal no campo,
 // a ação fica pendente e é sincronizada automaticamente ao voltar a conexão.
 import { get, set, del, keys, createStore } from 'idb-keyval';
@@ -8,14 +8,15 @@ import { get, set, del, keys, createStore } from 'idb-keyval';
 const actionStore = createStore('agri-operator-actions-db', 'actions');
 const blobStore = createStore('agri-operator-blobs-db', 'blobs');
 
-export type OperatorActionType = 'start' | 'finish';
+// 'load' = etapa "Entrega" da logística: foto do carregamento + GPS do local.
+export type OperatorActionType = 'start' | 'load' | 'finish';
 
 export interface OperatorAction {
   id: string;
   serviceId: string;
   operatorId: string | null;
   type: OperatorActionType;
-  blobKey?: string;            // foto principal (finish: término; start: —)
+  blobKey?: string;            // foto principal (finish: término; load: carregamento; start: —)
   startBlobKey?: string;       // no finalizar: foto de INÍCIO do serviço (opcional)
   latitude: number | null;
   longitude: number | null;
@@ -26,7 +27,7 @@ export interface EnqueueInput {
   serviceId: string;
   operatorId: string | null;
   type: OperatorActionType;
-  photoBlob?: Blob | null;         // finish: foto de término
+  photoBlob?: Blob | null;         // finish: foto de término; load: foto do carregamento
   startPhotoBlob?: Blob | null;    // finish: foto de início (opcional)
   latitude?: number | null;
   longitude?: number | null;

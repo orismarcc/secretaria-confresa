@@ -5,6 +5,9 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCombinedServicePhotos } from '@/hooks/useServicePhotos';
+import { useDemandTypes } from '@/hooks/useSupabaseData';
+import { isLogisticsCategory } from '@/lib/logistica';
+import { LogisticsRoute } from '@/components/LogisticsRoute';
 import {
   Pencil,
   Trash2,
@@ -119,6 +122,11 @@ export function ServiceDetailView({
   const canSeeDam = !isCoordenador;
   const isCompleted = service.status === 'completed';
   const isCancelled = service.status === 'cancelled';
+  // Logística (calcário/insumos): rota Partida → Carregamento → Entrega.
+  const { data: allDemandTypes = [] } = useDemandTypes();
+  const isLogistics = isLogisticsCategory(
+    (allDemandTypes as any[]).find((d) => d.id === service.demand_type_id)?.category,
+  );
 
   // Métricas operacionais (planejadas no cadastro ou efetivadas na finalização)
   const hasMetrics =
@@ -414,7 +422,14 @@ export function ServiceDetailView({
 
       {/* Localização do atendimento em execução — acesso direto ao mapa para a
           equipe interna (coordenada captada quando o operador iniciou). */}
-      {!isCompleted && service.status === 'in_progress' && service.latitude && service.longitude && (
+      {isLogistics && (service.status === 'in_progress' || isCompleted) && (
+        <LogisticsRoute
+          serviceId={service.id}
+          fallbackStart={{ latitude: service.latitude, longitude: service.longitude }}
+        />
+      )}
+
+      {!isLogistics && !isCompleted && service.status === 'in_progress' && service.latitude && service.longitude && (
         <div className="rounded-lg bg-blue-500/10 border border-blue-500/30 p-3 flex items-center gap-2">
           <Navigation className="h-4 w-4 text-blue-500 shrink-0" />
           <div className="flex-1 min-w-0">
@@ -460,7 +475,8 @@ export function ServiceDetailView({
             {/* Operational metrics — shown only when present */}
             {hasMetrics && metricsGrid}
 
-            {service.latitude && service.longitude ? (
+            {/* Logística: GPS e fotos já aparecem na "Rota da logística". */}
+            {isLogistics ? null : service.latitude && service.longitude ? (
               <div className="flex items-center gap-2">
                 <Navigation className="h-4 w-4 text-blue-500" />
                 <div className="flex-1">
@@ -481,7 +497,7 @@ export function ServiceDetailView({
               </div>
             )}
 
-            <div>
+            {!isLogistics && (<div>
               <div className="flex items-center gap-2 mb-2">
                 <Image className="h-4 w-4 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">Fotos do Atendimento</p>
@@ -507,7 +523,7 @@ export function ServiceDetailView({
                   Nenhuma foto registrada
                 </div>
               )}
-            </div>
+            </div>)}
           </div>
         </>
       )}

@@ -45,14 +45,42 @@ async function pushAction(action: OperatorAction): Promise<void> {
     return;
   }
 
+  if (action.type === 'load') {
+    // Logística — "Entrega": foto do caminhão sendo carregado + GPS do local de
+    // carregamento. O registro usa o id da ação: se o envio cair no meio e for
+    // repetido, não duplica (ON CONFLICT DO NOTHING).
+    const loadPath = await uploadPhoto(action.serviceId, action.blobKey, 'loading');
+    const { error: pErr } = await supabase.from('service_photos').upsert({
+      id: action.id,
+      service_id: action.serviceId,
+      storage_path: loadPath,
+      latitude: action.latitude,
+      longitude: action.longitude,
+      captured_at: action.capturedAt,
+      event_type: 'loading',
+    }, { onConflict: 'id', ignoreDuplicates: true });
+    if (pErr) throw pErr;
+    const { error: sErr } = await supabase.from('services')
+      // loaded_at ainda não está nos tipos gerados do Supabase (desatualizados).
+      .update({ loaded_at: action.capturedAt } as any)
+      .eq('id', action.serviceId);
+    if (sErr) throw sErr;
+    return;
+  }
+
   // Finalizar: até duas fotos (início e término), ambas opcionais.
+  // Na logística vem também o GPS do local de entrega (propriedade do produtor);
+  // no fluxo normal latitude/longitude chegam nulos (sem mudança).
   const finishPath = await uploadPhoto(action.serviceId, action.blobKey, 'finish');
   const startPath = await uploadPhoto(action.serviceId, action.startBlobKey, 'start');
+  const finishGps = action.latitude != null
+    ? { latitude: action.latitude, longitude: action.longitude }
+    : {};
 
   const rows: any[] = [];
-  if (finishPath) rows.push({
+  if (finishPath || action.latitude != null) rows.push({
     service_id: action.serviceId, storage_path: finishPath,
-    captured_at: action.capturedAt, event_type: 'finish',
+    captured_at: action.capturedAt, event_type: 'finish', ...finishGps,
   });
   if (startPath) rows.push({
     service_id: action.serviceId, storage_path: startPath,

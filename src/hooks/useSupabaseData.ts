@@ -765,7 +765,7 @@ export function usePendingServices() {
     queryFn: async () => {
       const { data: rawData, error } = await supabase
         .from('services')
-        .select(`*, producers(name, phone, location_name, latitude, longitude, gleba_id), demand_types(name), settlements(name), locations(name), profiles!operator_id(name), ${PROPERTY_EMBED}`)
+        .select(`*, producers(name, phone, location_name, latitude, longitude, gleba_id), demand_types(name, category), settlements(name), locations(name), profiles!operator_id(name), ${PROPERTY_EMBED}`)
         // exclui finalizados E cancelados — só atendimentos em aberto entram na fila
         .not('status', 'in', '("completed","cancelled")')
         .order('position', { ascending: true, nullsFirst: false }) // B-05: explicit NULLS LAST
