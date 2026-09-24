@@ -66,7 +66,6 @@ import {
   useOperatorSettlementsMap,
   useOperatorGlebasMap,
   useOperatorDemandTypesMap,
-  useGlebas,
   useCreateService,
   useUpdateService,
   useDeleteService,

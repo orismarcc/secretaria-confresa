@@ -122,12 +122,7 @@ function OperatorCardBody({
         </div>
         <div className="flex flex-col items-end gap-1">
           <StatusBadge status={service.status as 'pending' | 'in_progress' | 'completed'} />
-          {sharedFrom ? (
-            <span className="flex items-center gap-1 text-xs text-violet-700 dark:text-violet-400 text-right">
-              <User className="h-3 w-3 shrink-0" />
-              {service.status === 'in_progress' ? 'Em execução por' : 'Cadastrado para'} {sharedFrom}
-            </span>
-          ) : service.status === 'in_progress' && service.profiles?.name && (
+          {!sharedFrom && service.status === 'in_progress' && service.profiles?.name && (
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <User className="h-3 w-3" />
               {service.profiles.name}
@@ -135,6 +130,18 @@ function OperatorCardBody({
           )}
         </div>
       </div>
+
+      {/* Atendimento do colega (assentamento compartilhado): quem está e o que acontece ao agir */}
+      {sharedFrom && (
+        <div className="mb-3 flex items-start gap-2 rounded-md border border-violet-300/60 bg-violet-500/10 px-2.5 py-1.5 text-xs text-violet-800 dark:text-violet-300">
+          <User className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <span>
+            {service.status === 'in_progress'
+              ? <>Em execução por <strong>{sharedFrom}</strong> — se você finalizar, o atendimento passa para você.</>
+              : <>Cadastrado para <strong>{sharedFrom}</strong> — se você iniciar, o atendimento passa para você.</>}
+          </span>
+        </div>
+      )}
 
       <div className="grid gap-2 text-sm mb-4">
         {(() => {
