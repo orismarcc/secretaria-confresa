@@ -17,6 +17,7 @@ export interface Fornecedor {
   email: string | null; settlement_id: string | null; localidade: string | null; data_nascimento: string | null;
   genero: string | null; perfis: string[]; programas: string[]; aceita_contato: boolean; status: string;
   origem: string; observacao_interna: string | null; validado_por: string | null; validado_em: string | null;
+  latitude: number | null; longitude: number | null;
   created_at: string; updated_at: string;
   settlements?: { name: string } | null;
 }

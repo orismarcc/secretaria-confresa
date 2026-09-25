@@ -38,7 +38,7 @@ const adminNavItems = [
   { path: '/deliveries', label: 'Entregas', icon: Package },
   { path: '/services', label: 'Atendimentos', icon: ClipboardList },
   { path: '/producers', label: 'Produtores', icon: Users },
-  { path: '/agricultura-familiar', label: 'Agricultura Familiar', icon: Sprout },
+  { path: '/conecta-confresa', label: 'Conecta Confresa', icon: Sprout },
   { path: '/dam', label: 'DAMs', icon: Receipt },
   { path: '/operators', label: 'Colaboradores', icon: UserCog },
   { path: '/demand-types', label: 'Serviços', icon: FileText },

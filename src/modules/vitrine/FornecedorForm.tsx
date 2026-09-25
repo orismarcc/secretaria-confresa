@@ -8,7 +8,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Check, ChevronsUpDown, Link2, Loader2, X } from 'lucide-react';
+import { Check, ChevronsUpDown, Link2, Loader2, X, Crosshair } from 'lucide-react';
+import { useGeolocation } from '@/hooks/useGeolocation';
+import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useProducers, useSettlements } from '@/hooks/useSupabaseData';
 import { useSaveFornecedor, type Fornecedor } from './hooks';
@@ -45,7 +47,7 @@ const empty = {
   producer_id: null as string | null, nome: '', telefone: '', whatsapp: '', email: '',
   settlement_id: NONE, localidade: '', data_nascimento: '', genero: NONE,
   perfis: [] as string[], programas: [] as string[], aceita_contato: true,
-  status: 'em_analise', observacao_interna: '',
+  status: 'em_analise', observacao_interna: '', latitude: '', longitude: '',
 };
 
 interface Props {
@@ -61,6 +63,8 @@ export function FornecedorForm({ open, onOpenChange, fornecedor, linkedProducerI
   const { data: producers = [] } = useProducers();
   const { data: settlements = [] } = useSettlements();
   const save = useSaveFornecedor();
+  const { toast } = useToast();
+  const { getCurrentPosition, isLoading: gpsLoading } = useGeolocation();
   const [f, setF] = useState(empty);
   const [pickOpen, setPickOpen] = useState(false);
 
@@ -74,6 +78,8 @@ export function FornecedorForm({ open, onOpenChange, fornecedor, linkedProducerI
       perfis: fornecedor.perfis || [], programas: fornecedor.programas || [],
       aceita_contato: fornecedor.aceita_contato, status: fornecedor.status,
       observacao_interna: fornecedor.observacao_interna || '',
+      latitude: fornecedor.latitude != null ? String(fornecedor.latitude) : '',
+      longitude: fornecedor.longitude != null ? String(fornecedor.longitude) : '',
     } : empty);
   }, [open, fornecedor]);
 
@@ -94,9 +100,30 @@ export function FornecedorForm({ open, onOpenChange, fornecedor, linkedProducerI
     setPickOpen(false);
   };
 
+  const marcarLocalizacao = async () => {
+    try {
+      const { latitude, longitude } = await getCurrentPosition();
+      setF((s) => ({ ...s, latitude: latitude.toFixed(6), longitude: longitude.toFixed(6) }));
+      toast({ title: 'Localização marcada', description: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` });
+    } catch (e: any) {
+      toast({ title: 'Não foi possível obter a localização', description: e?.message, variant: 'destructive' });
+    }
+  };
+  const coord = (v: string, min: number, max: number) => {
+    const n = Number(v.replace(',', '.'));
+    return v.trim() && Number.isFinite(n) && n >= min && n <= max ? n : null;
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!f.nome.trim()) return;
+    const lat = coord(f.latitude, -90, 90);
+    const lng = coord(f.longitude, -180, 180);
+    // Coordenadas: as duas ou nenhuma (o banco também exige).
+    if ((f.latitude.trim() || f.longitude.trim()) && (lat === null || lng === null)) {
+      toast({ title: 'Coordenadas inválidas', description: 'Preencha latitude e longitude válidas, ou deixe as duas vazias.', variant: 'destructive' });
+      return;
+    }
     const id = await save.mutateAsync({
       id: fornecedor?.id,
       producer_id: f.producer_id,
@@ -113,6 +140,8 @@ export function FornecedorForm({ open, onOpenChange, fornecedor, linkedProducerI
       aceita_contato: f.aceita_contato,
       status: f.status,
       observacao_interna: f.observacao_interna.trim() || null,
+      latitude: lat,
+      longitude: lng,
     });
     onOpenChange(false);
     onSaved?.(id);
@@ -226,6 +255,22 @@ export function FornecedorForm({ open, onOpenChange, fornecedor, linkedProducerI
                 </div>
               </div>
               <div className="space-y-1.5"><Label>E-mail</Label><Input type="email" value={f.email} onChange={(e) => setF((s) => ({ ...s, email: e.target.value }))} /></div>
+              <div className="space-y-1.5">
+                <Label>Localização no mapa</Label>
+                <p className="text-[11px] text-muted-foreground">
+                  {linked && linked.latitude != null
+                    ? 'Vinculado ao cadastro rural: o mapa já usa a localização de lá. Preencha só se quiser outro ponto (ex.: local de coleta).'
+                    : 'Sem vínculo com coordenadas: marque para o fornecedor aparecer no mapa.'}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input inputMode="decimal" placeholder="Latitude" value={f.latitude} onChange={(e) => setF((s) => ({ ...s, latitude: e.target.value }))} />
+                  <Input inputMode="decimal" placeholder="Longitude" value={f.longitude} onChange={(e) => setF((s) => ({ ...s, longitude: e.target.value }))} />
+                </div>
+                <Button type="button" variant="outline" size="sm" className="w-full" onClick={marcarLocalizacao} disabled={gpsLoading}>
+                  {gpsLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Crosshair className="h-4 w-4 mr-2" />}
+                  {gpsLoading ? 'Obtendo localização…' : 'Marcar localização atual'}
+                </Button>
+              </div>
             </div>
           </details>
 

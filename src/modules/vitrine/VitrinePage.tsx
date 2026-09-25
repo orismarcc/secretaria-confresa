@@ -1,5 +1,5 @@
-// Vitrine da Agricultura Familiar — página da equipe (módulo independente,
-// carregado sob demanda). Fornecedor (quem é) ≠ Oferta (o que fornece).
+// CONECTA CONFRESA — Vitrine da Agricultura Familiar. Página da equipe
+// (módulo independente, carregado sob demanda). Fornecedor ≠ Oferta.
 import { useMemo, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
@@ -9,17 +9,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SearchInput } from '@/components/SearchInput';
 import { DataTable } from '@/components/DataTable';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { Plus, Users, Package, BookOpen, FileWarning, ShieldCheck, Sprout } from 'lucide-react';
-import { format } from 'date-fns';
+import { Plus, Users, Search, BookOpen, Sprout, CalendarRange, Map as MapIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { textIncludes } from '@/lib/text';
-import { statusVencimento, vencClasses, vencLabel } from '@/lib/vencimento';
 import { useFornecedores, useOfertas, useDocumentos, useDeleteFornecedor, type Fornecedor } from './hooks';
-import { STATUS, statusInfo, programaLabel, tipoDocLabel } from './constants';
+import { STATUS, statusInfo, programaLabel } from './constants';
 import { FornecedorForm } from './FornecedorForm';
 import { FornecedorSheet } from './FornecedorSheet';
-import { OfertasTab } from './OfertasTab';
+import { BuscaTab, type BuscaPreset } from './BuscaTab';
+import { CalendarioTab } from './CalendarioTab';
+import { MapaTab } from './MapaTab';
 import { CatalogoTab } from './CatalogoTab';
+import { AlertasPanel } from './AlertasPanel';
 
 const ALL = '__all__';
 
@@ -35,6 +36,12 @@ export default function VitrinePage() {
   const [form, setForm] = useState<{ open: boolean; f: Fornecedor | null }>({ open: false, f: null });
   const [abertoId, setAbertoId] = useState<string | null>(null);
   const [excluir, setExcluir] = useState<Fornecedor | null>(null);
+  // Calendário → Busca: abre a busca já filtrada por produto e mês.
+  const [preset, setPreset] = useState<BuscaPreset | null>(null);
+  const irParaBusca = (produtoId: string, mes: number) => {
+    setPreset((p) => ({ produtoId, mes, n: (p?.n ?? 0) + 1 }));
+    setTab('busca');
+  };
 
   const aberto = fornecedores.find((f) => f.id === abertoId) || null;
   const linkedProducerIds = useMemo(
@@ -51,11 +58,6 @@ export default function VitrinePage() {
     (status === ALL || f.status === status) &&
     (!busca || textIncludes(f.nome, busca) || textIncludes(f.settlements?.name, busca) || textIncludes(f.localidade, busca)),
   );
-
-  // Documentos vencidos ou vencendo (mesmo critério da Frota).
-  const alertasDocs = useMemo(() => documentos
-    .filter((d) => d.validade && statusVencimento(d.validade).status !== 'ok')
-    .sort((a, b) => (a.validade || '').localeCompare(b.validade || '')), [documentos]);
 
   const resumo = {
     total: fornecedores.length,
@@ -95,8 +97,8 @@ export default function VitrinePage() {
   return (
     <AppLayout>
       <PageHeader
-        title="Agricultura Familiar"
-        description="Vitrine de fornecedores e ofertas para PNAE, PAA e compras públicas"
+        title="Conecta Confresa"
+        description="Vitrine da Agricultura Familiar — fornecedores e ofertas para PNAE, PAA e compras públicas"
         action={tab === 'fornecedores' ? { label: 'Novo fornecedor', onClick: () => setForm({ open: true, f: null }), icon: <Plus className="h-4 w-4 mr-2" /> } : undefined}
       />
 
@@ -115,30 +117,17 @@ export default function VitrinePage() {
         ))}
       </div>
 
-      {/* Alertas de documentos */}
-      {alertasDocs.length > 0 ? (
-        <div className="mb-4 rounded-lg border p-3 space-y-2">
-          <p className="text-sm font-semibold flex items-center gap-2"><FileWarning className="h-4 w-4 text-amber-600" /> Documentos vencidos ou vencendo <span className="text-xs font-normal text-muted-foreground">{alertasDocs.length}</span></p>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {alertasDocs.slice(0, 9).map((d) => (
-              <button key={d.id} type="button" onClick={() => setAbertoId(d.fornecedor_id)}
-                className={cn('rounded-lg p-2 text-left', vencClasses(statusVencimento(d.validade!).status))}>
-                <p className="text-sm font-semibold truncate">{d.vitrine_fornecedores?.nome} · {tipoDocLabel(d.tipo)}</p>
-                <p className="text-[11px]">{format(new Date(`${d.validade}T12:00:00`), 'dd/MM/yyyy')} — {vencLabel(d.validade!)}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : documentos.length > 0 ? (
-        <div className="mb-4 rounded-lg border bg-emerald-500/5 border-emerald-500/25 p-3 flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
-          <ShieldCheck className="h-4 w-4 shrink-0" /> Documentação em dia.
-        </div>
-      ) : null}
+      {/* Alertas: documentos, cadastros e preços desatualizados, safra chegando */}
+      <div className="mb-4">
+        <AlertasPanel fornecedores={fornecedores} ofertas={ofertas} documentos={documentos} onOpenFornecedor={setAbertoId} />
+      </div>
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="fornecedores" className="gap-2"><Users className="h-4 w-4" /> Fornecedores</TabsTrigger>
-          <TabsTrigger value="ofertas" className="gap-2"><Package className="h-4 w-4" /> Ofertas</TabsTrigger>
+          <TabsTrigger value="busca" className="gap-2"><Search className="h-4 w-4" /> Busca</TabsTrigger>
+          <TabsTrigger value="calendario" className="gap-2"><CalendarRange className="h-4 w-4" /> Calendário</TabsTrigger>
+          <TabsTrigger value="mapa" className="gap-2"><MapIcon className="h-4 w-4" /> Mapa</TabsTrigger>
           <TabsTrigger value="catalogo" className="gap-2"><BookOpen className="h-4 w-4" /> Catálogo</TabsTrigger>
         </TabsList>
 
@@ -171,7 +160,9 @@ export default function VitrinePage() {
           )}
         </TabsContent>
 
-        <TabsContent value="ofertas"><OfertasTab onOpenFornecedor={setAbertoId} /></TabsContent>
+        <TabsContent value="busca"><BuscaTab onOpenFornecedor={setAbertoId} preset={preset} /></TabsContent>
+        <TabsContent value="calendario"><CalendarioTab onPick={irParaBusca} /></TabsContent>
+        <TabsContent value="mapa"><MapaTab onOpenFornecedor={setAbertoId} /></TabsContent>
         <TabsContent value="catalogo"><CatalogoTab /></TabsContent>
       </Tabs>
 

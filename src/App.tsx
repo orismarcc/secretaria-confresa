@@ -31,8 +31,8 @@ import AuditPage from "./pages/AuditPage";
 import MaintenancePage from "./pages/MaintenancePage";
 import NotFound from "./pages/NotFound";
 
-// Vitrine da Agricultura Familiar: módulo independente, carregado só quando a
-// página é aberta (não pesa no restante do sistema).
+// Conecta Confresa (Vitrine da Agricultura Familiar): módulo independente,
+// carregado só quando a página é aberta (não pesa no restante do sistema).
 const VitrinePage = lazy(() => import("./modules/vitrine/VitrinePage"));
 
 const queryClient = new QueryClient();
@@ -89,7 +89,9 @@ function AppRoutes() {
       <Route path="/settlements" element={<ProtectedRoute adminOnly><SettlementsPage /></ProtectedRoute>} />
       <Route path="/machinery" element={<ProtectedRoute adminOnly assistenteOk><MachineryPage /></ProtectedRoute>} />
       <Route path="/transito" element={<ProtectedRoute adminOnly><TransitoPage /></ProtectedRoute>} />
-      <Route path="/agricultura-familiar" element={<ProtectedRoute adminOnly><Suspense fallback={<Loading />}><VitrinePage /></Suspense></ProtectedRoute>} />
+      <Route path="/conecta-confresa" element={<ProtectedRoute adminOnly><Suspense fallback={<Loading />}><VitrinePage /></Suspense></ProtectedRoute>} />
+      {/* Endereço antigo (Fase 1) → novo nome */}
+      <Route path="/agricultura-familiar" element={<Navigate to="/conecta-confresa" replace />} />
       <Route path="/field-services" element={<ProtectedRoute adminOnly assistenteOk><FieldServicesPage /></ProtectedRoute>} />
       <Route path="/maintenance" element={<ProtectedRoute adminOnly><MaintenancePage /></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute adminOnly><AnalyticsPage /></ProtectedRoute>} />
