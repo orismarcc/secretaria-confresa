@@ -158,7 +158,7 @@ export default function ProducersMap({ producers, settlements, onOpenProducer }:
       <p className="text-sm text-muted-foreground">
         <span className="font-semibold text-foreground">{pontos.length}</span> propriedade(s) no mapa ·{' '}
         <span className="font-semibold text-foreground">{producers.length - semLocal.length}</span> de {producers.length} produtor(es) localizados.
-        {' '}A localização é atualizada automaticamente pelo GPS do operador ao finalizar um atendimento.
+        {' '}Cadastro sem localização recebe automaticamente o GPS do primeiro atendimento finalizado pelo operador; depois disso só muda se for editada no cadastro.
       </p>
 
       {/* isolate: mantém os z-index do Leaflet dentro do mapa (não cobre fichas e janelas). */}
