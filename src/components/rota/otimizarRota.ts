@@ -1,6 +1,10 @@
-// Rota de visitas técnicas: matriz de tempos pela estrada (OSRM/OpenStreetMap)
-// e ordem de menor tempo total. Só COORDENADAS são enviadas ao serviço de rotas
-// (nenhum nome ou dado do produtor). Sem o serviço, usa estimativa em linha reta.
+// Rota de visitas técnicas. Ordem de preferência:
+//   1. Google (função de servidor rota-google): mesma base de estradas do Google
+//      Maps, ordem otimizada pelo Google;
+//   2. OSRM/OpenStreetMap: matriz de tempos pela estrada + ordem ótima nossa;
+//   3. estimativa em linha reta.
+// Só COORDENADAS são enviadas (nenhum nome ou dado do produtor).
+import { supabase } from '@/integrations/supabase/client';
 
 export interface PontoRota { lat: number; lng: number }
 
@@ -11,7 +15,7 @@ export interface ResultadoRota {
   trechos: { segundos: number; metros: number }[];
   /** Linha da rota pelas estradas ([lat, lng]); null na estimativa em linha reta. */
   geometria: [number, number][] | null;
-  fonte: 'estradas' | 'estimativa';
+  fonte: 'google' | 'estradas' | 'estimativa';
   /** Paradas cujo ponto está longe da estrada mapeada mais próxima (metros). */
   longeDaEstrada: { indice: number; metros: number }[];
 }
@@ -129,11 +133,70 @@ function resolver(D: number[][], n: number, voltar: boolean) {
   return n <= LIMITE_EXATO ? exata(D, n, voltar) : heuristica(D, n, voltar);
 }
 
+/** Decodifica a polyline do Google em [lat, lng]. */
+function decodePolyline(str: string): [number, number][] {
+  const out: [number, number][] = [];
+  let i = 0, lat = 0, lng = 0;
+  while (i < str.length) {
+    for (const eixo of [0, 1]) {
+      let b, shift = 0, result = 0;
+      do { b = str.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+      const d = result & 1 ? ~(result >> 1) : result >> 1;
+      if (eixo === 0) lat += d; else lng += d;
+    }
+    out.push([lat / 1e5, lng / 1e5]);
+  }
+  return out;
+}
+
+// Sem chave do Google configurada: não tenta de novo nesta sessão.
+let googleNaoConfigurado = false;
+
+async function viaGoogle(partida: PontoRota, paradas: PontoRota[], voltar: boolean, destinoIndice: number | null): Promise<ResultadoRota | null> {
+  if (googleNaoConfigurado) return null;
+  try {
+    const { data, error } = await supabase.functions.invoke('rota-google', {
+      body: { origem: partida, paradas, voltar, destinoIndice },
+    });
+    if (error) {
+      const corpo = await (error as { context?: Response }).context?.json?.().catch(() => null);
+      if (corpo?.error === 'nao_configurado') googleNaoConfigurado = true;
+      return null;
+    }
+    const ordem: number[] = data?.ordem;
+    const trechos = data?.trechos;
+    if (!Array.isArray(ordem) || ordem.length !== paradas.length || new Set(ordem).size !== paradas.length
+      || !Array.isArray(trechos) || trechos.length !== paradas.length + (voltar ? 1 : 0)) return null;
+    return {
+      ordem,
+      trechos,
+      geometria: data.polyline ? decodePolyline(data.polyline) : null,
+      fonte: 'google',
+      longeDaEstrada: [],
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Calcula a rota de menor tempo saindo de `partida`, passando por todas as
  * `paradas` (e voltando, se `voltar`).
  */
 export async function otimizarRota(partida: PontoRota, paradas: PontoRota[], voltar: boolean): Promise<ResultadoRota> {
+  // Ida e volta: o Google escolhe a ordem de todas as paradas.
+  if (voltar) {
+    const g = await viaGoogle(partida, paradas, true, null);
+    if (g) return g;
+    return otimizarRotaOsm(partida, paradas, true);
+  }
+  // Só ida: a última parada vem do nosso cálculo; o Google ordena as demais.
+  const base = await otimizarRotaOsm(partida, paradas, false);
+  const g = await viaGoogle(partida, paradas, false, base.ordem[base.ordem.length - 1]);
+  return g ?? base;
+}
+
+async function otimizarRotaOsm(partida: PontoRota, paradas: PontoRota[], voltar: boolean): Promise<ResultadoRota> {
   const nos = [partida, ...paradas];
   const n = paradas.length;
   const estimativaM = (a: number, b: number) => haversineM(nos[a], nos[b]) * FATOR_SINUOSIDADE;
