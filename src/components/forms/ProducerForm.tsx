@@ -354,7 +354,8 @@ export function ProducerForm({
 
             {/* GPS Coordinates Section */}
             <div className="border rounded-lg p-4 bg-muted/30">
-              <p className="text-sm font-medium mb-3">Coordenadas GPS (opcional)</p>
+              <p className="text-sm font-medium mb-1">Coordenadas GPS da propriedade principal (opcional)</p>
+              <p className="text-xs text-muted-foreground mb-3">Propriedades adicionais têm GPS próprio, na ficha do produtor.</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}

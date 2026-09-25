@@ -295,7 +295,7 @@ export function ProducerDetailSheet({
               <div className="flex items-start gap-3">
                 <Navigation className="h-5 w-5 text-muted-foreground mt-0.5" />
                 <div>
-                  <p className="text-sm text-muted-foreground">Coordenadas GPS</p>
+                  <p className="text-sm text-muted-foreground">Coordenadas GPS da propriedade principal</p>
                   <button
                     onClick={() => openInMaps(producer.latitude!, producer.longitude!)}
                     className="flex items-center gap-1.5 mt-0.5 text-sm text-blue-600 hover:text-blue-500 font-mono"
@@ -317,6 +317,8 @@ export function ProducerDetailSheet({
               settlementName: settlement?.name,
               glebaName: (producer as any).glebaName ?? null,
               locationName: producer.locationName,
+              latitude: producer.latitude ?? null,
+              longitude: producer.longitude ?? null,
             }}
           />
 

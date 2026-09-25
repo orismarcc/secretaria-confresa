@@ -20,7 +20,7 @@ const NONE = '__none__';
 interface Props {
   producerId: string;
   /** Dados da propriedade principal (a do cadastro do produtor), só para exibição. */
-  principal: { settlementName?: string; glebaName?: string | null; locationName?: string | null };
+  principal: { settlementName?: string; glebaName?: string | null; locationName?: string | null; latitude?: number | null; longitude?: number | null };
 }
 
 const empty = { name: '', settlement_id: '', gleba_id: NONE, location_name: '', latitude: '', longitude: '' };
@@ -120,14 +120,26 @@ export function ProducerPropertiesSection({ producerId, principal }: Props) {
 
       <div className="space-y-2">
         {/* Principal — editada pelo formulário do produtor */}
-        <div className="rounded-lg border p-2.5 text-sm">
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-[10px]">Principal</Badge>
-            <span className="font-medium truncate">{principal.settlementName || '—'}</span>
+        <div className="rounded-lg border p-2.5 text-sm flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-[10px]">Principal</Badge>
+              <span className="font-medium truncate">{principal.settlementName || '—'}</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1 truncate">
+              {[principal.glebaName && `Gleba ${principal.glebaName}`, principal.locationName].filter(Boolean).join(' · ') || 'Localidade não informada'}
+            </p>
+            <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+              {principal.latitude != null && principal.longitude != null
+                ? `GPS ${Number(principal.latitude).toFixed(5)}, ${Number(principal.longitude).toFixed(5)}`
+                : 'Sem GPS'}
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground mt-1 truncate">
-            {[principal.glebaName && `Gleba ${principal.glebaName}`, principal.locationName].filter(Boolean).join(' · ') || 'Localidade não informada'}
-          </p>
+          {principal.latitude != null && principal.longitude != null && (
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Abrir no mapa" onClick={() => openInMaps(principal.latitude!, principal.longitude!)}>
+              <Navigation className="h-4 w-4 text-blue-600" />
+            </Button>
+          )}
         </div>
 
         {extras.map((p) => (
@@ -138,6 +150,11 @@ export function ProducerPropertiesSection({ producerId, principal }: Props) {
               </p>
               <p className="text-xs text-muted-foreground mt-0.5 truncate">
                 {[glebaName(p.gleba_id) && `Gleba ${glebaName(p.gleba_id)}`, p.location_name].filter(Boolean).join(' · ') || 'Localidade não informada'}
+              </p>
+              <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                {p.latitude != null && p.longitude != null
+                  ? `GPS ${Number(p.latitude).toFixed(5)}, ${Number(p.longitude).toFixed(5)}`
+                  : 'Sem GPS'}
               </p>
             </div>
             {p.latitude != null && p.longitude != null && (
