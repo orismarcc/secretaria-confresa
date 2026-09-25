@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { lazy, Suspense } from "react";
 
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -29,6 +30,10 @@ import ImportSEFAZPage from "./pages/ImportSEFAZPage";
 import AuditPage from "./pages/AuditPage";
 import MaintenancePage from "./pages/MaintenancePage";
 import NotFound from "./pages/NotFound";
+
+// Vitrine da Agricultura Familiar: módulo independente, carregado só quando a
+// página é aberta (não pesa no restante do sistema).
+const VitrinePage = lazy(() => import("./modules/vitrine/VitrinePage"));
 
 const queryClient = new QueryClient();
 
@@ -84,6 +89,7 @@ function AppRoutes() {
       <Route path="/settlements" element={<ProtectedRoute adminOnly><SettlementsPage /></ProtectedRoute>} />
       <Route path="/machinery" element={<ProtectedRoute adminOnly assistenteOk><MachineryPage /></ProtectedRoute>} />
       <Route path="/transito" element={<ProtectedRoute adminOnly><TransitoPage /></ProtectedRoute>} />
+      <Route path="/agricultura-familiar" element={<ProtectedRoute adminOnly><Suspense fallback={<Loading />}><VitrinePage /></Suspense></ProtectedRoute>} />
       <Route path="/field-services" element={<ProtectedRoute adminOnly assistenteOk><FieldServicesPage /></ProtectedRoute>} />
       <Route path="/maintenance" element={<ProtectedRoute adminOnly><MaintenancePage /></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute adminOnly><AnalyticsPage /></ProtectedRoute>} />

@@ -22,6 +22,7 @@ import {
   History,
   Hammer,
   Car,
+  Sprout,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -37,6 +38,7 @@ const adminNavItems = [
   { path: '/deliveries', label: 'Entregas', icon: Package },
   { path: '/services', label: 'Atendimentos', icon: ClipboardList },
   { path: '/producers', label: 'Produtores', icon: Users },
+  { path: '/agricultura-familiar', label: 'Agricultura Familiar', icon: Sprout },
   { path: '/dam', label: 'DAMs', icon: Receipt },
   { path: '/operators', label: 'Colaboradores', icon: UserCog },
   { path: '/demand-types', label: 'Serviços', icon: FileText },
