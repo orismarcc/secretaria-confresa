@@ -25,6 +25,7 @@ export interface LinhaOferta {
   entregaPropria: string;
   emiteNota: string;
   distanciaKm: number | null;
+  situacaoOferta?: string;
 }
 
 export interface LinhaCalendario {
@@ -83,10 +84,11 @@ export async function exportarOfertasPdf(linhas: LinhaOferta[], filtros: string,
   doc.text(resumo, 12, y); y += 4;
   autoTable(doc, {
     startY: y,
-    head: [['Fornecedor', 'Situação', 'Assentamento', 'Produto', 'Qtd/mês', 'Período', 'Preço', 'Entrega', 'Nota', 'Dist. sede*']],
+    head: [['Fornecedor', 'Situação', 'Assentamento', 'Produto', 'Oferta', 'Qtd/mês', 'Período', 'Preço', 'Entrega', 'Nota', 'Dist. sede*']],
     body: linhas.map((l) => [
       l.fornecedor, l.situacao, l.assentamento,
       l.variedade ? `${l.produto} — ${l.variedade}` : l.produto,
+      l.situacaoOferta || '—',
       l.qtd != null ? `${fmtNum(l.qtd)} ${l.unidade}` : '—',
       l.periodo,
       l.preco != null ? `${fmtBRL(l.preco)}/${l.unidade}${l.entregue ? ' (entregue)' : ''}` : '—',
@@ -109,17 +111,17 @@ export async function exportarOfertasPdf(linhas: LinhaOferta[], filtros: string,
 /** Planilha com o resultado da busca de ofertas. */
 export function exportarOfertasXlsx(linhas: LinhaOferta[]) {
   const aoa: (string | number | null)[][] = [[
-    'Fornecedor', 'Situação', 'Assentamento', 'Produto', 'Variedade', 'Qtd/mês', 'Unidade', 'Período',
+    'Fornecedor', 'Situação', 'Assentamento', 'Produto', 'Variedade', 'Situação da oferta', 'Qtd/mês', 'Unidade', 'Período',
     'Preço (R$)', 'Preço com entrega', 'Frequência', 'Entrega própria', 'Emite nota', 'Distância da sede (km, linha reta)',
   ]];
   linhas.forEach((l) => aoa.push([
-    l.fornecedor, l.situacao, l.assentamento, l.produto, l.variedade, l.qtd, l.unidade, l.periodo,
+    l.fornecedor, l.situacao, l.assentamento, l.produto, l.variedade, l.situacaoOferta || '', l.qtd, l.unidade, l.periodo,
     l.preco, l.preco != null ? (l.entregue ? 'Sim' : 'Não') : null, l.frequencia, l.entregaPropria, l.emiteNota,
     l.distanciaKm != null ? Math.round(l.distanciaKm * 10) / 10 : null,
   ]));
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [28, 12, 22, 18, 14, 10, 9, 14, 10, 10, 12, 10, 10, 14].map((w) => ({ wch: w }));
+  ws['!cols'] = [28, 12, 22, 18, 14, 16, 10, 9, 14, 10, 10, 12, 10, 10, 14].map((w) => ({ wch: w }));
   XLSX.utils.book_append_sheet(wb, ws, 'Ofertas');
   XLSX.writeFile(wb, `conecta-confresa-ofertas-${slugData()}.xlsx`);
 }

@@ -16,19 +16,21 @@ import { statusVencimento, vencClasses, vencLabel } from '@/lib/vencimento';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   useOfertas, useDocumentos, useSaveDocumento, useDeleteDocumento, useDeleteOferta, useSetStatusFornecedor,
-  usePrecosHist, openDocumento, type Fornecedor, type Oferta, type Documento,
+  usePrecosHistDe, useSetSituacaoOferta, openDocumento, type Fornecedor, type Oferta, type Documento,
 } from './hooks';
 import {
   STATUS, TIPOS_DOC, SITUACOES_DOC, statusInfo, situacaoDocInfo, tipoDocLabel, programaLabel, perfilLabel,
-  unidadeLabel, frequenciaLabel, mesesResumo, fmtNum, fmtBRL,
+  unidadeLabel, frequenciaLabel, mesesResumo, fmtNum, fmtBRL, SITUACOES_OFERTA, situacaoOfertaInfo,
 } from './constants';
+import { AceitarDialog } from './AceitarDialog';
+import { avisosDoFornecedor } from './regras';
 import { MesesBar } from './Meses';
 import { OfertaForm } from './OfertaForm';
 
 const fmtData = (v?: string | null) => (v ? format(new Date(v.length <= 10 ? `${v}T12:00:00` : v.replace(' ', 'T')), 'dd/MM/yyyy') : '—');
 
-function PrecoHistorico({ ofertaId }: { ofertaId: string }) {
-  const { data = [], isLoading } = usePrecosHist(ofertaId);
+function PrecoHistorico({ ofertaIds }: { ofertaIds: string[] }) {
+  const { data = [], isLoading } = usePrecosHistDe(ofertaIds);
   if (isLoading) return <p className="text-xs text-muted-foreground">Carregando…</p>;
   if (data.length === 0) return <p className="text-xs text-muted-foreground">Sem preços registrados.</p>;
   return (
@@ -43,9 +45,15 @@ function PrecoHistorico({ ofertaId }: { ofertaId: string }) {
   );
 }
 
-function OfertaCard({ o, onEdit, onDelete, canDelete }: { o: Oferta; onEdit: () => void; onDelete: () => void; canDelete: boolean }) {
+function OfertaCard({ o, irmas, onEdit, onDelete, onAceitar, canDelete }: {
+  o: Oferta; irmas: Oferta[]; onEdit: () => void; onDelete: () => void; onAceitar: () => void; canDelete: boolean;
+}) {
   const [hist, setHist] = useState(false);
+  const setSit = useSetSituacaoOferta();
   const un = unidadeLabel(o.unidade);
+  const sit = situacaoOfertaInfo(o.situacao);
+  // Mesmo produto/variedade (esta + as "irmãs"): o histórico junta todas.
+  const idsHistorico = [o.id, ...irmas.map((x) => x.id)];
   return (
     <div className={cn('rounded-lg border p-3 space-y-2', !o.ativo && 'opacity-60')}>
       <div className="flex items-start justify-between gap-2">
@@ -64,6 +72,20 @@ function OfertaCard({ o, onEdit, onDelete, canDelete }: { o: Oferta; onEdit: () 
           {canDelete && <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={onDelete}><Trash2 className="h-4 w-4" /></Button>}
         </div>
       </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Select
+          value={o.situacao}
+          onValueChange={(v) => (v === 'aceita' ? onAceitar() : setSit.mutate({ id: o.id, situacao: v }))}
+        >
+          <SelectTrigger className={cn('h-6 w-auto gap-1 px-2 text-[11px] border', sit.cls)}><SelectValue /></SelectTrigger>
+          <SelectContent>{SITUACOES_OFERTA.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
+        </Select>
+        {o.situacao === 'aceita' && (
+          <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+            {programaLabel(o.programa)}{o.qtd_aceita != null ? ` · ${fmtNum(o.qtd_aceita)} ${un}/mês aceito` : ''}
+          </span>
+        )}
+      </div>
       <MesesBar meses={o.meses} />
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
         <span className="font-semibold">{o.preco != null ? `${fmtBRL(o.preco)}/${un}` : 'Sem preço'}</span>
@@ -74,8 +96,10 @@ function OfertaCard({ o, onEdit, onDelete, canDelete }: { o: Oferta; onEdit: () 
       </div>
       {hist && (
         <div className="rounded-md bg-muted/50 p-2">
-          <p className="text-[11px] font-semibold mb-1">Histórico de preço</p>
-          <PrecoHistorico ofertaId={o.id} />
+          <p className="text-[11px] font-semibold mb-1">
+            Histórico de preço{irmas.length > 0 ? ` (junta ${irmas.length + 1} ofertas deste produto)` : ''}
+          </p>
+          <PrecoHistorico ofertaIds={idsHistorico} />
         </div>
       )}
     </div>
@@ -141,10 +165,14 @@ export function FornecedorSheet({ fornecedor, onOpenChange, onEdit, onDelete }: 
   const [ofertaForm, setOfertaForm] = useState<{ open: boolean; oferta: Oferta | null }>({ open: false, oferta: null });
   const [ofertaDel, setOfertaDel] = useState<Oferta | null>(null);
   const [docDel, setDocDel] = useState<Documento | null>(null);
+  const [aceitar, setAceitar] = useState<Oferta | null>(null);
 
   if (!fornecedor) return null;
   const ofertas = ofertasAll.filter((o) => o.fornecedor_id === fornecedor.id);
   const docs = docsAll.filter((d) => d.fornecedor_id === fornecedor.id);
+  const mesmaChave = (a: Oferta, b: Oferta) => a.produto_id === b.produto_id && (a.variedade_id ?? null) === (b.variedade_id ?? null);
+  const irmasDe = (o: Oferta) => ofertas.filter((x) => x.id !== o.id && mesmaChave(x, o));
+  const duplicadas = ofertas.filter((o) => o.ativo && irmasDe(o).some((x) => x.ativo));
   const st = statusInfo(fornecedor.status);
 
   return (
@@ -198,11 +226,17 @@ export function FornecedorSheet({ fornecedor, onOpenChange, onEdit, onDelete }: 
               <h3 className="text-sm font-semibold">Ofertas <span className="text-muted-foreground font-normal">({ofertas.length})</span></h3>
               <Button size="sm" onClick={() => setOfertaForm({ open: true, oferta: null })}><Plus className="h-4 w-4 mr-1" /> Oferta</Button>
             </div>
+            {duplicadas.length > 0 && (
+              <p className="rounded-md border border-amber-400/50 bg-amber-500/10 p-2 text-[11px] text-amber-800 dark:text-amber-300">
+                Há ofertas repetidas do mesmo produto/variedade. Para atualizar preço ou quantidade, <strong>edite a oferta existente</strong> (o valor anterior vai para o histórico) e remova ou suspenda a repetida.
+              </p>
+            )}
             {ofertas.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">Nenhuma oferta cadastrada.</p>
             ) : ofertas.map((o) => (
-              <OfertaCard key={o.id} o={o} canDelete={canDelete}
-                onEdit={() => setOfertaForm({ open: true, oferta: o })} onDelete={() => setOfertaDel(o)} />
+              <OfertaCard key={o.id} o={o} irmas={irmasDe(o)} canDelete={canDelete}
+                onEdit={() => setOfertaForm({ open: true, oferta: o })} onDelete={() => setOfertaDel(o)}
+                onAceitar={() => setAceitar(o)} />
             ))}
           </div>
 
@@ -252,6 +286,13 @@ export function FornecedorSheet({ fornecedor, onOpenChange, onEdit, onDelete }: 
           onOpenChange={(o) => setOfertaForm((s) => ({ ...s, open: o }))}
           fornecedorId={fornecedor.id}
           oferta={ofertaForm.oferta}
+          ofertasDoFornecedor={ofertas}
+          onEditarExistente={(o) => setOfertaForm({ open: true, oferta: o })}
+        />
+        <AceitarDialog
+          oferta={aceitar}
+          onOpenChange={(o) => { if (!o) setAceitar(null); }}
+          avisos={avisosDoFornecedor(fornecedor.status, docs)}
         />
         <ConfirmDialog
           open={!!ofertaDel}

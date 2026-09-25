@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SearchInput } from '@/components/SearchInput';
 import { DataTable } from '@/components/DataTable';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { Plus, Users, Search, BookOpen, Sprout, CalendarRange, Map as MapIcon } from 'lucide-react';
+import { Plus, Users, Search, BookOpen, Sprout, CalendarRange, Map as MapIcon, ListChecks } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { textIncludes } from '@/lib/text';
 import { useFornecedores, useOfertas, useDocumentos, useDeleteFornecedor, type Fornecedor } from './hooks';
@@ -17,6 +17,7 @@ import { STATUS, statusInfo, programaLabel } from './constants';
 import { FornecedorForm } from './FornecedorForm';
 import { FornecedorSheet } from './FornecedorSheet';
 import { BuscaTab, type BuscaPreset } from './BuscaTab';
+import { SelecaoTab } from './SelecaoTab';
 import { CalendarioTab } from './CalendarioTab';
 import { MapaTab } from './MapaTab';
 import { CatalogoTab } from './CatalogoTab';
@@ -126,6 +127,7 @@ export default function VitrinePage() {
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="fornecedores" className="gap-2"><Users className="h-4 w-4" /> Fornecedores</TabsTrigger>
           <TabsTrigger value="busca" className="gap-2"><Search className="h-4 w-4" /> Busca</TabsTrigger>
+          <TabsTrigger value="selecao" className="gap-2"><ListChecks className="h-4 w-4" /> Seleção</TabsTrigger>
           <TabsTrigger value="calendario" className="gap-2"><CalendarRange className="h-4 w-4" /> Calendário</TabsTrigger>
           <TabsTrigger value="mapa" className="gap-2"><MapIcon className="h-4 w-4" /> Mapa</TabsTrigger>
           <TabsTrigger value="catalogo" className="gap-2"><BookOpen className="h-4 w-4" /> Catálogo</TabsTrigger>
@@ -161,6 +163,7 @@ export default function VitrinePage() {
         </TabsContent>
 
         <TabsContent value="busca"><BuscaTab onOpenFornecedor={setAbertoId} preset={preset} /></TabsContent>
+        <TabsContent value="selecao"><SelecaoTab onOpenFornecedor={setAbertoId} /></TabsContent>
         <TabsContent value="calendario"><CalendarioTab onPick={irParaBusca} /></TabsContent>
         <TabsContent value="mapa"><MapaTab onOpenFornecedor={setAbertoId} /></TabsContent>
         <TabsContent value="catalogo"><CatalogoTab /></TabsContent>

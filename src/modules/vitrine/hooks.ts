@@ -28,6 +28,7 @@ export interface Oferta {
   frequencia: string | null; entrega_propria: boolean | null; emite_nota: boolean | null;
   validade_dias: number | null; registro_sanitario: string | null; observacao: string | null;
   ativo: boolean; preco_atualizado_em: string | null; updated_at: string;
+  situacao: string; programa: string | null; qtd_aceita: number | null; situacao_em: string | null;
   vitrine_produtos?: { nome: string; categoria: string } | null;
   vitrine_variedades?: { nome: string } | null;
   vitrine_fornecedores?: { nome: string; status: string; settlement_id: string | null; settlements?: { name: string } | null } | null;
@@ -161,6 +162,34 @@ export const useDeleteOferta = () => useMut(
   async (id: string) => { check(await t('vitrine_ofertas').delete().eq('id', id)); },
   [['vitrine']], 'Oferta removida.', 'Erro ao remover oferta',
 );
+export const useSetSituacaoOferta = () => useMut(
+  async ({ id, situacao, programa, qtd_aceita }: { id: string; situacao: string; programa?: string | null; qtd_aceita?: number | null }) => {
+    const payload: any = { situacao };
+    if (situacao === 'aceita') { payload.programa = programa ?? null; payload.qtd_aceita = qtd_aceita ?? null; }
+    check(await t('vitrine_ofertas').update(payload).eq('id', id));
+  },
+  [['vitrine', 'ofertas']], 'Situação da oferta atualizada!', 'Erro ao atualizar a oferta',
+);
+
+/**
+ * Histórico de preço de VÁRIAS ofertas juntas (ex.: todas as ofertas do mesmo
+ * produto/variedade de um fornecedor) — assim o histórico não se perde quando
+ * alguém cadastra uma oferta nova em vez de editar a existente.
+ */
+export function usePrecosHistDe(ofertaIds: string[]) {
+  const key = [...ofertaIds].sort().join(',');
+  return useQuery({
+    queryKey: ['vitrine', 'precos_hist', key],
+    enabled: ofertaIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await t('vitrine_precos_hist')
+        .select('id, oferta_id, preco, preco_entregue, unidade, registrado_em').in('oferta_id', ofertaIds).order('registrado_em', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as { id: string; oferta_id: string; preco: number | null; preco_entregue: boolean | null; unidade: string | null; registrado_em: string }[];
+    },
+  });
+}
+
 export function usePrecosHist(ofertaId: string | null) {
   return useQuery({
     queryKey: ['vitrine', 'precos_hist', ofertaId],

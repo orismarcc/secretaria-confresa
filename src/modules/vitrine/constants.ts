@@ -105,6 +105,15 @@ export const SITUACOES_DOC: (Opt & { cls: string })[] = [
   { value: 'recusado', label: 'Recusado', cls: 'bg-red-500/10 text-red-700 border-red-500/30 dark:text-red-400' },
 ];
 
+/** Situação da OFERTA na seleção da equipe. */
+export const SITUACOES_OFERTA: (Opt & { cls: string; dot: string; desc: string })[] = [
+  { value: 'disponivel', label: 'Disponível', cls: 'bg-slate-500/10 text-slate-700 border-slate-500/30 dark:text-slate-300', dot: 'bg-slate-400', desc: 'Cadastrada, ainda não conferida' },
+  { value: 'validada',   label: 'Validada',   cls: 'bg-blue-500/10 text-blue-700 border-blue-500/30 dark:text-blue-400',     dot: 'bg-blue-500',  desc: 'Conferida pela equipe (quantidade, preço, período)' },
+  { value: 'aceita',     label: 'Aceita',     cls: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:text-emerald-400', dot: 'bg-emerald-500', desc: 'Selecionada para um programa' },
+  { value: 'suspensa',   label: 'Suspensa',   cls: 'bg-muted text-muted-foreground', dot: 'bg-muted-foreground/50', desc: 'Fora de uso no momento' },
+];
+export const situacaoOfertaInfo = (v?: string | null) => SITUACOES_OFERTA.find((s) => s.value === v) ?? SITUACOES_OFERTA[0];
+
 export const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 export const categoriaLabel = (v?: string | null) => labelOf(CATEGORIAS, v);

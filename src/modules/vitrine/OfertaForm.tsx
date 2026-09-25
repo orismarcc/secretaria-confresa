@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react';
+import { Check, ChevronsUpDown, Loader2, AlertTriangle, History } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useProdutos, useVariedades, useSaveOferta, type Oferta } from './hooks';
 import { CATEGORIAS, UNIDADES, FORMAS, FREQUENCIAS, PRECO_INCLUI, unidadeLabel } from './constants';
@@ -32,9 +32,13 @@ interface Props {
   onOpenChange: (o: boolean) => void;
   fornecedorId: string;
   oferta?: Oferta | null;
+  /** Ofertas do fornecedor — para avisar de repetição do mesmo produto/variedade. */
+  ofertasDoFornecedor?: Oferta[];
+  /** Abrir a oferta existente para edição (mantém o histórico de preço). */
+  onEditarExistente?: (o: Oferta) => void;
 }
 
-export function OfertaForm({ open, onOpenChange, fornecedorId, oferta }: Props) {
+export function OfertaForm({ open, onOpenChange, fornecedorId, oferta, ofertasDoFornecedor = [], onEditarExistente }: Props) {
   const { data: produtos = [] } = useProdutos();
   const { data: variedades = [] } = useVariedades();
   const save = useSaveOferta();
@@ -58,6 +62,10 @@ export function OfertaForm({ open, onOpenChange, fornecedorId, oferta }: Props) 
   const vars = useMemo(() => variedades.filter((v) => v.produto_id === f.produto_id && v.ativo), [variedades, f.produto_id]);
   const ativos = produtos.filter((p) => p.ativo || p.id === f.produto_id);
   const precisaSanitario = produto?.categoria === 'processado' || produto?.categoria === 'origem_animal';
+  // Nova oferta de produto/variedade que o fornecedor JÁ tem: o certo é atualizar a existente.
+  const existente = !oferta && f.produto_id
+    ? ofertasDoFornecedor.find((o) => o.produto_id === f.produto_id && (o.variedade_id ?? null) === (f.variedade_id === NONE ? null : f.variedade_id))
+    : undefined;
 
   const escolherProduto = (id: string) => {
     const p = produtos.find((x) => x.id === id);
@@ -151,6 +159,20 @@ export function OfertaForm({ open, onOpenChange, fornecedorId, oferta }: Props) 
             </div>
           </div>
 
+          {existente && (
+            <div className="rounded-md border border-amber-400/60 bg-amber-500/10 p-3 text-sm space-y-2">
+              <p className="flex items-start gap-2 text-amber-800 dark:text-amber-300">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>Este fornecedor já tem oferta de <strong>{produto?.nome}{existente.vitrine_variedades?.nome ? ` ${existente.vitrine_variedades.nome}` : ''}</strong>. Para mudar preço, quantidade ou meses, atualize a existente — assim o preço anterior fica no histórico.</span>
+              </p>
+              {onEditarExistente && (
+                <Button type="button" size="sm" variant="outline" onClick={() => onEditarExistente(existente)}>
+                  Atualizar a oferta existente
+                </Button>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Quanto pode vender por mês</Label>
@@ -180,6 +202,11 @@ export function OfertaForm({ open, onOpenChange, fornecedorId, oferta }: Props) 
               <Switch id="vo-entregue" checked={f.preco_entregue} onCheckedChange={(c) => setF((s) => ({ ...s, preco_entregue: c }))} />
             </div>
           </div>
+          {oferta && (
+            <p className="-mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <History className="h-3.5 w-3.5" /> Ao mudar o preço, o valor anterior fica guardado no histórico desta oferta.
+            </p>
+          )}
 
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">

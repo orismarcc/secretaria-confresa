@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, ShieldCheck, FileWarning, Clock, Tag, TrendingUp, CalendarClock } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, FileWarning, Clock, Tag, TrendingUp, CalendarClock, ShieldAlert } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { statusVencimento, vencLabel } from '@/lib/vencimento';
 import type { Fornecedor, Oferta, Documento } from './hooks';
-import { MESES, tipoDocLabel, unidadeLabel, fmtNum } from './constants';
+import { MESES, tipoDocLabel, unidadeLabel, fmtNum, statusInfo, programaLabel } from './constants';
 
 const DIA = 24 * 60 * 60 * 1000;
 const PRECO_VELHO_DIAS = 180;
@@ -67,7 +67,24 @@ export function AlertasPanel({ fornecedores, ofertas, documentos, onOpenForneced
         detalhe: `disponível a partir de ${MESES[proximo - 1]}${o.qtd_mensal != null ? ` · ${fmtNum(o.qtd_mensal)} ${unidadeLabel(o.unidade)}/mês` : ''}`,
       }));
 
+    // Ofertas ACEITAS cujo fornecedor não está apto: risco direto na distribuição.
+    const docVencidoPorF = new Set(documentos
+      .filter((d) => d.validade && statusVencimento(d.validade).status === 'vencido')
+      .map((d) => d.fornecedor_id));
+    const aceitas = ofertas.filter((o) => o.ativo && o.situacao === 'aceita');
+    const aceitaRisco: Item[] = aceitas
+      .filter((o) => o.vitrine_fornecedores?.status !== 'validado' || docVencidoPorF.has(o.fornecedor_id))
+      .map((o) => ({
+        id: o.id, fornecedorId: o.fornecedor_id, titulo: `${prod(o)} · ${nomeF(o.fornecedor_id)}`,
+        detalhe: [
+          o.programa ? programaLabel(o.programa) : null,
+          o.vitrine_fornecedores?.status !== 'validado' ? `fornecedor ${statusInfo(o.vitrine_fornecedores?.status).label.toLowerCase()}` : null,
+          docVencidoPorF.has(o.fornecedor_id) ? 'documento vencido' : null,
+        ].filter(Boolean).join(' · '),
+      }));
+
     return [
+      { key: 'aceitarisco', label: 'Oferta aceita com fornecedor não apto', icon: ShieldAlert, tom: 'red', itens: aceitaRisco },
       { key: 'docs', label: 'Documentos vencidos/vencendo', icon: FileWarning, tom: 'red', itens: docs },
       { key: 'velhos', label: 'Cadastro sem atualização há 12 meses', icon: Clock, tom: 'amber', itens: velhos },
       { key: 'sempreco', label: 'Ofertas sem preço', icon: Tag, tom: 'amber', itens: semPreco },

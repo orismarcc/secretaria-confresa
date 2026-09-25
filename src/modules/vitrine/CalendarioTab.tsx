@@ -29,14 +29,18 @@ export function CalendarioTab({ onPick }: { onPick: (produtoId: string, mes: num
   const { data: ofertas = [], isLoading } = useOfertas();
   const [soValidados, setSoValidados] = useState(false);
   const [categoria, setCategoria] = useState(ALL);
+  // Visão: todas as ofertas | validadas + aceitas | só aceitas (cobertura garantida).
+  const [visao, setVisao] = useState<'todas' | 'validadas' | 'aceitas'>('todas');
   const mesAtual = new Date().getMonth() + 1;
 
   const linhas = useMemo(() => {
     const map = new Map<string, Linha & { _f: Set<string>[] }>();
     ofertas.forEach((o) => {
       const st = o.vitrine_fornecedores?.status;
-      if (!o.ativo || st === 'inativo') return;
+      if (!o.ativo || st === 'inativo' || o.situacao === 'suspensa') return;
       if (soValidados && st !== 'validado') return;
+      if (visao === 'validadas' && o.situacao !== 'validada' && o.situacao !== 'aceita') return;
+      if (visao === 'aceitas' && o.situacao !== 'aceita') return;
       const cat = o.vitrine_produtos?.categoria || 'outro';
       if (categoria !== ALL && cat !== categoria) return;
       const key = `${o.produto_id}|${o.unidade}`;
@@ -49,18 +53,19 @@ export function CalendarioTab({ onPick }: { onPick: (produtoId: string, mes: num
       const l = map.get(key)!;
       (o.meses || []).forEach((m) => {
         if (m < 1 || m > 12) return;
-        l.porMes[m - 1] += Number(o.qtd_mensal) || 0;
+        // Na visão "só aceitas" soma a quantidade ACEITA (se informada).
+        l.porMes[m - 1] += Number(visao === 'aceitas' ? (o.qtd_aceita ?? o.qtd_mensal) : o.qtd_mensal) || 0;
         l._f[m - 1].add(o.fornecedor_id);
       });
     });
     return [...map.values()]
       .map((l) => ({ ...l, fornecedoresMes: l._f.map((s) => s.size) }))
       .sort((a, b) => a.produto.localeCompare(b.produto, 'pt-BR'));
-  }, [ofertas, soValidados, categoria]);
+  }, [ofertas, soValidados, categoria, visao]);
 
   const exportar = () => exportarCalendarioXlsx(
     linhas.map((l) => ({ produto: l.produto, unidade: unidadeLabel(l.unidade), porMes: l.porMes })),
-    `Conecta Confresa — Calendário da oferta${soValidados ? ' (só validados)' : ''}${categoria !== ALL ? ` · ${categoriaLabel(categoria)}` : ''}`,
+    `Conecta Confresa — Calendário da oferta · ${visao === 'aceitas' ? 'só aceitas (cobertura)' : visao === 'validadas' ? 'validadas e aceitas' : 'todas as ofertas'}${soValidados ? ' · só fornecedores validados' : ''}${categoria !== ALL ? ` · ${categoriaLabel(categoria)}` : ''}`,
   );
 
   return (
@@ -71,6 +76,14 @@ export function CalendarioTab({ onPick }: { onPick: (produtoId: string, mes: num
           <SelectContent>
             <SelectItem value={ALL}>Todas as categorias</SelectItem>
             {CATEGORIAS.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={visao} onValueChange={(v) => setVisao(v as typeof visao)}>
+          <SelectTrigger className="w-[220px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Todas as ofertas</SelectItem>
+            <SelectItem value="validadas">Validadas e aceitas</SelectItem>
+            <SelectItem value="aceitas">Só aceitas (cobertura)</SelectItem>
           </SelectContent>
         </Select>
         <label className="flex items-center gap-2 text-sm"><Switch checked={soValidados} onCheckedChange={setSoValidados} /> Só fornecedores validados</label>
@@ -119,6 +132,9 @@ export function CalendarioTab({ onPick }: { onPick: (produtoId: string, mes: num
                               <span className={cn('block font-semibold', alpha > 0.55 ? 'text-primary-foreground' : 'text-foreground')}>{fmtNum(v)}</span>
                               <span className={cn('block text-[9px]', alpha > 0.55 ? 'text-primary-foreground/80' : 'text-muted-foreground')}>{l.fornecedoresMes[i]} forn.</span>
                             </button>
+                          ) : visao === 'aceitas' ? (
+                            // Produto aceito em outros meses, mas SEM cobertura neste: risco de faltar.
+                            <span className="block rounded py-2 bg-red-500/15 text-red-700 dark:text-red-400 text-[10px] font-semibold" title="Sem oferta aceita neste mês">falta</span>
                           ) : (
                             <span className="block rounded py-2.5 bg-muted/40 text-muted-foreground/60">—</span>
                           )}
@@ -133,8 +149,9 @@ export function CalendarioTab({ onPick }: { onPick: (produtoId: string, mes: num
         </div>
       )}
       <p className="text-[11px] text-muted-foreground">
-        Soma das quantidades mensais que os fornecedores declararam para cada mês. Toque numa célula para ver quem fornece.
-        Meses sem oferta (—) indicam onde a agricultura familiar local não atende hoje.
+        {visao === 'aceitas'
+          ? 'Soma das quantidades ACEITAS por mês. "falta" = produto com aceite em outros meses, mas sem nenhuma oferta aceita neste — risco de faltar na distribuição.'
+          : 'Soma das quantidades mensais que os fornecedores declararam para cada mês. Toque numa célula para ver quem fornece. Meses sem oferta (—) indicam onde a agricultura familiar local não atende hoje.'}
       </p>
     </div>
   );

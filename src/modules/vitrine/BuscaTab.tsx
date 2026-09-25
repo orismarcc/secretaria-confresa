@@ -14,7 +14,8 @@ import { cn } from '@/lib/utils';
 import { useProducers, useSettlements } from '@/hooks/useSupabaseData';
 import { useOfertas, useProdutos, useVariedades, useFornecedores, type Oferta } from './hooks';
 import {
-  MESES, FREQUENCIAS, statusInfo, unidadeLabel, frequenciaLabel, mesesResumo, fmtNum, fmtBRL,
+  MESES, FREQUENCIAS, SITUACOES_OFERTA, statusInfo, unidadeLabel, frequenciaLabel, mesesResumo, fmtNum, fmtBRL,
+  situacaoOfertaInfo, programaLabel,
 } from './constants';
 import { MesesBar } from './Meses';
 import { SEDE, coordsDoFornecedor, distanciaKm, fmtKm } from './geo';
@@ -38,6 +39,7 @@ const inicial = {
   busca: '', produtoId: ALL, variedadeId: ALL, mesIni: ALL, mesFim: ALL, modoPeriodo: 'todos' as 'todos' | 'algum',
   assentamento: ALL, qtdMin: '', precoMax: '', freqMin: ALL, soValidados: false, soAtivas: true,
   comEntrega: false, entregaPropria: false, emiteNota: false, ordem: 'recentes',
+  situacao: '__sem_suspensas__',
 };
 
 export function BuscaTab({ onOpenFornecedor, preset }: { onOpenFornecedor: (id: string) => void; preset?: BuscaPreset | null }) {
@@ -86,6 +88,7 @@ export function BuscaTab({ onOpenFornecedor, preset }: { onOpenFornecedor: (id: 
       const st = o.vitrine_fornecedores?.status;
       if (f.soAtivas && (!o.ativo || st === 'inativo')) return false;
       if (f.soValidados && st !== 'validado') return false;
+      if (f.situacao === '__sem_suspensas__' ? o.situacao === 'suspensa' : (f.situacao !== ALL && o.situacao !== f.situacao)) return false;
       if (f.produtoId !== ALL && o.produto_id !== f.produtoId) return false;
       if (f.variedadeId !== ALL && o.variedade_id !== f.variedadeId) return false;
       if (periodo) {
@@ -134,6 +137,7 @@ export function BuscaTab({ onOpenFornecedor, preset }: { onOpenFornecedor: (id: 
     f.entregaPropria ? 'Transporte próprio' : null,
     f.emiteNota ? 'Emite nota' : null,
     f.soValidados ? 'Só validados' : null,
+    f.situacao !== ALL && f.situacao !== '__sem_suspensas__' ? `Ofertas: ${situacaoOfertaInfo(f.situacao).label.toLowerCase()}s` : null,
   ].filter(Boolean).join(' · ');
 
   const linhas = (): LinhaOferta[] => filtradas.map((o) => ({
@@ -151,6 +155,7 @@ export function BuscaTab({ onOpenFornecedor, preset }: { onOpenFornecedor: (id: 
     entregaPropria: o.entrega_propria == null ? '' : o.entrega_propria ? 'Transporte próprio' : 'Sem transporte',
     emiteNota: o.emite_nota == null ? '' : o.emite_nota ? 'Sim' : 'Não',
     distanciaKm: distPorFornecedor.get(o.fornecedor_id) ?? null,
+    situacaoOferta: situacaoOfertaInfo(o.situacao).label + (o.situacao === 'aceita' && o.programa ? ` (${programaLabel(o.programa)})` : ''),
   }));
   const resumoTexto = `${filtradas.length} oferta(s) de ${nFornecedores} fornecedor(es)` +
     (totais ? ' · Total: ' + Object.entries(totais).map(([u, q]) => `${fmtNum(q)} ${unidadeLabel(u)}/mês`).join(' + ') : '');
@@ -175,7 +180,10 @@ export function BuscaTab({ onOpenFornecedor, preset }: { onOpenFornecedor: (id: 
     {
       key: 'produto', header: 'Produto', render: (o: Oferta) => (
         <div><p className="font-medium">{o.vitrine_produtos?.nome}</p>
-          {o.vitrine_variedades?.nome && <p className="text-[11px] text-muted-foreground">{o.vitrine_variedades.nome}</p>}</div>
+          {o.vitrine_variedades?.nome && <p className="text-[11px] text-muted-foreground">{o.vitrine_variedades.nome}</p>}
+          <Badge variant="outline" className={cn('mt-0.5 h-4 px-1.5 text-[10px]', situacaoOfertaInfo(o.situacao).cls)}>
+            {situacaoOfertaInfo(o.situacao).label}{o.situacao === 'aceita' && o.programa ? ` · ${programaLabel(o.programa)}` : ''}
+          </Badge></div>
       ),
     },
     { key: 'qtd', header: 'Qtd/mês', render: (o: Oferta) => o.qtd_mensal != null ? `${fmtNum(o.qtd_mensal)} ${unidadeLabel(o.unidade)}` : <span className="text-muted-foreground">—</span> },
@@ -290,6 +298,14 @@ export function BuscaTab({ onOpenFornecedor, preset }: { onOpenFornecedor: (id: 
       )}
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        <Select value={f.situacao} onValueChange={(v) => set('situacao', v)}>
+          <SelectTrigger className="h-9 w-[200px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__sem_suspensas__">Ofertas: todas (sem suspensas)</SelectItem>
+            {SITUACOES_OFERTA.map((s) => <SelectItem key={s.value} value={s.value}>Ofertas: {s.label.toLowerCase()}s</SelectItem>)}
+            <SelectItem value={ALL}>Ofertas: todas, inclusive suspensas</SelectItem>
+          </SelectContent>
+        </Select>
         <label className="flex items-center gap-2 text-sm"><Switch checked={f.soValidados} onCheckedChange={(c) => set('soValidados', c)} /> Só fornecedores validados</label>
         <label className="flex items-center gap-2 text-sm"><Switch checked={f.soAtivas} onCheckedChange={(c) => set('soAtivas', c)} /> Só ofertas ativas</label>
         <div className="ml-auto flex gap-2">
