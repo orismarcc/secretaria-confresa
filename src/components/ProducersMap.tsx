@@ -1,10 +1,12 @@
 // Mapa dos produtores (aba "Mapa" da página Produtores). Carregado sob demanda
 // (Leaflet fica fora do pacote principal). Mesmo padrão do mapa do Conecta
 // Confresa: OpenStreetMap, circleMarker e balão montado com textContent.
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPinOff } from 'lucide-react';
+import { MapPinOff, Route } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { RotaPanel, MAX_PARADAS, type Parada, type RotaDesenho } from '@/components/rota/RotaPanel';
 import { useAllProducerProperties } from '@/hooks/useSupabaseData';
 
 /** Centro de Confresa/MT — referência de "distância da sede". */
@@ -24,6 +26,7 @@ const valida = (lat: unknown, lng: unknown) =>
 export interface MapProducer {
   id: string;
   name: string;
+  phone?: string | null;
   settlement_id?: string | null;
   location_name?: string | null;
   latitude?: number | null;
@@ -42,7 +45,7 @@ interface Ponto {
   local: string;
 }
 
-function popupEl(p: Ponto, onAbrir: () => void): HTMLElement {
+function popupEl(p: Ponto, onAbrir: () => void, rota?: { naRota: boolean; alternar: () => void }): HTMLElement {
   const el = (tag: string, text?: string, style?: string) => {
     const e = document.createElement(tag);
     if (text != null) e.textContent = text;
@@ -64,6 +67,12 @@ function popupEl(p: Ponto, onAbrir: () => void): HTMLElement {
   a.target = '_blank';
   a.rel = 'noopener noreferrer';
   acoes.appendChild(a);
+  if (rota) {
+    const r = el('button', rota.naRota ? 'Remover da rota' : 'Adicionar à rota',
+      `padding:4px 10px;border-radius:6px;border:1px solid #d97706;color:${rota.naRota ? '#d97706' : '#fff'};background:${rota.naRota ? '#fff' : '#d97706'};font-size:12px;cursor:pointer`);
+    r.addEventListener('click', rota.alternar);
+    acoes.appendChild(r);
+  }
   root.appendChild(acoes);
   return root;
 }
@@ -79,6 +88,25 @@ export default function ProducersMap({ producers, settlements, onOpenProducer }:
   const layerRef = useRef<L.LayerGroup | null>(null);
   const abrirRef = useRef(onOpenProducer);
   abrirRef.current = onOpenProducer;
+  const rotaLayerRef = useRef<L.LayerGroup | null>(null);
+
+  // Rota de visitas: paradas selecionadas ficam guardadas mesmo ao trocar o
+  // filtro (dá para montar uma rota com produtores de assentamentos diferentes).
+  const [modoRota, setModoRota] = useState(false);
+  const [sel, setSel] = useState<Map<string, Parada>>(new Map());
+  const [desenho, setDesenho] = useState<RotaDesenho | null>(null);
+  const paradaDe = (p: Ponto): Parada => ({
+    key: p.key, nome: p.producer.name, telefone: p.producer.phone || '',
+    propriedade: [p.adicional != null ? (p.adicional || 'Propriedade adicional') : null, p.local].filter(Boolean).join(' · ') || '—',
+    lat: p.lat, lng: p.lng,
+  });
+  const alternarRef = useRef<(p: Ponto) => void>(() => {});
+  alternarRef.current = (p: Ponto) => setSel((m) => {
+    const n = new Map(m);
+    if (n.has(p.key)) n.delete(p.key);
+    else if (n.size < MAX_PARADAS) n.set(p.key, paradaDe(p));
+    return n;
+  });
 
   const { pontos, semLocal, cores } = useMemo(() => {
     const nomeAss = new Map(settlements.map((s) => [s.id, s.name]));
@@ -122,8 +150,9 @@ export default function ProducersMap({ producers, settlements, onOpenProducer }:
       attribution: '&copy; colaboradores do OpenStreetMap',
     }).addTo(map);
     layerRef.current = L.layerGroup().addTo(map);
+    rotaLayerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
-    return () => { map.remove(); mapRef.current = null; layerRef.current = null; };
+    return () => { map.remove(); mapRef.current = null; layerRef.current = null; rotaLayerRef.current = null; };
   }, []);
 
   // Atualiza os pontos.
@@ -136,22 +165,58 @@ export default function ProducersMap({ producers, settlements, onOpenProducer }:
     L.circleMarker([SEDE.lat, SEDE.lng], { radius: 7, color: '#111827', weight: 2, fillColor: '#fbbf24', fillOpacity: 1 })
       .bindTooltip(SEDE.nome).addTo(layer);
     pontos.forEach((p) => {
+      const naRota = modoRota && sel.has(p.key);
       L.circleMarker([p.lat, p.lng], {
-        radius: p.adicional != null ? 6 : 7,
-        color: p.adicional != null ? '#111827' : '#fff',
-        weight: 2,
+        radius: naRota ? 9 : p.adicional != null ? 6 : 7,
+        color: naRota ? '#d97706' : p.adicional != null ? '#111827' : '#fff',
+        weight: naRota ? 3 : 2,
         fillColor: corDe.get(p.settlementId) || '#64748b',
         fillOpacity: 0.95,
       })
         .bindTooltip(p.adicional != null ? `${p.producer.name} (propriedade adicional)` : p.producer.name)
-        .bindPopup(() => popupEl(p, () => abrirRef.current(p.producer.id)))
+        .bindPopup(() => popupEl(p, () => abrirRef.current(p.producer.id),
+          modoRota ? { naRota, alternar: () => { alternarRef.current(p); map.closePopup(); } } : undefined))
         .addTo(layer);
     });
-    if (pontos.length > 0) {
+    if (pontos.length > 0 && !desenho) {
       const b = L.latLngBounds([[SEDE.lat, SEDE.lng], ...pontos.map((p) => [p.lat, p.lng] as [number, number])]);
       map.fitBounds(b, { padding: [30, 30], maxZoom: 13 });
     }
-  }, [pontos, cores]);
+  }, [pontos, cores, modoRota, sel, desenho]);
+
+  // O mapa muda de largura ao abrir/fechar o painel da rota.
+  useEffect(() => {
+    const t = setTimeout(() => mapRef.current?.invalidateSize(), 60);
+    return () => clearTimeout(t);
+  }, [modoRota]);
+
+  // Desenho da rota calculada: linha pelas estradas + paradas numeradas.
+  useEffect(() => {
+    const map = mapRef.current;
+    const layer = rotaLayerRef.current;
+    if (!map || !layer) return;
+    layer.clearLayers();
+    if (!desenho || !modoRota) return;
+    const seq: [number, number][] = [
+      [desenho.partida.lat, desenho.partida.lng],
+      ...desenho.paradas.map((p) => [p.lat, p.lng] as [number, number]),
+      ...(desenho.voltar ? [[desenho.partida.lat, desenho.partida.lng] as [number, number]] : []),
+    ];
+    const linha = desenho.geometria && desenho.geometria.length > 1 ? desenho.geometria : seq;
+    L.polyline(linha, { color: '#d97706', weight: 4, opacity: 0.85, dashArray: desenho.geometria ? undefined : '6 6' }).addTo(layer);
+    L.circleMarker([desenho.partida.lat, desenho.partida.lng], { radius: 8, color: '#111827', weight: 2, fillColor: '#fbbf24', fillOpacity: 1 })
+      .bindTooltip('Partida').addTo(layer);
+    desenho.paradas.forEach((p, i) => {
+      L.marker([p.lat, p.lng], {
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="width:22px;height:22px;border-radius:9999px;background:#d97706;color:#fff;font:700 11px/22px sans-serif;text-align:center;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)">${i + 1}</div>`,
+          iconSize: [22, 22], iconAnchor: [11, 11],
+        }),
+      }).bindTooltip(`${i + 1}. ${p.nome}`).addTo(layer);
+    });
+    map.fitBounds(L.latLngBounds(linha), { padding: [30, 30], maxZoom: 14 });
+  }, [desenho, modoRota]);
 
   return (
     <div className="space-y-3">
@@ -161,8 +226,27 @@ export default function ProducersMap({ producers, settlements, onOpenProducer }:
         {' '}Cadastro sem localização recebe automaticamente o GPS do primeiro atendimento finalizado pelo operador; depois disso só muda se for editada no cadastro.
       </p>
 
-      {/* isolate: mantém os z-index do Leaflet dentro do mapa (não cobre fichas e janelas). */}
-      <div ref={divRef} className="isolate h-[520px] w-full rounded-lg border overflow-hidden" />
+      <div className="flex justify-end">
+        <Button type="button" size="sm" variant={modoRota ? 'default' : 'outline'} onClick={() => setModoRota((v) => !v)}>
+          <Route className="h-4 w-4 mr-1" /> {modoRota ? 'Fechar rota de visitas' : 'Montar rota de visitas'}
+        </Button>
+      </div>
+
+      <div className={modoRota ? 'grid gap-3 lg:grid-cols-[1fr_340px] items-start' : ''}>
+        {/* isolate: mantém os z-index do Leaflet dentro do mapa (não cobre fichas e janelas). */}
+        <div ref={divRef} className="isolate h-[520px] w-full rounded-lg border overflow-hidden" />
+        {modoRota && (
+          <RotaPanel
+            sede={SEDE}
+            selecionadas={[...sel.values()]}
+            disponiveis={pontos.map(paradaDe)}
+            onRemover={(key) => setSel((m) => { const n = new Map(m); n.delete(key); return n; })}
+            onAdicionarTodas={(ps) => setSel((m) => { const n = new Map(m); ps.forEach((p) => { if (n.size < MAX_PARADAS) n.set(p.key, p); }); return n; })}
+            onLimpar={() => setSel(new Map())}
+            onDesenhar={setDesenho}
+          />
+        )}
+      </div>
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
         <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full" style={{ background: '#fbbf24', border: '2px solid #111827' }} /> Sede</span>
