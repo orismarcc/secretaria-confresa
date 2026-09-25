@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { SearchInput } from '@/components/SearchInput';
@@ -15,7 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Eye, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Eye, Trash2, ChevronLeft, ChevronRight, List, Map as MapIcon } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -29,6 +30,9 @@ import {
   useDeleteProducer,
   useDeleteProducers,
 } from '@/hooks/useSupabaseData';
+
+// Mapa carregado só quando a aba é aberta (Leaflet fora do pacote principal).
+const ProducersMap = lazy(() => import('@/components/ProducersMap'));
 
 interface DbProducer {
   id: string;
@@ -82,6 +86,7 @@ export default function ProducersPage() {
   const [selectedProducer, setSelectedProducer] = useState<DbProducer | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
+  const [view, setView] = useState<'lista' | 'mapa'>('lista');
   const PAGE_SIZE = 20;
 
   const filtered = producers.filter((p: DbProducer) => {
@@ -270,6 +275,12 @@ export default function ProducersPage() {
         action={{ label: 'Novo', onClick: () => { setEditingProducer(null); setFormOpen(true); }, icon: <Plus className="h-4 w-4 mr-2" /> }}
       />
 
+      <Tabs value={view} onValueChange={(v) => setView(v as 'lista' | 'mapa')}>
+      <TabsList className="mb-3">
+        <TabsTrigger value="lista" className="gap-2"><List className="h-4 w-4" /> Lista</TabsTrigger>
+        <TabsTrigger value="mapa" className="gap-2"><MapIcon className="h-4 w-4" /> Mapa</TabsTrigger>
+      </TabsList>
+
       <div className="flex gap-2 items-center flex-wrap mb-4">
         <SearchInput value={search} onChange={setSearch} placeholder="Buscar..." className="flex-1 min-w-[150px]" />
         <Select value={settlementFilter} onValueChange={setSettlementFilter}>
@@ -309,6 +320,7 @@ export default function ProducersPage() {
         )}
       </div>
 
+      <TabsContent value="lista" className="mt-0">
       <div className="rounded-md border">
         <table className="w-full text-sm">
           <thead>
@@ -413,6 +425,18 @@ export default function ProducersPage() {
           )}
         </div>
       )}
+      </TabsContent>
+
+      <TabsContent value="mapa" className="mt-0">
+        <Suspense fallback={<Skeleton className="h-[520px] w-full" />}>
+          <ProducersMap
+            producers={filtered}
+            settlements={settlements as { id: string; name: string }[]}
+            onOpenProducer={(id) => { const p = producers.find((x) => x.id === id); if (p) openDetail(p as DbProducer); }}
+          />
+        </Suspense>
+      </TabsContent>
+      </Tabs>
 
       <ProducerDetailSheet
         open={detailOpen}
