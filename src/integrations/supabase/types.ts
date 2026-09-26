@@ -128,6 +128,36 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_unificacao_produtores: {
+        Row: {
+          desfeito_em: string | null
+          id: string
+          manter_id: string
+          movidos: Json
+          removido: Json
+          unificado_em: string
+          unificado_por: string | null
+        }
+        Insert: {
+          desfeito_em?: string | null
+          id?: string
+          manter_id: string
+          movidos: Json
+          removido: Json
+          unificado_em?: string
+          unificado_por?: string | null
+        }
+        Update: {
+          desfeito_em?: string | null
+          id?: string
+          manter_id?: string
+          movidos?: Json
+          removido?: Json
+          unificado_em?: string
+          unificado_por?: string | null
+        }
+        Relationships: []
+      }
       condutores: {
         Row: {
           cnh_categoria: string | null
@@ -632,6 +662,7 @@ export type Database = {
           created_by: string | null
           description: string
           ended_at: string | null
+          hour_meter: number | null
           id: string
           machinery_id: string
           operator_id: string | null
@@ -644,6 +675,7 @@ export type Database = {
           created_by?: string | null
           description: string
           ended_at?: string | null
+          hour_meter?: number | null
           id?: string
           machinery_id: string
           operator_id?: string | null
@@ -656,6 +688,7 @@ export type Database = {
           created_by?: string | null
           description?: string
           ended_at?: string | null
+          hour_meter?: number | null
           id?: string
           machinery_id?: string
           operator_id?: string | null
@@ -677,10 +710,12 @@ export type Database = {
           created_at: string
           created_by: string | null
           fuel_type: string | null
+          hour_meter: number | null
           id: string
           liters: number
           machinery_id: string
           note: string | null
+          price_per_liter: number | null
           receipt_path: string | null
           refueled_at: string
           updated_at: string
@@ -689,10 +724,12 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           fuel_type?: string | null
+          hour_meter?: number | null
           id?: string
           liters: number
           machinery_id: string
           note?: string | null
+          price_per_liter?: number | null
           receipt_path?: string | null
           refueled_at?: string
           updated_at?: string
@@ -701,10 +738,12 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           fuel_type?: string | null
+          hour_meter?: number | null
           id?: string
           liters?: number
           machinery_id?: string
           note?: string | null
+          price_per_liter?: number | null
           receipt_path?: string | null
           refueled_at?: string
           updated_at?: string
@@ -2382,7 +2421,31 @@ export type Database = {
         Args: { _service_id: string }
         Returns: boolean
       }
+      cpf_digitos: { Args: { _v: string }; Returns: string }
+      cpf_formatado: { Args: { _v: string }; Returns: string }
+      custo_maquinas: {
+        Args: { _fim: string; _inicio: string }
+        Returns: {
+          atendimentos: number
+          categoria: string
+          custo_combustivel: number
+          custo_hora: number
+          custo_manutencao: number
+          custo_total: number
+          hectares: number
+          horas: number
+          litros: number
+          litros_atendimentos: number
+          litros_hora: number
+          litros_sem_preco: number
+          machinery_id: string
+          manutencoes: number
+          manutencoes_sem_custo: number
+          nome: string
+        }[]
+      }
       decrypt_cpf: { Args: { encrypted_cpf: string }; Returns: string }
+      desfazer_unificacao: { Args: { _backup_id: string }; Returns: Json }
       encrypt_cpf: { Args: { plain_cpf: string }; Returns: string }
       has_any_admin: { Args: never; Returns: boolean }
       has_role: {
@@ -2395,6 +2458,7 @@ export type Database = {
       is_coordenador: { Args: { _uid: string }; Returns: boolean }
       mask_cpf: { Args: { plain_cpf: string }; Returns: string }
       next_comunicado_dam: { Args: never; Returns: number }
+      nome_normalizado: { Args: { _v: string }; Returns: string }
       operator_shares_service: {
         Args: {
           _demand_type_id: string
@@ -2404,6 +2468,25 @@ export type Database = {
           _uid: string
         }
         Returns: boolean
+      }
+      produtores_parecidos: {
+        Args: {
+          _cpf?: string
+          _ignorar_id?: string
+          _nome: string
+          _settlement_id?: string
+          _telefone?: string
+        }
+        Returns: {
+          id: string
+          motivo: string
+          name: string
+          settlement_name: string
+        }[]
+      }
+      unificar_produtores: {
+        Args: { _manter: string; _remover: string }
+        Returns: Json
       }
     }
     Enums: {
