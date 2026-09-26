@@ -48,6 +48,7 @@ try {
   const po = await opc.newPage();
   po.on('pageerror', (e) => console.log('  [erro na página operador]', e.message));
   await entrar(po, 'operador.e2e@teste.local');
+  await po.waitForURL((u) => u.pathname.startsWith('/operator'), { timeout: 30000 }).catch(() => {});
   ok(po.url().includes('/operator'), 'operador cai direto na tela do operador');
 
   await po.getByText(PRODUTOR).first().waitFor({ timeout: 30000 }).catch(() => {});
