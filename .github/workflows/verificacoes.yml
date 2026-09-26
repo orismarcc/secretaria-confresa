@@ -159,6 +159,8 @@ jobs:
           echo "status do atendimento: $st"; test "$st" = "completed"
           loc=$(psql "$LOCAL_DB" -Atc "select latitude::float || ',' || longitude::float from public.producers where id = 'e2e00000-0000-0000-0000-000000000003'")
           echo "localização do produtor: $loc"; test "$loc" = "-10.61,-51.61"
+          pos=$(psql "$LOCAL_DB" -Atc "select count(*) from public.settlements where id = 'e2e00000-0000-0000-0000-000000000001' and latitude is not null and longitude is not null")
+          echo "assentamento posicionado pelo mapa: $pos"; test "$pos" = "1"
 
       - name: Desligar
         if: always()

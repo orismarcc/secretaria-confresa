@@ -38,7 +38,33 @@ try {
   await pa.goto(`${BASE}/producers`);
   await pa.getByText(PRODUTOR).first().waitFor({ timeout: 30000 }).catch(() => {});
   ok(await pa.getByText(PRODUTOR).first().isVisible(), 'Produtores: lista mostra o produtor fictício');
+  // Análises → Mapa da demanda: marcar a posição do assentamento com um clique.
+  await pa.goto(`${BASE}/analytics`);
+  await pa.getByText('Mapa da demanda').first().click();
+  await pa.getByText('PA Ficticio E2E — marcar').first().waitFor({ timeout: 30000 }).catch(() => {});
+  const marcar = pa.getByText('PA Ficticio E2E — marcar').first();
+  ok(await marcar.isVisible().catch(() => false), 'Mapa da demanda: assentamento sem posição aparece para marcar');
+  await marcar.click().catch(() => {});
+  await pa.waitForTimeout(700);
+  const mapa = pa.locator('.leaflet-container').first();
+  const box = await mapa.boundingBox();
+  if (box) await pa.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await pa.waitForTimeout(2500);
   await adm.close();
+
+  // ─── Visitante sem login: painel público de transparência ────────────────
+  const pub = await browser.newContext();
+  const pp = await pub.newPage();
+  let errosPublico = 0;
+  pp.on('pageerror', (e) => { errosPublico++; console.log('  [erro na página pública]', e.message); });
+  await pp.goto(`${BASE}/transparencia`);
+  await pp.getByText('Atendimentos realizados').first().waitFor({ timeout: 30000 }).catch(() => {});
+  ok(await pp.getByText('Atendimentos realizados').first().isVisible().catch(() => false), 'Transparência abre SEM login');
+  ok(!pp.url().includes('/login'), 'Transparência não redireciona para o login');
+  const textoPublico = await pp.locator('body').innerText();
+  ok(!/Produtor Ficticio|52998224725|529\.982/.test(textoPublico), 'Transparência não mostra nome nem CPF');
+  ok(errosPublico === 0, 'Transparência sem erros na página');
+  await pub.close();
 
   // ─── Operador (celular, com GPS) ─────────────────────────────────────────
   const opc = await browser.newContext({

@@ -33,6 +33,7 @@ import NotFound from "./pages/NotFound";
 
 // Conecta Confresa (Vitrine da Agricultura Familiar): módulo independente,
 // carregado só quando a página é aberta (não pesa no restante do sistema).
+const TransparenciaPage = lazy(() => import("./pages/TransparenciaPage"));
 const VitrinePage = lazy(() => import("./modules/vitrine/VitrinePage"));
 
 const queryClient = new QueryClient();
@@ -79,6 +80,8 @@ function AppRoutes() {
       {/* Não autenticado: LoginPage permanece montada mesmo durante a tentativa de login. */}
       <Route path="/login" element={isAuthenticated ? <HomeRedirect /> : <LoginPage />} />
       <Route path="/" element={<HomeRedirect />} />
+      {/* Público (sem login): só números agregados */}
+      <Route path="/transparencia" element={<Suspense fallback={<Loading />}><TransparenciaPage /></Suspense>} />
 
       {/* Admin Routes */}
       <Route path="/dashboard" element={<ProtectedRoute adminOnly><DashboardPage /></ProtectedRoute>} />

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -115,6 +115,9 @@ export default function LoginPage() {
               Entrar
             </Button>
           </form>
+          <p className="mt-4 text-center text-xs text-muted-foreground">
+            <Link to="/transparencia" className="hover:underline">Painel de transparência (público)</Link>
+          </p>
         </CardContent>
       </Card>
     </div>

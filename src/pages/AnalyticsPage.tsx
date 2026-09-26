@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
+import { MapaDemandaCard } from '@/components/demanda/MapaDemandaCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -729,6 +730,9 @@ export default function AnalyticsPage() {
   return (
     <AppLayout>
       <PageHeader title="Análise Gráfica" description="Estatísticas e métricas do sistema" />
+
+      {/* Mapa de calor da demanda — recolhido; carrega só ao abrir */}
+      <MapaDemandaCard />
 
       {/* ── Seletor de Exercício (ano) — governa indicadores e rankings ───────── */}
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">

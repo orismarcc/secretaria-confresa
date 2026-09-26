@@ -2606,3 +2606,81 @@ export function useCustoMaquinas(inicio: string, fim: string) {
     },
   });
 }
+
+// ============= MAPA DA DEMANDA / TRANSPARÊNCIA =============
+export interface DemandaAssentamento {
+  settlement_id: string; nome: string; latitude: number | null; longitude: number | null;
+  posicao: 'marcada' | 'estimada' | 'sem';
+  abertos: number; horas_pedidas: number; espera_media_dias: number; espera_max_dias: number;
+  concluidos: number; horas_trabalhadas: number;
+}
+
+export function useDemandaPorAssentamento(inicio: string, fim: string, tipoId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ['demanda_assentamento', inicio, fim, tipoId],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('demanda_por_assentamento', { _inicio: inicio, _fim: fim, _demand_type_id: tipoId });
+      if (error) throw error;
+      const n = (v: unknown) => (v == null ? null : Number(v));
+      return ((data ?? []) as any[]).map((r) => ({
+        ...r, latitude: n(r.latitude), longitude: n(r.longitude),
+        horas_pedidas: Number(r.horas_pedidas) || 0, espera_media_dias: Number(r.espera_media_dias) || 0,
+        horas_trabalhadas: Number(r.horas_trabalhadas) || 0,
+      })) as DemandaAssentamento[];
+    },
+  });
+}
+
+export function useDemandaPontos(tipoId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ['demanda_pontos', tipoId],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('demanda_pontos', { _demand_type_id: tipoId });
+      if (error) throw error;
+      return ((data ?? []) as any[]).map((r) => ({ lat: Number(r.latitude), lng: Number(r.longitude), abertos: Number(r.abertos) || 0 }));
+    },
+  });
+}
+
+/** Marca o ponto central de um assentamento (uma vez; equipe). */
+export function useSalvarPosicaoAssentamento() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ id, latitude, longitude }: { id: string; latitude: number | null; longitude: number | null }) => {
+      const { error } = await supabase.from('settlements').update({ latitude, longitude } as any).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['demanda_assentamento'] });
+      queryClient.invalidateQueries({ queryKey: ['settlements'] });
+      toast({ title: 'Posição do assentamento salva' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Não foi possível salvar a posição', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
+export interface TransparenciaResumo {
+  ano: number; gerado_em: string; em_aberto_hoje: number;
+  totais: { atendimentos: number; produtores_atendidos: number; horas_maquina: number; hectares: number; assentamentos_atendidos: number };
+  por_mes: { mes: number; atendimentos: number; horas: number }[];
+  por_tipo: { tipo: string; atendimentos: number }[];
+  por_assentamento: { assentamento: string; atendimentos: number; produtores: number; horas: number }[];
+}
+
+/** Resumo público (só números agregados) — funciona sem login. */
+export function useTransparencia(ano: number) {
+  return useQuery({
+    queryKey: ['transparencia', ano],
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('transparencia_resumo', { _ano: ano });
+      if (error) throw error;
+      return data as TransparenciaResumo;
+    },
+  });
+}
