@@ -47,9 +47,13 @@ try {
   await marcar.click().catch(() => {});
   await pa.waitForTimeout(700);
   const mapa = pa.locator('.leaflet-container').first();
+  await mapa.scrollIntoViewIfNeeded();
   const box = await mapa.boundingBox();
-  if (box) await pa.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-  await pa.waitForTimeout(2500);
+  if (box) await mapa.click({ position: { x: box.width / 2, y: box.height / 2 } });
+  await pa.getByText('Posição do assentamento salva').first().waitFor({ timeout: 15000 }).catch(() => {});
+  const avisos = await pa.locator('ol li').allInnerTexts().catch(() => []);
+  console.log('  avisos após marcar:', JSON.stringify(avisos));
+  ok(avisos.some((t) => t.includes('Posição do assentamento salva')), 'Mapa da demanda: clique no mapa salvou a posição');
   await adm.close();
 
   // ─── Visitante sem login: painel público de transparência ────────────────
