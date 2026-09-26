@@ -93,7 +93,8 @@ export function CustoMaquinasPanel() {
                       <th className="px-2 py-2 font-medium">Máquina</th>
                       <th className="px-2 py-2 font-medium text-right">Atend.</th>
                       <th className="px-2 py-2 font-medium text-right">Horas</th>
-                      <th className="px-2 py-2 font-medium text-right">Litros</th>
+                      <th className="px-2 py-2 font-medium text-right" title="Litros lançados nos atendimentos (não entram no custo)">L atend.</th>
+                      <th className="px-2 py-2 font-medium text-right">Litros abast.</th>
                       <th className="px-2 py-2 font-medium text-right">L/h</th>
                       <th className="px-2 py-2 font-medium text-right">Combustível</th>
                       <th className="px-2 py-2 font-medium text-right">Manutenção</th>
@@ -111,11 +112,13 @@ export function CustoMaquinasPanel() {
                             <div className="flex flex-wrap gap-1 mt-0.5">
                               {d.litros_sem_preco > 0 && <Badge variant="outline" className="h-auto py-0 px-1 text-[9px] whitespace-nowrap border-amber-500/50 text-amber-700 dark:text-amber-400">{num(d.litros_sem_preco)} L sem preço</Badge>}
                               {d.manutencoes_sem_custo > 0 && <Badge variant="outline" className="h-auto py-0 px-1 text-[9px] whitespace-nowrap border-amber-500/50 text-amber-700 dark:text-amber-400">{d.manutencoes_sem_custo} manut. sem valor</Badge>}
+                              {d.horas > 0 && d.custo_total === 0 && <Badge variant="outline" className="h-auto py-0 px-1 text-[9px] whitespace-nowrap border-amber-500/50 text-amber-700 dark:text-amber-400">sem abastecimento/custo lançado</Badge>}
                               {d.horas === 0 && <Badge variant="outline" className="h-auto py-0 px-1 text-[9px] whitespace-nowrap">sem horas no período</Badge>}
                             </div>
                           </td>
                           <td className="px-2 py-1.5 text-right tabular-nums">{d.atendimentos}</td>
                           <td className="px-2 py-1.5 text-right tabular-nums">{num(d.horas)}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">{num(d.litros_atendimentos)}</td>
                           <td className="px-2 py-1.5 text-right tabular-nums">{num(d.litros)}</td>
                           <td className={cn('px-2 py-1.5 text-right tabular-nums', consumoAlto && 'text-red-600 font-semibold')}
                             title={consumoAlto ? 'Consumo acima de 1,5× o normal das máquinas' : undefined}>
@@ -132,12 +135,13 @@ export function CustoMaquinasPanel() {
                       <td className="px-2 py-1.5">Total</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{data.reduce((s, d) => s + d.atendimentos, 0)}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{num(tot.horas)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">{num(data.reduce((s, d) => s + d.litros_atendimentos, 0))}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{num(tot.litros)}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{tot.horas > 0 ? num(tot.litros / tot.horas) : '—'}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{brl(tot.comb)}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{brl(tot.man)}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{brl(tot.total)}</td>
-                      <td className="px-2 py-1.5 text-right tabular-nums">{tot.horas > 0 ? brl(tot.total / tot.horas) : '—'}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{tot.horas > 0 && tot.total > 0 ? brl(tot.total / tot.horas) : '—'}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -153,6 +157,7 @@ export function CustoMaquinasPanel() {
               <p className="text-[11px] text-muted-foreground">
                 Custo/hora = (combustível com preço + manutenções) ÷ horas trabalhadas nos atendimentos finalizados do período.
                 ⚠ = consumo (L/h) acima de 1,5× o normal entre as máquinas.
+                "L atend." = litros lançados nos atendimentos (usados na DAM) — mostrados à parte, não entram no custo.
               </p>
             </>
           )}

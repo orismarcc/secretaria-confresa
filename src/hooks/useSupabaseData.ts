@@ -2582,7 +2582,7 @@ export function useDesfazerUnificacao() {
 // ============= CUSTO POR HORA-MÁQUINA =============
 export interface CustoMaquina {
   machinery_id: string; nome: string; categoria: string | null;
-  atendimentos: number; horas: number; hectares: number;
+  atendimentos: number; horas: number; hectares: number; litros_atendimentos: number;
   litros: number; litros_sem_preco: number; custo_combustivel: number;
   manutencoes: number; manutencoes_sem_custo: number; custo_manutencao: number;
   custo_total: number; custo_hora: number | null; litros_hora: number | null;
@@ -2598,7 +2598,7 @@ export function useCustoMaquinas(inicio: string, fim: string) {
       if (error) throw error;
       return ((data ?? []) as any[]).map((r) => ({
         ...r,
-        ...Object.fromEntries(['horas', 'hectares', 'litros', 'litros_sem_preco', 'custo_combustivel', 'custo_manutencao', 'custo_total']
+        ...Object.fromEntries(['horas', 'hectares', 'litros_atendimentos', 'litros', 'litros_sem_preco', 'custo_combustivel', 'custo_manutencao', 'custo_total']
           .map((k) => [k, Number(r[k]) || 0])),
         custo_hora: r.custo_hora == null ? null : Number(r.custo_hora),
         litros_hora: r.litros_hora == null ? null : Number(r.litros_hora),
