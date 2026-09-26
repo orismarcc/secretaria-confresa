@@ -90,7 +90,16 @@ jobs:
           mv "$RUNNER_TEMP/migrations" supabase/migrations
 
       - name: Carregar a estrutura da produção
-        run: psql "$LOCAL_DB" -v ON_ERROR_STOP=1 -q -f "$RUNNER_TEMP/estrutura.sql"
+        run: |
+          # Papéis (roles) que só existem na produção e recebem permissões na
+          # estrutura: criados aqui como fictícios, SEM login.
+          psql "$LOCAL_DB" -Atc "select rolname from pg_roles" | sort > "$RUNNER_TEMP/roles_locais.txt"
+          grep -oE '(TO|OWNER TO|FROM) "?[A-Za-z_][A-Za-z0-9_]*"?' "$RUNNER_TEMP/estrutura.sql"             | awk '{print $NF}' | tr -d '"' | grep -viE '^(public|current_user|session_user)$' | sort -u > "$RUNNER_TEMP/roles_citados.txt"
+          for r in $(comm -13 "$RUNNER_TEMP/roles_locais.txt" "$RUNNER_TEMP/roles_citados.txt"); do
+            echo "Criando papel fictício: $r"
+            psql "$LOCAL_DB" -v ON_ERROR_STOP=1 -qc "CREATE ROLE \"$r\" NOLOGIN"
+          done
+          psql "$LOCAL_DB" -v ON_ERROR_STOP=1 -q -f "$RUNNER_TEMP/estrutura.sql"
 
       - name: Aplicar SÓ as migrations que ainda não estão na produção
         run: |
