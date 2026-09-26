@@ -38,6 +38,7 @@ import {
 } from '@/lib/documents';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useToast } from '@/hooks/use-toast';
+import { ProdutoresParecidosAviso } from '@/components/ProdutoresParecidosAviso';
 import { MapPin, Loader2 } from 'lucide-react';
 
 const producerSchema = z.object({
@@ -400,6 +401,16 @@ export function ProducerForm({
                 {gpsLoading ? 'Obtendo localização…' : 'Marcar localização atual'}
               </Button>
             </div>
+
+            {/* Aviso de cadastro parecido (não bloqueia o salvamento) */}
+            <ProdutoresParecidosAviso
+              ativo={open}
+              nome={form.watch('name')}
+              cpf={form.watch('cpf')}
+              telefone={form.watch('phone')}
+              settlementId={form.watch('settlementId')}
+              ignorarId={producer?.id}
+            />
 
             <div className="flex justify-end gap-2 pt-4">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

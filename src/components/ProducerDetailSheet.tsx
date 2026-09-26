@@ -11,8 +11,11 @@ import { Badge } from '@/components/ui/badge';
 import {
   Pencil, Trash2, MapPin, Phone, User, FileText, Home, Navigation,
   ExternalLink, ClipboardList, AlertTriangle, MessageCircle, Eye,
-  Tractor, Layers, Truck, Package,
+  Tractor, Layers, Truck, Package, Merge,
 } from 'lucide-react';
+import { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { UnificarProdutorDialog } from '@/components/UnificarProdutorDialog';
 import { useNavigate } from 'react-router-dom';
 import { openWhatsApp } from '@/lib/phone';
 import { Separator } from '@/components/ui/separator';
@@ -68,6 +71,8 @@ export function ProducerDetailSheet({
   onDelete,
 }: ProducerDetailSheetProps) {
   const navigate = useNavigate();
+  const { canDelete } = useAuth(); // admin completo (coordenador não unifica)
+  const [unificarOpen, setUnificarOpen] = useState(false);
 
   const { data: services = [], isLoading: servicesLoading } = useServicesByProducer(
     open ? producer?.id : undefined
@@ -564,6 +569,12 @@ export function ProducerDetailSheet({
               <Pencil className="h-4 w-4 mr-2" />
               Editar Produtor
             </Button>
+            {canDelete && (
+              <Button variant="outline" onClick={() => setUnificarOpen(true)} className="w-full">
+                <Merge className="h-4 w-4 mr-2" />
+                Unificar com outro cadastro
+              </Button>
+            )}
             {onDelete && (
               <Button
                 variant="destructive"
@@ -577,6 +588,15 @@ export function ProducerDetailSheet({
           </div>
         </div>
       </SheetContent>
+      {canDelete && (
+        <UnificarProdutorDialog
+          open={unificarOpen}
+          onOpenChange={setUnificarOpen}
+          atual={{ id: producer.id, name: producer.name, cpf: producer.cpf, phone: producer.phone, settlementId: producer.settlementId }}
+          // O cadastro exibido pode ter sido incorporado: fecha a ficha.
+          onUnificado={() => onOpenChange(false)}
+        />
+      )}
     </Sheet>
   );
 }

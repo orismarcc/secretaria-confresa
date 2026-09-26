@@ -90,7 +90,12 @@ export default function ProducersPage() {
   const PAGE_SIZE = 20;
 
   const filtered = producers.filter((p: DbProducer) => {
-    const matchesSearch = textIncludes(p.name, search) || p.cpf.includes(search) || phoneMatches((p as any).phone, search);
+    // CPF: acha digitado com ou sem pontos (compara também só os números).
+    const buscaDigitos = search.replace(/\D/g, '');
+    const cpfDigitos = (p.cpf || '').replace(/\D/g, '');
+    const matchesSearch = textIncludes(p.name, search) || (p.cpf || '').includes(search)
+      || (buscaDigitos.length >= 3 && cpfDigitos.includes(buscaDigitos))
+      || phoneMatches((p as any).phone, search);
     const matchesSettlement = settlementFilter === 'all' || p.settlement_id === settlementFilter;
     const matchesGleba = glebaFilter === 'all' || p.gleba_id === glebaFilter;
     return matchesSearch && matchesSettlement && matchesGleba;

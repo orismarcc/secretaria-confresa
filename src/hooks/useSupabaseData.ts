@@ -2515,3 +2515,62 @@ export function useDeleteSefazService() {
     },
   });
 }
+
+// ============= PRODUTORES: PARECIDOS / UNIFICAR =============
+export interface ProdutorParecido { id: string; name: string; settlement_name: string | null; motivo: string }
+
+/** Cadastros parecidos (mesmo CPF, mesmo telefone ou nome parecido) — só admin. */
+export function useProdutoresParecidos(p: { nome: string; cpf?: string; telefone?: string; settlementId?: string; ignorarId?: string }, enabled: boolean) {
+  return useQuery({
+    queryKey: ['produtores_parecidos', p],
+    enabled: enabled && p.nome.trim().length >= 5,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('produtores_parecidos', {
+        _nome: p.nome, _cpf: p.cpf || null, _telefone: p.telefone || null,
+        _settlement_id: p.settlementId || null, _ignorar_id: p.ignorarId || null,
+      });
+      if (error) return [] as ProdutorParecido[]; // aviso é auxiliar: nunca atrapalha o cadastro
+      return (data ?? []) as ProdutorParecido[];
+    },
+  });
+}
+
+function invalidarProdutores(queryClient: ReturnType<typeof useQueryClient>) {
+  ['producers', 'services', 'deliveries', 'producer_properties', 'produtores_parecidos', 'vitrine'].forEach((k) =>
+    queryClient.invalidateQueries({ queryKey: [k] }));
+}
+
+export function useUnificarProdutores() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ manter, remover }: { manter: string; remover: string }) => {
+      const { data, error } = await (supabase as any).rpc('unificar_produtores', { _manter: manter, _remover: remover });
+      if (error) throw error;
+      return data as { backup_id: string; atendimentos: number; entregas: number; propriedades: number; fornecedor: boolean; campos_preenchidos: string[] };
+    },
+    onSuccess: () => invalidarProdutores(queryClient),
+    onError: (error: Error) => {
+      toast({ title: 'Não foi possível unificar', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
+export function useDesfazerUnificacao() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (backupId: string) => {
+      const { error } = await (supabase as any).rpc('desfazer_unificacao', { _backup_id: backupId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidarProdutores(queryClient);
+      toast({ title: 'Unificação desfeita', description: 'Os dois cadastros voltaram a ser como antes.' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Não foi possível desfazer', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}

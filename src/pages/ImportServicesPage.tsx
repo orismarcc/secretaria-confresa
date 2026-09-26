@@ -239,7 +239,8 @@ export default function ImportServicesPage() {
     const cpfToId = new Map<string, string>();
     {
       const cpfRows = await fetchProducerCpfs();
-      cpfRows.forEach((r) => { if (r.cpf) cpfToId.set(r.cpf, r.id); });
+      // Chave = só os números: planilha com ou sem pontos acha o mesmo produtor.
+      cpfRows.forEach((r) => { if (r.cpf) cpfToId.set(r.cpf.replace(/\D/g, ''), r.id); });
     }
 
     for (const [key, p] of uniqueProducers) {
@@ -247,7 +248,7 @@ export default function ImportServicesPage() {
         let existingId: string | null = null;
 
         if (p.cpf) {
-          existingId = cpfToId.get(p.cpf) ?? null;
+          existingId = cpfToId.get(String(p.cpf).replace(/\D/g, '')) ?? null;
         }
         if (!existingId) {
           const { data } = await supabase
