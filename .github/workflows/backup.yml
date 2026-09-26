@@ -1,0 +1,121 @@
+name: Backup diário (criptografado) + teste de restauração
+
+# Copia estrutura + dados da produção, CRIPTOGRAFA com a senha do secret
+# BACKUP_PASSPHRASE (AES-256) e guarda como artefato por 30 dias. Em seguida
+# restaura a cópia num Supabase TEMPORÁRIO e confere a contagem de registros de
+# cada tabela — prova de que o backup realmente volta.
+#
+# DESLIGADO enquanto o secret BACKUP_PASSPHRASE não existir. Sem a senha o
+# arquivo é ilegível (o repositório é público). Guarde a senha em local seguro:
+# sem ela, nenhum backup pode ser restaurado.
+#
+# Não inclui os ARQUIVOS do Storage (fotos, documentos) — só o banco.
+on:
+  schedule:
+    - cron: '0 6 * * *'   # 03:00 em Cuiabá/Brasília
+  workflow_dispatch:
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Backup + restauração de teste
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+      LOCAL_DB: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+    steps:
+      - name: Backup ativado?
+        id: ativo
+        run: |
+          if [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::notice::Backup DESLIGADO — crie o secret BACKUP_PASSPHRASE para ativar."
+            echo "sim=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "sim=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.ativo.outputs.sim == 'true'
+
+      - uses: supabase/setup-cli@v1
+        if: steps.ativo.outputs.sim == 'true'
+        with:
+          version: 2.108.0
+
+      - name: Copiar estrutura e dados da produção
+        if: steps.ativo.outputs.sim == 'true'
+        run: |
+          supabase link --project-ref pqvsdzvmbwbotkfggcxc -p "$DB_PASSWORD"
+          D="$RUNNER_TEMP/backup"; mkdir -p "$D"
+          supabase db dump --linked -p "$DB_PASSWORD" -f "$D/estrutura.sql"
+          supabase db dump --linked -p "$DB_PASSWORD" --data-only --use-copy -s public,private -f "$D/dados.sql"
+          # Logins (auth) em arquivo separado: fazem parte do backup, mas não do
+          # teste automático de restauração.
+          supabase db dump --linked -p "$DB_PASSWORD" --data-only --use-copy -s auth -f "$D/auth.sql"
+          test -s "$D/estrutura.sql" && test -s "$D/dados.sql"
+          # Contagem de linhas por tabela no próprio arquivo (sem imprimir dados).
+          awk '/^COPY /{t=$2; n=0; inb=1; next} inb && /^\\\.$/{print t, n; inb=0; next} inb{n++}' "$D/dados.sql" | sort > "$D/contagem.txt"
+          echo "Tabelas no backup: $(wc -l < "$D/contagem.txt")"
+
+      - name: Criptografar e guardar (30 dias)
+        if: steps.ativo.outputs.sim == 'true'
+        run: |
+          cd "$RUNNER_TEMP"
+          tar -czf backup.tar.gz backup
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" \
+              --symmetric --cipher-algo AES256 -o "backup-$(date -u +%F).tar.gz.gpg" backup.tar.gz
+          rm -f backup.tar.gz
+          ls -la ./*.gpg
+
+      - uses: actions/upload-artifact@v4
+        if: steps.ativo.outputs.sim == 'true'
+        with:
+          name: backup-banco-${{ github.run_id }}
+          path: ${{ runner.temp }}/*.gpg
+          retention-days: 30
+          if-no-files-found: error
+
+      # ─── Teste de restauração (a partir do arquivo CRIPTOGRAFADO) ──────────
+      - name: Restaurar num Supabase temporário
+        if: steps.ativo.outputs.sim == 'true'
+        run: |
+          cd "$RUNNER_TEMP"
+          rm -rf backup restaurado && mkdir restaurado
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" -d backup-*.tar.gz.gpg | tar -xz -C restaurado
+          cd "$GITHUB_WORKSPACE"
+          mv supabase/migrations "$RUNNER_TEMP/migrations" && mkdir supabase/migrations
+          supabase start -x studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor,realtime,postgres-meta
+          R="$RUNNER_TEMP/restaurado/backup"
+          psql "$LOCAL_DB" -Atc "select rolname from pg_roles" | sort > "$RUNNER_TEMP/roles_locais.txt"
+          grep -E '^(GRANT|REVOKE|ALTER .* OWNER TO|ALTER DEFAULT PRIVILEGES)' "$R/estrutura.sql" \
+            | grep -oE '(TO|FROM) "?[A-Za-z_][A-Za-z0-9_]*"?;?$' | awk '{print $NF}' | tr -d '";' \
+            | grep -viE '^(public|current_user|session_user)$' | sort -u > "$RUNNER_TEMP/roles_citados.txt"
+          for r in $(comm -13 "$RUNNER_TEMP/roles_locais.txt" "$RUNNER_TEMP/roles_citados.txt"); do
+            psql "$LOCAL_DB" -qc "CREATE ROLE \"$r\" NOLOGIN"
+          done
+          psql "$LOCAL_DB" -v ON_ERROR_STOP=1 -q -f "$R/estrutura.sql"
+          psql "$LOCAL_DB" -v ON_ERROR_STOP=1 -q -f "$R/dados.sql"
+
+      - name: Conferir contagem de registros (backup × restaurado)
+        if: steps.ativo.outputs.sim == 'true'
+        run: |
+          R="$RUNNER_TEMP/restaurado/backup"
+          falhas=0
+          while read -r tabela esperado; do
+            real=$(psql "$LOCAL_DB" -Atc "select count(*) from $tabela")
+            if [ "$real" != "$esperado" ]; then echo "✗ $tabela: backup=$esperado restaurado=$real"; falhas=$((falhas+1)); fi
+          done < "$R/contagem.txt"
+          echo "Tabelas conferidas: $(wc -l < "$R/contagem.txt") — divergências: $falhas"
+          test "$falhas" = "0"
+
+      - name: Desligar e apagar cópias locais
+        if: always() && steps.ativo.outputs.sim == 'true'
+        run: |
+          supabase stop --no-backup || true
+          rm -rf "$RUNNER_TEMP/backup" "$RUNNER_TEMP/restaurado"
