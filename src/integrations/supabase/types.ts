@@ -1733,18 +1733,24 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
+          latitude: number | null
+          longitude: number | null
           name: string
           updated_at: string
         }
         Insert: {
           created_at?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           name: string
           updated_at?: string
         }
         Update: {
           created_at?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           name?: string
           updated_at?: string
         }
@@ -2445,6 +2451,30 @@ export type Database = {
         }[]
       }
       decrypt_cpf: { Args: { encrypted_cpf: string }; Returns: string }
+      demanda_pontos: {
+        Args: { _demand_type_id?: string }
+        Returns: {
+          abertos: number
+          latitude: number
+          longitude: number
+        }[]
+      }
+      demanda_por_assentamento: {
+        Args: { _demand_type_id?: string; _fim: string; _inicio: string }
+        Returns: {
+          abertos: number
+          concluidos: number
+          espera_max_dias: number
+          espera_media_dias: number
+          horas_pedidas: number
+          horas_trabalhadas: number
+          latitude: number
+          longitude: number
+          nome: string
+          posicao: string
+          settlement_id: string
+        }[]
+      }
       desfazer_unificacao: { Args: { _backup_id: string }; Returns: Json }
       encrypt_cpf: { Args: { plain_cpf: string }; Returns: string }
       has_any_admin: { Args: never; Returns: boolean }
@@ -2484,6 +2514,7 @@ export type Database = {
           settlement_name: string
         }[]
       }
+      transparencia_resumo: { Args: { _ano: number }; Returns: Json }
       unificar_produtores: {
         Args: { _manter: string; _remover: string }
         Returns: Json
