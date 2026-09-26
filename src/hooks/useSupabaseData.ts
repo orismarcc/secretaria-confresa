@@ -1561,6 +1561,8 @@ export interface MachineryRefuel {
   refueled_at: string;
   note: string | null;
   receipt_path: string | null;
+  price_per_liter?: number | null;
+  hour_meter?: number | null;
   created_at: string;
 }
 
@@ -1604,7 +1606,7 @@ export function useCreateMachineryRefuel() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: async (item: { machinery_id: string; liters: number; fuel_type?: string | null; refueled_at?: string; note?: string | null; receipt_path?: string | null }) => {
+    mutationFn: async (item: { machinery_id: string; liters: number; fuel_type?: string | null; refueled_at?: string; note?: string | null; receipt_path?: string | null; price_per_liter?: number | null; hour_meter?: number | null }) => {
       const { data: auth } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from('machinery_refuels')
@@ -1617,6 +1619,7 @@ export function useCreateMachineryRefuel() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['machinery_refuels', variables.machinery_id] });
       queryClient.invalidateQueries({ queryKey: ['machinery_refuels', 'totals'] });
+      queryClient.invalidateQueries({ queryKey: ['custo_maquinas'] });
       toast({ title: 'Abastecimento registrado!' });
     },
     onError: (error: Error) => {
@@ -1636,6 +1639,7 @@ export function useDeleteMachineryRefuel() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['machinery_refuels', variables.machinery_id] });
       queryClient.invalidateQueries({ queryKey: ['machinery_refuels', 'totals'] });
+      queryClient.invalidateQueries({ queryKey: ['custo_maquinas'] });
       toast({ title: 'Abastecimento removido.' });
     },
     onError: (error: Error) => {
@@ -2571,6 +2575,34 @@ export function useDesfazerUnificacao() {
     },
     onError: (error: Error) => {
       toast({ title: 'Não foi possível desfazer', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
+// ============= CUSTO POR HORA-MÁQUINA =============
+export interface CustoMaquina {
+  machinery_id: string; nome: string; categoria: string | null;
+  atendimentos: number; horas: number; hectares: number;
+  litros: number; litros_sem_preco: number; custo_combustivel: number;
+  manutencoes: number; manutencoes_sem_custo: number; custo_manutencao: number;
+  custo_total: number; custo_hora: number | null; litros_hora: number | null;
+}
+
+/** Custos por máquina no período (cálculo feito no banco). */
+export function useCustoMaquinas(inicio: string, fim: string) {
+  return useQuery({
+    queryKey: ['custo_maquinas', inicio, fim],
+    enabled: !!inicio && !!fim,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc('custo_maquinas', { _inicio: inicio, _fim: fim });
+      if (error) throw error;
+      return ((data ?? []) as any[]).map((r) => ({
+        ...r,
+        ...Object.fromEntries(['horas', 'hectares', 'litros', 'litros_sem_preco', 'custo_combustivel', 'custo_manutencao', 'custo_total']
+          .map((k) => [k, Number(r[k]) || 0])),
+        custo_hora: r.custo_hora == null ? null : Number(r.custo_hora),
+        litros_hora: r.litros_hora == null ? null : Number(r.litros_hora),
+      })) as CustoMaquina[];
     },
   });
 }

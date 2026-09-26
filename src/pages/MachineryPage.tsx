@@ -32,6 +32,7 @@ import {
 } from '@/hooks/useSupabaseData';
 import { useOperators } from '@/hooks/useOperatorData';
 import { MachineryRefuelDialog, FUEL_TYPES } from '@/components/MachineryRefuelDialog';
+import { CustoMaquinasPanel } from '@/components/CustoMaquinasPanel';
 import { FleetDocsDialog } from '@/components/FleetDocsDialog';
 import { FleetAlerts } from '@/components/FleetAlerts';
 import { useAuth } from '@/contexts/AuthContext';
@@ -339,6 +340,11 @@ export default function MachineryPage() {
       {/* Alertas de vencimento (documentos + CNH) */}
       <div className="mb-4">
         <FleetAlerts />
+      </div>
+
+      {/* Custo por hora-máquina (seção própria, recolhida por padrão) */}
+      <div className="mb-4">
+        <CustoMaquinasPanel />
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as 'maquinario' | 'veiculo')} className="mb-4">

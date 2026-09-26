@@ -54,6 +54,9 @@ export function MachineryRefuelDialog({
   const [liters, setLiters] = useState('');
   const [fuelType, setFuelType] = useState<string>(defaultFuelType || '');
   const [note, setNote] = useState('');
+  // Opcionais — alimentam o custo por hora-máquina.
+  const [preco, setPreco] = useState('');
+  const [horimetro, setHorimetro] = useState('');
   const [toDelete, setToDelete] = useState<MachineryRefuel | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -98,13 +101,19 @@ export function MachineryRefuelDialog({
     setReceiptBlob(null); setReceiptPreview(null);
   };
 
-  const resetForm = () => { setLiters(''); setNote(''); clearReceipt(); };
+  const resetForm = () => { setLiters(''); setNote(''); setPreco(''); setHorimetro(''); clearReceipt(); };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!machineryId || saving) return;
     const litersNum = Number(String(liters).replace(',', '.'));
     if (!Number.isFinite(litersNum) || litersNum <= 0) return;
+    const numOuNull = (v: string) => {
+      // "6,29" / "1.234,5" (vírgula = decimal) ou "6.29" (ponto = decimal)
+      const t = String(v).trim();
+      const n = Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t);
+      return v.trim() === '' || !Number.isFinite(n) || n < 0 ? null : n;
+    };
 
     setSaving(true);
     try {
@@ -125,6 +134,8 @@ export function MachineryRefuelDialog({
         refueled_at: new Date().toISOString(),
         note: note.trim() || null,
         receipt_path,
+        price_per_liter: numOuNull(preco),
+        hour_meter: numOuNull(horimetro),
       });
       resetForm();
     } catch {
@@ -188,6 +199,17 @@ export function MachineryRefuelDialog({
                   </Select>
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="refuel-preco">Preço do litro (R$)</Label>
+                  <Input id="refuel-preco" value={preco} onChange={(e) => setPreco(e.target.value)} placeholder="Ex: 6,29" inputMode="decimal" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="refuel-horimetro">Horímetro (h)</Label>
+                  <Input id="refuel-horimetro" value={horimetro} onChange={(e) => setHorimetro(e.target.value)} placeholder="Opcional" inputMode="decimal" />
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground -mt-1">O preço entra no cálculo do custo por hora-máquina.</p>
               <div className="space-y-1.5">
                 <Label htmlFor="refuel-note">Observação (opcional)</Label>
                 <Input id="refuel-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ex: posto, responsável…" />
@@ -238,7 +260,15 @@ export function MachineryRefuelDialog({
                   {refuels.map((r) => (
                     <div key={r.id} className="flex items-center gap-3 p-2.5">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold">{fmtL(r.liters)}{r.fuel_type ? ` · ${r.fuel_type}` : ''}</p>
+                        <p className="text-sm font-semibold">
+                          {fmtL(r.liters)}{r.fuel_type ? ` · ${r.fuel_type}` : ''}
+                          {r.price_per_liter != null && (
+                            <span className="font-normal text-muted-foreground">
+                              {' '}· R$ {Number(r.price_per_liter).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}/L
+                            </span>
+                          )}
+                          {r.hour_meter != null && <span className="font-normal text-muted-foreground"> · {Number(r.hour_meter).toLocaleString('pt-BR')} h</span>}
+                        </p>
                         <p className="text-xs text-muted-foreground">
                           {fmtDateTime(r.refueled_at)}{r.note ? ` — ${r.note}` : ''}
                         </p>

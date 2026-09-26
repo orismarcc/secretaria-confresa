@@ -56,6 +56,7 @@ export function useCreateMaintenance() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['maintenances'] });
+      queryClient.invalidateQueries({ queryKey: ['custo_maquinas'] });
       toast({ title: 'Manutenção registrada!' });
     },
     onError: (error: Error) => {
@@ -80,6 +81,7 @@ export function useUpdateMaintenance() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['maintenances'] });
+      queryClient.invalidateQueries({ queryKey: ['custo_maquinas'] });
       toast({ title: 'Manutenção atualizada!' });
     },
     onError: (error: Error) => {
@@ -98,6 +100,7 @@ export function useDeleteMaintenance() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['maintenances'] });
+      queryClient.invalidateQueries({ queryKey: ['custo_maquinas'] });
       toast({ title: 'Manutenção excluída!' });
     },
     onError: (error: Error) => {
