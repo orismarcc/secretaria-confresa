@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPinOff, Route } from 'lucide-react';
+import { MapPinOff, Route, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { RotaPanel, MAX_PARADAS, type Parada, type RotaDesenho } from '@/components/rota/RotaPanel';
 import { useAllProducerProperties } from '@/hooks/useSupabaseData';
@@ -93,6 +93,7 @@ export default function ProducersMap({ producers, settlements, onOpenProducer }:
   // Rota de visitas: paradas selecionadas ficam guardadas mesmo ao trocar o
   // filtro (dá para montar uma rota com produtores de assentamentos diferentes).
   const [modoRota, setModoRota] = useState(false);
+  const [semLocalAberto, setSemLocalAberto] = useState(false);
   const [sel, setSel] = useState<Map<string, Parada>>(new Map());
   const [desenho, setDesenho] = useState<RotaDesenho | null>(null);
   const paradaDe = (p: Ponto): Parada => ({
@@ -259,8 +260,16 @@ export default function ProducersMap({ producers, settlements, onOpenProducer }:
       </div>
 
       {semLocal.length > 0 && (
-        <div className="rounded-lg border border-dashed p-3 text-sm">
-          <p className="font-medium flex items-center gap-2"><MapPinOff className="h-4 w-4 text-amber-600" /> {semLocal.length} produtor(es) sem localização</p>
+        <div className="rounded-lg border border-dashed text-sm">
+          {/* Recolhido por padrão: a lista costuma ser longa. */}
+          <button type="button" onClick={() => setSemLocalAberto((v) => !v)} aria-expanded={semLocalAberto}
+            className="flex w-full items-center gap-2 p-3 text-left font-medium hover:bg-muted/40 rounded-lg">
+            <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${semLocalAberto ? 'rotate-90' : ''}`} />
+            <MapPinOff className="h-4 w-4 text-amber-600" /> {semLocal.length} produtor(es) sem localização
+            <span className="ml-auto text-[11px] font-normal text-muted-foreground">{semLocalAberto ? 'recolher' : 'ver lista'}</span>
+          </button>
+          {semLocalAberto && (
+          <div className="px-3 pb-3">
           <p className="text-[11px] text-muted-foreground mb-2">Serão localizados no próximo atendimento finalizado pelo operador, ou informe as coordenadas no cadastro.</p>
           <div className="flex flex-wrap gap-1.5">
             {semLocal.slice(0, 80).map((p) => (
@@ -270,6 +279,8 @@ export default function ProducersMap({ producers, settlements, onOpenProducer }:
             ))}
             {semLocal.length > 80 && <span className="text-xs text-muted-foreground self-center">+ {semLocal.length - 80}</span>}
           </div>
+          </div>
+          )}
         </div>
       )}
     </div>
