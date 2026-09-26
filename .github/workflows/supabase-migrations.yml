@@ -9,8 +9,16 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Barreira: a migration é testada antes numa cópia da ESTRUTURA da produção
+  # (sem dados), junto com os testes de permissões. Se falhar, nada é aplicado.
+  verificar:
+    name: Verificar antes de aplicar
+    uses: ./.github/workflows/verificacoes.yml
+    secrets: inherit
+
   migrate:
     name: Run database migrations
+    needs: verificar
     runs-on: ubuntu-latest
 
     steps:

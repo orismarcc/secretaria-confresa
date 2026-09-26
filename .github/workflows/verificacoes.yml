@@ -9,9 +9,12 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  # Chamado pelo workflow de migrations: só aplica na produção se passar aqui.
+  workflow_call:
 
 concurrency:
-  group: verificacoes-${{ github.ref }}
+  # github.workflow difere quando chamado pelas migrations: um nunca cancela o outro.
+  group: verificacoes-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -94,7 +97,7 @@ jobs:
           # Papéis (roles) que só existem na produção e recebem permissões na
           # estrutura: criados aqui como fictícios, SEM login.
           psql "$LOCAL_DB" -Atc "select rolname from pg_roles" | sort > "$RUNNER_TEMP/roles_locais.txt"
-          grep -oE '(TO|OWNER TO|FROM) "?[A-Za-z_][A-Za-z0-9_]*"?' "$RUNNER_TEMP/estrutura.sql"             | awk '{print $NF}' | tr -d '"' | grep -viE '^(public|current_user|session_user)$' | sort -u > "$RUNNER_TEMP/roles_citados.txt"
+          grep -E '^(GRANT|REVOKE|ALTER .* OWNER TO|ALTER DEFAULT PRIVILEGES)' "$RUNNER_TEMP/estrutura.sql"             | grep -oE '(TO|FROM) "?[A-Za-z_][A-Za-z0-9_]*"?;?$'             | awk '{print $NF}' | tr -d '";' | grep -viE '^(public|current_user|session_user)$' | sort -u > "$RUNNER_TEMP/roles_citados.txt"
           for r in $(comm -13 "$RUNNER_TEMP/roles_locais.txt" "$RUNNER_TEMP/roles_citados.txt"); do
             echo "Criando papel fictício: $r"
             psql "$LOCAL_DB" -v ON_ERROR_STOP=1 -qc "CREATE ROLE \"$r\" NOLOGIN"
@@ -116,6 +119,46 @@ jobs:
 
       - name: Testes de permissões e regras do banco
         run: supabase test db
+
+      # ─── Ponta a ponta: robô de navegador no app, contra o banco temporário ──
+      - name: Ponta a ponta — usuários e dados fictícios
+        env:
+          E2E_SENHA: SenhaFicticia-CI-2026
+        run: |
+          eval "$(supabase status -o env)"
+          echo "E2E_API_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "E2E_ANON_KEY=$ANON_KEY" >> "$GITHUB_ENV"
+          criar() {
+            curl -sf -X POST "$API_URL/auth/v1/admin/users"               -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY"               -H "Content-Type: application/json"               -d "{\"email\":\"$1\",\"password\":\"$E2E_SENHA\",\"email_confirm\":true}"               | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])"
+          }
+          ADMIN_ID=$(criar admin.e2e@teste.local)
+          OP_ID=$(criar operador.e2e@teste.local)
+          psql "$LOCAL_DB" -v ON_ERROR_STOP=1 -q -v admin_id="$ADMIN_ID" -v op_id="$OP_ID" -f e2e/dados-ficticios.sql
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Ponta a ponta — app apontando para o banco temporário
+        env:
+          E2E_SENHA: SenhaFicticia-CI-2026
+        run: |
+          npm ci
+          VITE_SUPABASE_URL="$E2E_API_URL" VITE_SUPABASE_PUBLISHABLE_KEY="$E2E_ANON_KEY" npm run build
+          nohup npx vite preview --host 127.0.0.1 --port 4173 --strictPort > "$RUNNER_TEMP/preview.log" 2>&1 &
+          # Playwright só aqui (não entra no package.json / deploy).
+          npm i --no-save playwright@1.49.1
+          npx playwright install --with-deps chromium
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:4173 >/dev/null && break; sleep 1; done
+          node e2e/fluxo-principal.mjs
+
+      - name: Ponta a ponta — conferir no banco
+        run: |
+          st=$(psql "$LOCAL_DB" -Atc "select status from public.services where id = 'e2e00000-0000-0000-0000-000000000004'")
+          echo "status do atendimento: $st"; test "$st" = "completed"
+          loc=$(psql "$LOCAL_DB" -Atc "select latitude::float || ',' || longitude::float from public.producers where id = 'e2e00000-0000-0000-0000-000000000003'")
+          echo "localização do produtor: $loc"; test "$loc" = "-10.61,-51.61"
 
       - name: Desligar
         if: always()
