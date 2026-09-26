@@ -3,6 +3,20 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { friendlyDbError } from '@/lib/dbErrors';
 import { Sentry } from '@/lib/sentry';
+import { fetchAllRows } from '@/lib/fetchAll';
+
+/**
+ * CPFs dos produtores (só admin; a coluna é revogada no cliente), em lotes.
+ * Como antes, falha/sem permissão = lista vazia (não quebra a tela).
+ */
+export async function fetchProducerCpfs(): Promise<{ id: string; cpf: string | null }[]> {
+  try {
+    return await fetchAllRows<{ id: string; cpf: string | null }>(() =>
+      (supabase as any).rpc('admin_producer_cpfs').order('id', { ascending: true }));
+  } catch {
+    return [];
+  }
+}
 
 // ============= SCHEMA-RESILIENCE HELPER =============
 /**
@@ -429,14 +443,14 @@ export function useProducers() {
       // A coluna cpf de producers é revogada no cliente (só admin lê, via função
       // admin_producer_cpfs). Selecionamos colunas explícitas (sem cpf) e, para
       // admins, reanexamos o cpf — o restante do app continua lendo p.cpf normal.
-      const { data, error } = await supabase
+      // Em lotes: acima de 1000 linhas o Supabase corta sem avisar.
+      const rows = await fetchAllRows<any>(() => supabase
         .from('producers')
         .select('id, name, phone, settlement_id, location_id, property_name, property_size, dap_cap, created_at, location_name, latitude, longitude, caf, updated_at, gleba_id, settlements(name), locations(name), glebas(name), producer_demands(demand_type_id)')
-        .order('name');
-      if (error) throw error;
-      const rows = (data ?? []) as any[];
-      const { data: cpfRows } = await (supabase as any).rpc('admin_producer_cpfs');
-      if (cpfRows && cpfRows.length) {
+        .order('name')
+        .order('id', { ascending: true }));
+      const cpfRows = await fetchProducerCpfs();
+      if (cpfRows.length) {
         const cpfById = new Map<string, string | null>(cpfRows.map((r: any) => [r.id, r.cpf ?? null]));
         rows.forEach((p) => { p.cpf = cpfById.get(p.id) ?? null; });
       }
@@ -653,11 +667,12 @@ export function useServices() {
   return useQuery({
     queryKey: ['services'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Em lotes: acima de 1000 linhas o Supabase corta sem avisar.
+      const data = await fetchAllRows<any>(() => supabase
         .from('services')
         .select(`*, producers(name, phone, location_name, latitude, longitude, gleba_id, glebas(name)), demand_types(name), settlements(name), locations(name), machinery(name, patrimony_number), profiles!created_by(name), operador:profiles!operator_id(name), responsible_technicians(name), ${PROPERTY_EMBED}`)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true }));
       return applyPropertyOverlay(data);
     },
   });
@@ -1192,12 +1207,12 @@ export function useOperatorOwnStats(operatorId: string | undefined) {
     queryKey: ['operator_own_stats', operatorId],
     queryFn: async () => {
       if (!operatorId) return { byYear: {} as Record<number, OperatorYearStats>, years: [] as number[], all: { total: 0, hours: 0, assentamentos: 0 } as OperatorYearStats };
-      const { data, error } = await supabase
+      const data = await fetchAllRows<any>(() => supabase
         .from('services')
-        .select('worked_hours, settlement_id, completed_at')
+        .select('id, worked_hours, settlement_id, completed_at')
         .eq('operator_id', operatorId)
-        .eq('status', 'completed');
-      if (error) throw error;
+        .eq('status', 'completed')
+        .order('id', { ascending: true }));
       const acc: Record<number, { total: number; hours: number; sett: Set<string> }> = {};
       // Total geral (todos os períodos) — assentamentos distintos de tudo.
       const allSett = new Set<string>();
@@ -1571,10 +1586,10 @@ export function useMachineryRefuelTotals() {
   return useQuery({
     queryKey: ['machinery_refuels', 'totals'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const data = await fetchAllRows<any>(() => supabase
         .from('machinery_refuels')
-        .select('machinery_id, liters');
-      if (error) throw error;
+        .select('id, machinery_id, liters')
+        .order('id', { ascending: true }));
       const map: Record<string, number> = {};
       (data ?? []).forEach((r: any) => {
         map[r.machinery_id] = (map[r.machinery_id] || 0) + Number(r.liters || 0);
@@ -1792,7 +1807,8 @@ export function useDeliveries() {
   return useQuery({
     queryKey: ['deliveries'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Em lotes: acima de 1000 linhas o Supabase corta sem avisar.
+      const data = await fetchAllRows<any>(() => supabase
         .from('deliveries')
         .select(`
           *,
@@ -1806,12 +1822,12 @@ export function useDeliveries() {
           delivery_items(quantity, lot_id, delivery_lots(name)),
           creator:profiles!deliveries_created_by_fkey(name)
         `)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true }));
       // cpf de producers é revogado no cliente; para admins, reanexa via função.
-      const rows = (data ?? []) as any[];
-      const { data: cpfRows } = await (supabase as any).rpc('admin_producer_cpfs');
-      if (cpfRows && cpfRows.length) {
+      const rows = data;
+      const cpfRows = await fetchProducerCpfs();
+      if (cpfRows.length) {
         const cpfById = new Map<string, string | null>(cpfRows.map((r: any) => [r.id, r.cpf ?? null]));
         rows.forEach((d) => { if (d.producers) d.producers.cpf = cpfById.get(d.producer_id) ?? null; });
       }
@@ -2345,12 +2361,11 @@ export function useSefazProducers() {
   return useQuery({
     queryKey: ['sefaz_producers'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      return fetchAllRows<any>(() => supabase
         .from('sefaz_producers')
         .select('*, sefaz_services(id)')
-        .order('name');
-      if (error) throw error;
-      return data;
+        .order('name')
+        .order('id', { ascending: true }));
     },
   });
 }
@@ -2423,14 +2438,15 @@ export function useSefazServices(producerId?: string) {
   return useQuery({
     queryKey: ['sefaz_services', producerId],
     queryFn: async () => {
-      let query = supabase
-        .from('sefaz_services')
-        .select('*, sefaz_producers(name, cpf, phone, settlement, location)')
-        .order('service_date', { ascending: false });
-      if (producerId) query = query.eq('sefaz_producer_id', producerId);
-      const { data, error } = await query;
-      if (error) throw error;
-      return data;
+      return fetchAllRows<any>(() => {
+        let query = supabase
+          .from('sefaz_services')
+          .select('*, sefaz_producers(name, cpf, phone, settlement, location)');
+        if (producerId) query = query.eq('sefaz_producer_id', producerId);
+        return query
+          .order('service_date', { ascending: false })
+          .order('id', { ascending: true });
+      });
     },
   });
 }

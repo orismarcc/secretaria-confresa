@@ -19,6 +19,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllRows } from '@/lib/fetchAll';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -197,7 +198,11 @@ export async function fetchAterData(year: number): Promise<TechnicianGroup[]> {
       };
 
   // ── Fetch all completed services (with or without a linked technician) ────
-  const { data: services, error } = await supabase
+  // Em lotes: acima de 1000 linhas o Supabase corta sem avisar.
+  let services: any[] | null = null;
+  let error: { message: string } | null = null;
+  try {
+    services = await fetchAllRows<any>(() => supabase
     .from('services')
     .select(
       `
@@ -216,7 +221,11 @@ export async function fetchAterData(year: number): Promise<TechnicianGroup[]> {
     `,
     )
     .eq('status', 'completed')
-    .order('completed_at', { ascending: true, nullsLast: true });
+    .order('completed_at', { ascending: true, nullsLast: true } as any)
+    .order('id', { ascending: true }));
+  } catch (e: any) {
+    error = { message: e?.message ?? String(e) };
+  }
 
   if (error) {
     throw new Error(error.message);

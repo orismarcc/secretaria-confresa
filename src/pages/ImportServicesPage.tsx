@@ -12,6 +12,7 @@ import {
   useSettlements,
   useMachinery,
   useResponsibleTechnicians,
+  fetchProducerCpfs,
 } from '@/hooks/useSupabaseData';
 import {
   Download,
@@ -236,8 +237,8 @@ export default function ImportServicesPage() {
     // cliente; filtrar por ela quebraria). Import é tela de admin.
     const cpfToId = new Map<string, string>();
     {
-      const { data: cpfRows } = await (supabase as any).rpc('admin_producer_cpfs');
-      (cpfRows ?? []).forEach((r: any) => { if (r.cpf) cpfToId.set(r.cpf, r.id); });
+      const cpfRows = await fetchProducerCpfs();
+      cpfRows.forEach((r) => { if (r.cpf) cpfToId.set(r.cpf, r.id); });
     }
 
     for (const [key, p] of uniqueProducers) {
