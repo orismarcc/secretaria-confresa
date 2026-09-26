@@ -43,7 +43,8 @@ function extractMissingColumn(message: string): string | null {
  * @param onSkip   - optional callback called with each stripped column name
  */
 async function withMissingColumnRetry<T>(
-  callFn: (payload: Record<string, unknown>) => Promise<{ data: T | null; error: { message: string } | null }>,
+  // PromiseLike: os builders do supabase-js são "thenables" (await funciona igual).
+  callFn: (payload: Record<string, unknown>) => PromiseLike<{ data: T | null; error: { message: string } | null }>,
   payload: Record<string, unknown>,
   onSkip?: (column: string) => void,
 ): Promise<T> {
@@ -108,7 +109,7 @@ export function useCreateDemandType() {
     mutationFn: async ({ name, description, category, operation_type }: { name: string; description?: string; category?: string | null; operation_type?: string | null }) => {
       const payload: Record<string, unknown> = { name, description, category, operation_type };
       const result = await withMissingColumnRetry(
-        (p) => supabase.from('demand_types').insert(p).select().single(),
+        (p) => supabase.from('demand_types').insert(p as any).select().single(),
         payload,
       );
       return result;
@@ -868,7 +869,7 @@ export function useCreateService() {
       const skipped: string[] = [];
 
       const result = await withMissingColumnRetry(
-        (p) => supabase.from('services').insert(p).select().single(),
+        (p) => supabase.from('services').insert(p as any).select().single(),
         payload,
         (col) => skipped.push(col),
       );
@@ -1855,7 +1856,7 @@ export function useCreateDelivery() {
       const { data: { user } } = await supabase.auth.getUser();
       const payload: Record<string, unknown> = { ...delivery, created_by: user?.id ?? null };
       const result = await withMissingColumnRetry(
-        (p) => supabase.from('deliveries').insert(p).select().single(),
+        (p) => supabase.from('deliveries').insert(p as any).select().single(),
         payload,
       );
       return result;

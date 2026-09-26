@@ -325,7 +325,7 @@ export default function AnalyticsPage() {
 
   // ── Operation-type ids (estável; fallback por nome p/ tipos antigos sem o campo) ──
   const getOperationIds = useMemo(() => {
-    return (op: 'grade' | 'pc' | 'pa_carregadeira', fallback: () => Set<string>): Set<string> => {
+    return (op: 'grade' | 'pc' | 'pa_carregadeira' | 'rocadeira', fallback: () => Set<string>): Set<string> => {
       const ids = new Set(
         (demandTypes as any[]).filter(d => d.operation_type === op).map((d: any) => d.id as string),
       );

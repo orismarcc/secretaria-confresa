@@ -68,7 +68,8 @@ async function bulkInsertWithRetry(
 ): Promise<{ data: { id: string }[] | null; error: { message: string } | null }> {
   let current = [...records];
   for (let attempt = 0; attempt <= 8; attempt++) {
-    const res = await supabase.from(table).insert(current).select('id');
+    // Tabela dinâmica: os tipos gerados não conseguem inferir o formato.
+    const res = await (supabase.from as any)(table).insert(current).select('id');
     if (!res.error) return res as { data: { id: string }[]; error: null };
 
     const missing = extractMissingColumn(res.error.message);
@@ -265,7 +266,7 @@ export default function ImportServicesPage() {
           if (p.phone) insertData.phone = p.phone;
           const { data, error } = await supabase
             .from('producers')
-            .insert(insertData)
+            .insert(insertData as any)
             .select('id')
             .single();
           if (error) throw error;

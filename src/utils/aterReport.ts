@@ -515,7 +515,8 @@ export function generateAterPDF(groups: TechnicianGroup[], year: number): void {
       svc.data,
     ]);
 
-    autoTable(doc, {
+    // <any>: ver nota em 'didAddPage' abaixo.
+    autoTable(doc, <any>{
       startY: tableStartY,
       head: [
         [
@@ -557,7 +558,10 @@ export function generateAterPDF(groups: TechnicianGroup[], year: number): void {
       },
       margin: { left: mL, right: mR, top: 48 },
       // On continuation pages: print a compact technician identifier header
-      didAddPage: (data) => {
+      // ATENÇÃO: 'didAddPage' não existe no jspdf-autotable atual (o certo seria
+      // 'didDrawPage'), então este cabeçalho de continuação hoje NÃO é desenhado.
+      // Mantido como está de propósito até a revisão do relatório ATER.
+      didAddPage: (data: any) => {
         if (data.pageNumber > 1) {
           doc.setFont('helvetica', 'italic');
           doc.setFontSize(8);

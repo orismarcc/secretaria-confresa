@@ -872,7 +872,7 @@ export default function OperatorsPage() {
         <DialogContent>
           <DialogHeader><DialogTitle>Novo Operador</DialogTitle></DialogHeader>
           <OperatorForm
-            onSubmit={handleCreate}
+            onSubmit={(data) => handleCreate(data as Parameters<typeof handleCreate>[0])}
             onCancel={() => setIsFormOpen(false)}
             isLoading={createOperator.isPending || setOperatorDemandTypes.isPending || setOperatorMachinery.isPending || setOperatorSettlements.isPending || setOperatorGlebas.isPending}
             mode="create"
@@ -895,7 +895,7 @@ export default function OperatorsPage() {
             assentamentos selecionados. Os demais cargos têm acesso completo.
           </p>
           <OperatorForm
-            onSubmit={handleCreateInternal}
+            onSubmit={(data) => handleCreateInternal(data as Parameters<typeof handleCreateInternal>[0])}
             onCancel={() => setAssistFormOpen(false)}
             isLoading={createInternalUser.isPending || setOperatorDemandTypes.isPending || setOperatorMachinery.isPending || setOperatorSettlements.isPending || setOperatorGlebas.isPending}
             mode="create"

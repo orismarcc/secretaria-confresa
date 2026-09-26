@@ -1111,7 +1111,8 @@ export default function ServicesPage() {
         {categoryBuckets.map((b) => {
           const style = BUCKET_STYLE[b.styleKey] || BUCKET_STYLE._default;
           const Icon = style.icon;
-          const active = b.isType ? demandTypeFilter === b.id : categoryFilter === b.value;
+          const bValue = (b as { value?: string }).value;
+          const active = b.isType ? demandTypeFilter === b.id : categoryFilter === bValue;
           return (
             <button
               key={b.key}
@@ -1121,7 +1122,7 @@ export default function ServicesPage() {
                   setDemandTypeFilter(active ? 'all' : b.id);
                   setCategoryFilter('all');
                 } else {
-                  setCategoryFilter(active ? 'all' : b.value);
+                  setCategoryFilter(active ? 'all' : (bValue as string));
                   setDemandTypeFilter('all');
                 }
                 setCurrentPage(1);
