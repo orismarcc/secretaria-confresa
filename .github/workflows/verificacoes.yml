@@ -1,0 +1,70 @@
+name: Verificações
+
+# Roda a cada envio de código (qualquer branch) e em pull requests.
+# NÃO publica nada e NÃO toca a produção:
+#   - app: trava de dados pessoais, tipos, testes e build;
+#   - banco: sobe um Supabase TEMPORÁRIO (descartado no fim), aplica TODAS as
+#     migrations do zero e roda os testes de permissões (supabase/tests).
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: verificacoes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: App (tipos, testes, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Trava de dados pessoais no código
+        run: node scripts/verificar-dados-pessoais.mjs
+
+      - name: Tipos (TypeScript)
+        run: |
+          npx tsc --noEmit -p tsconfig.app.json
+          npx tsc --noEmit -p tsconfig.node.json
+
+      - name: Testes
+        run: npx vitest run
+
+      - name: Build
+        run: npm run build
+        env:
+          # Valores fictícios: o build não acessa o banco.
+          VITE_SUPABASE_URL: https://exemplo.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_ficticia
+
+  banco:
+    name: Banco (migrations do zero + permissões)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.108.0
+
+      - name: Subir Supabase temporário e aplicar todas as migrations
+        run: supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,supavisor,realtime,postgres-meta
+
+      - name: Testes de permissões e regras do banco
+        run: supabase test db
+
+      - name: Desligar
+        if: always()
+        run: supabase stop --no-backup
