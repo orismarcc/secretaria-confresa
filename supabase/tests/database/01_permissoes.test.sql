@@ -24,6 +24,9 @@ insert into public.user_roles (user_id, role) values
   ('00000000-0000-0000-0000-0000000000b2', 'operator');
 
 -- ─── Dados fictícios ────────────────────────────────────────────────────────
+-- A estrutura copiada da produção não traz dados: chave de CPF de TESTE.
+insert into private.secrets (name, value) values ('cpf_encryption_key', 'chave-de-teste-ci')
+on conflict (name) do nothing;
 insert into public.settlements (id, name) values ('10000000-0000-0000-0000-000000000001', 'PA Teste');
 insert into public.demand_types (id, name, category) values ('20000000-0000-0000-0000-000000000001', 'Gradagem Teste', 'patrulha_mecanizada');
 insert into public.producers (id, name, cpf, settlement_id, latitude, longitude) values

@@ -49,9 +49,15 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_ficticia
 
   banco:
-    name: Banco (migrations do zero + permissões)
+    name: Banco (estrutura da produção + migrations novas + permissões)
+    # Precisa dos secrets do repositório (não disponíveis em PR de fork).
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      LOCAL_DB: postgresql://postgres:postgres@127.0.0.1:54322/postgres
     steps:
       - uses: actions/checkout@v4
 
@@ -59,8 +65,45 @@ jobs:
         with:
           version: 2.108.0
 
-      - name: Subir Supabase temporário e aplicar todas as migrations
-        run: supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,supavisor,realtime,postgres-meta
+      - name: Vincular ao projeto (somente leitura nesta etapa)
+        run: supabase link --project-ref pqvsdzvmbwbotkfggcxc -p "$DB_PASSWORD"
+
+      # As migrations antigas NÃO recriam o banco do zero (algumas tabelas, ex.
+      # deliveries, nasceram no painel). Por isso o teste parte da ESTRUTURA
+      # real da produção — sem nenhum dado — e aplica só as migrations novas.
+      - name: Copiar SÓ a estrutura da produção (sem dados) e o que já foi aplicado
+        run: |
+          supabase db dump --linked -p "$DB_PASSWORD" -f "$RUNNER_TEMP/estrutura.sql"
+          supabase migration list --linked -p "$DB_PASSWORD" > "$RUNNER_TEMP/lista.txt"
+          # versões que já estão na produção (coluna "Remote")
+          awk -F'|' 'NR>2 { gsub(/ /,"",$2); if ($2 ~ /^[0-9]+$/) print $2 }' "$RUNNER_TEMP/lista.txt" > "$RUNNER_TEMP/remotas.txt"
+          echo "Migrations já na produção: $(wc -l < "$RUNNER_TEMP/remotas.txt")"
+          test -s "$RUNNER_TEMP/estrutura.sql"
+          test -s "$RUNNER_TEMP/remotas.txt"
+
+      - name: Subir Supabase temporário (vazio)
+        run: |
+          mv supabase/migrations "$RUNNER_TEMP/migrations"
+          mkdir supabase/migrations
+          supabase start -x studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor,realtime,postgres-meta
+          rmdir supabase/migrations
+          mv "$RUNNER_TEMP/migrations" supabase/migrations
+
+      - name: Carregar a estrutura da produção
+        run: psql "$LOCAL_DB" -v ON_ERROR_STOP=1 -q -f "$RUNNER_TEMP/estrutura.sql"
+
+      - name: Aplicar SÓ as migrations que ainda não estão na produção
+        run: |
+          n=0
+          for f in $(ls supabase/migrations/*.sql | sort); do
+            v=$(basename "$f" | cut -d_ -f1)
+            if ! grep -qx "$v" "$RUNNER_TEMP/remotas.txt"; then
+              echo "Aplicando (nova): $(basename "$f")"
+              psql "$LOCAL_DB" -v ON_ERROR_STOP=1 -q -f "$f"
+              n=$((n+1))
+            fi
+          done
+          echo "Migrations novas aplicadas: $n"
 
       - name: Testes de permissões e regras do banco
         run: supabase test db
