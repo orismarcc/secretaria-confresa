@@ -114,11 +114,9 @@ export function RotaPanel({ sede, selecionadas, disponiveis, onRemover, onAdicio
         `Partida: ${nomePartida} às ${hhmm(saidaMin)} · ${res.paradas.length} visita(s) · ${visitaMin || 0} min por visita`,
         `Distância total: ${fmtKm(totMetros)} · Tempo dirigindo: ${fmtMin(totDirigindo)} · ${retorno != null ? `Retorno previsto: ${hhmm(retorno)}` : `Término previsto: ${hhmm(t)}`}`,
       ],
-      res.r.fonte === 'google'
-        ? 'Rota e ordem de visitas otimizadas pelo Google (mesma base do Google Maps). Tempos são estimativas; estradas vicinais podem variar com chuva e conservação.'
-        : res.r.fonte === 'estradas'
-          ? 'Ordem de visitas otimizada para o menor tempo total, com tempos pelas estradas do OpenStreetMap (pode divergir do Google Maps em estradas vicinais). Tempos são estimativas.'
-          : 'Ordem calculada por estimativa em linha reta (serviço de rotas indisponível no momento). Tempos aproximados.',
+      res.r.fonte === 'estradas'
+        ? 'Ordem de visitas otimizada para o menor tempo total de deslocamento, com tempos pelas estradas do OpenStreetMap. Tempos são estimativas; estradas vicinais podem variar com chuva e conservação.'
+        : 'Ordem calculada por estimativa em linha reta (serviço de rotas indisponível no momento). Tempos aproximados.',
     );
   };
 
@@ -189,11 +187,6 @@ export function RotaPanel({ sede, selecionadas, disponiveis, onRemover, onAdicio
             <div className="rounded-md bg-muted/50 p-1.5"><p className="font-bold">{fmtMin(totDirigindo + visitaS * res.paradas.length)}</p><p className="text-[10px] text-muted-foreground">com as visitas</p></div>
             <div className="rounded-md bg-muted/50 p-1.5"><p className="font-bold">{hhmm(retorno ?? t)}</p><p className="text-[10px] text-muted-foreground">{retorno != null ? 'retorno previsto' : 'término previsto'}</p></div>
           </div>
-          <p className="text-[11px] text-muted-foreground">
-            {res.r.fonte === 'google' ? 'Rota do Google — mesma base do Google Maps.'
-              : res.r.fonte === 'estradas' ? 'Rota pelo OpenStreetMap — em estradas vicinais pode divergir do Google Maps.'
-              : null}
-          </p>
           {res.r.fonte === 'estimativa' && (
             <p className="text-[11px] text-amber-700 dark:text-amber-400 flex gap-1"><AlertTriangle className="h-3.5 w-3.5 shrink-0" /> Serviço de rotas indisponível: ordem e tempos estimados em linha reta.</p>
           )}

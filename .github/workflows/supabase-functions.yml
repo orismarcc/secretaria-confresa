@@ -31,6 +31,4 @@ jobs:
       - name: Deploy functions
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: |
-          supabase functions deploy manage-users --project-ref pqvsdzvmbwbotkfggcxc
-          supabase functions deploy rota-google --project-ref pqvsdzvmbwbotkfggcxc
+        run: supabase functions deploy manage-users --project-ref pqvsdzvmbwbotkfggcxc
