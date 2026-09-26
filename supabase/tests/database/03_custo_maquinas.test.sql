@@ -1,7 +1,7 @@
 -- Custo por hora-máquina: conta conferida com valores conhecidos (fictícios).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(10);
+select plan(13);
 
 insert into private.secrets (name, value) values ('cpf_encryption_key', 'chave-de-teste-ci') on conflict (name) do nothing;
 insert into public.settlements (id, name) values ('80000000-0000-0000-0000-000000000001', 'PA Custo Teste');
@@ -38,6 +38,16 @@ select is((select custo_manutencao from r), 400.00, 'manutenção = R$ 400');
 select is((select manutencoes_sem_custo from r), 1, 'manutenção sem custo é sinalizada');
 select is((select custo_hora from r), 100.00, 'custo/hora = (600 + 400) / 10 h');
 select is((select litros_hora from r), 12.00, 'consumo = 120 L / 10 h');
+
+-- Máquina com horas mas SEM nenhum custo lançado: custo/hora fica vazio (não R$ 0).
+insert into public.machinery (id, name, patrimony_number) values ('80000000-0000-0000-0000-000000000020', 'Trator Sem Custo', 'PAT-TESTE-SEMCUSTO');
+insert into public.services (producer_id, demand_type_id, settlement_id, scheduled_date, status, completed_at, machinery_id, worked_hours, fuel_liters) values
+  ('80000000-0000-0000-0000-000000000003', '80000000-0000-0000-0000-000000000002', '80000000-0000-0000-0000-000000000001', '2026-09-10', 'completed', '2026-09-10 15:00-04', '80000000-0000-0000-0000-000000000020', 5, 40);
+create temp table r2 as select * from public.custo_maquinas('2026-09-01', '2026-09-30')
+  where machinery_id = '80000000-0000-0000-0000-000000000020';
+select is((select custo_hora from r2), null::numeric, 'sem custo lançado: custo/hora vazio (não R$ 0,00)');
+select is((select litros_atendimentos from r2), 40.00, 'litros lançados nos atendimentos aparecem à parte');
+select is((select custo_total from r2), 0.00, 'litros dos atendimentos NÃO entram no custo');
 
 select * from finish();
 rollback;
