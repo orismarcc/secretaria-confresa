@@ -83,6 +83,8 @@ try {
 
   await po.getByText(PRODUTOR).first().waitFor({ timeout: 30000 }).catch(() => {});
   ok(await po.getByText(PRODUTOR).first().isVisible(), 'operador vê o atendimento pendente');
+  ok(await po.getByText('Produtor Fora E2E').first().isVisible().catch(() => false),
+    'operador vê atendimento ATRIBUÍDO a ele fora dos assentamentos do cadastro');
 
   await po.getByRole('button', { name: 'Iniciar' }).first().click();
   await po.getByRole('button', { name: 'Finalizar' }).first().waitFor({ timeout: 30000 });

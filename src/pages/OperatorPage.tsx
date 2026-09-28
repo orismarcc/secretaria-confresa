@@ -426,27 +426,28 @@ export default function OperatorPage() {
   // atendimento passa para quem executou — regra espelhada no banco
   // (operator_shares_service). Respeita restrições por tipo de serviço,
   // assentamento e gleba (lista vazia = sem restrição naquela dimensão).
+  //
+  // Atendimento ATRIBUÍDO a este operador (operator_id = ele) aparece SEMPRE,
+  // mesmo fora dos assentamentos/tipos/glebas do cadastro em Colaboradores —
+  // atribuir é decisão explícita da equipe. As restrições valem só para os
+  // atendimentos de colegas.
   const visibleServices = useMemo(() => {
     const mySettlements = new Set(allowedSettlementIds as string[]);
-    let mine = (pendingServicesRaw as DbService[]).filter((s) =>
-      s.operator_id === user?.id ||
-      (!!s.operator_id && !!s.settlement_id && mySettlements.has(s.settlement_id)));
-    if (allowedDemandTypeIds.length > 0) {
-      const allowedDt = new Set(allowedDemandTypeIds);
-      mine = mine.filter((s) => allowedDt.has(s.demand_type_id));
-    }
-    if (allowedSettlementIds.length > 0) {
-      const allowedSt = new Set(allowedSettlementIds);
-      mine = mine.filter((s) => !s.settlement_id || allowedSt.has(s.settlement_id));
-    }
-    if (glebaRestriction.restrictedSettlements.size > 0) {
-      mine = mine.filter((s) => {
-        if (!s.settlement_id || !glebaRestriction.restrictedSettlements.has(s.settlement_id)) return true;
+    const allowedDt = new Set(allowedDemandTypeIds);
+    const allowedSt = new Set(allowedSettlementIds);
+    const passaRestricoes = (s: DbService) => {
+      if (allowedDt.size > 0 && !allowedDt.has(s.demand_type_id)) return false;
+      if (allowedSt.size > 0 && s.settlement_id && !allowedSt.has(s.settlement_id)) return false;
+      if (glebaRestriction.restrictedSettlements.size > 0 && s.settlement_id
+          && glebaRestriction.restrictedSettlements.has(s.settlement_id)) {
         const gid = (s.producers as any)?.gleba_id;
-        return gid && glebaRestriction.allowedGleba.has(gid);
-      });
-    }
-    return mine;
+        if (!gid || !glebaRestriction.allowedGleba.has(gid)) return false;
+      }
+      return true;
+    };
+    return (pendingServicesRaw as DbService[]).filter((s) =>
+      s.operator_id === user?.id ||
+      (!!s.operator_id && !!s.settlement_id && mySettlements.has(s.settlement_id) && passaRestricoes(s)));
   }, [pendingServicesRaw, allowedDemandTypeIds, allowedSettlementIds, glebaRestriction, user?.id]);
 
   // Ações ainda não sincronizadas (fila local). Sobrepostas à lista para que,

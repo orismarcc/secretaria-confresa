@@ -21,3 +21,12 @@ insert into public.producers (id, name, cpf, settlement_id, latitude, longitude)
 insert into public.services (id, producer_id, demand_type_id, settlement_id, scheduled_date, status, operator_id) values
   ('e2e00000-0000-0000-0000-000000000004', 'e2e00000-0000-0000-0000-000000000003', 'e2e00000-0000-0000-0000-000000000002',
    'e2e00000-0000-0000-0000-000000000001', current_date, 'pending', :'op_id');
+
+-- Atendimento ATRIBUÍDO ao operador num assentamento FORA do cadastro dele
+-- (caso real de 28/09): precisa aparecer na tela do operador.
+insert into public.settlements (id, name) values ('e2e00000-0000-0000-0000-000000000011', 'PA Fora E2E');
+insert into public.producers (id, name, cpf, settlement_id) values
+  ('e2e00000-0000-0000-0000-000000000013', 'Produtor Fora E2E', '11144477735', 'e2e00000-0000-0000-0000-000000000011');
+insert into public.services (id, producer_id, demand_type_id, settlement_id, scheduled_date, status, operator_id) values
+  ('e2e00000-0000-0000-0000-000000000014', 'e2e00000-0000-0000-0000-000000000013', 'e2e00000-0000-0000-0000-000000000002',
+   'e2e00000-0000-0000-0000-000000000011', current_date, 'pending', :'op_id');
