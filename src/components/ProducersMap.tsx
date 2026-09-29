@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { adicionarLimitesMunicipio } from '@/lib/mapa/limitesMunicipio';
 import { MapPinOff, Route, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { RotaPanel, MAX_PARADAS, type Parada, type RotaDesenho } from '@/components/rota/RotaPanel';
@@ -150,10 +151,11 @@ export default function ProducersMap({ producers, settlements, onOpenProducer }:
       maxZoom: 18,
       attribution: '&copy; colaboradores do OpenStreetMap',
     }).addTo(map);
+    const tirarLimites = adicionarLimitesMunicipio(map); // limite IBGE, por baixo dos pontos
     layerRef.current = L.layerGroup().addTo(map);
     rotaLayerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
-    return () => { map.remove(); mapRef.current = null; layerRef.current = null; rotaLayerRef.current = null; };
+    return () => { tirarLimites(); map.remove(); mapRef.current = null; layerRef.current = null; rotaLayerRef.current = null; };
   }, []);
 
   // Atualiza os pontos.

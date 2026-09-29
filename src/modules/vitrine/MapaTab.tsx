@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { adicionarLimitesMunicipio } from '@/lib/mapa/limitesMunicipio';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MapPinOff } from 'lucide-react';
@@ -84,9 +85,10 @@ export function MapaTab({ onOpenFornecedor }: { onOpenFornecedor: (id: string) =
       maxZoom: 18,
       attribution: '&copy; colaboradores do OpenStreetMap',
     }).addTo(map);
+    const tirarLimites = adicionarLimitesMunicipio(map); // limite IBGE, por baixo dos pontos
     layerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
-    return () => { map.remove(); mapRef.current = null; layerRef.current = null; };
+    return () => { tirarLimites(); map.remove(); mapRef.current = null; layerRef.current = null; };
   }, []);
 
   // Atualiza os pontos.

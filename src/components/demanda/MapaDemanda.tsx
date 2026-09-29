@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { adicionarLimitesMunicipio } from '@/lib/mapa/limitesMunicipio';
 import { format, startOfYear } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
@@ -63,6 +64,7 @@ export default function MapaDemanda() {
     if (!divRef.current || mapRef.current) return;
     const map = L.map(divRef.current).setView([SEDE.lat, SEDE.lng], 9);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; colaboradores do OpenStreetMap' }).addTo(map);
+    const tirarLimites = adicionarLimitesMunicipio(map); // limite IBGE, por baixo dos pontos
     camadaRef.current = L.layerGroup().addTo(map);
     // Modo "marcar posição": o próximo clique define o centro do assentamento.
     map.on('click', (e: L.LeafletMouseEvent) => {
@@ -75,7 +77,7 @@ export default function MapaDemanda() {
     // A seção abre com animação: mede de novo o tamanho depois de montar.
     const t1 = setTimeout(() => map.invalidateSize(), 120);
     const t2 = setTimeout(() => map.invalidateSize(), 500);
-    return () => { clearTimeout(t1); clearTimeout(t2); map.remove(); mapRef.current = null; camadaRef.current = null; };
+    return () => { clearTimeout(t1); clearTimeout(t2); tirarLimites(); map.remove(); mapRef.current = null; camadaRef.current = null; };
   }, []);
 
   useEffect(() => {

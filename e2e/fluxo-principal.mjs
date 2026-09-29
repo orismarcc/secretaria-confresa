@@ -51,6 +51,8 @@ try {
   await marcar.click().catch(() => {});
   await pa.waitForTimeout(700);
   const mapa = pa.locator('.leaflet-container').first();
+  await pa.locator('.leaflet-limites-municipio-pane path').first().waitFor({ state: 'attached', timeout: 15000 }).catch(() => {});
+  ok((await pa.locator('.leaflet-limites-municipio-pane path').count()) >= 1, 'Mapa da demanda: limite do município (IBGE) desenhado');
   await mapa.scrollIntoViewIfNeeded();
   const box = await mapa.boundingBox();
   if (box) await mapa.click({ position: { x: box.width / 2, y: box.height / 2 } });
