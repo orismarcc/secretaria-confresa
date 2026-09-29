@@ -20,6 +20,11 @@ export interface OperatorAction {
   startBlobKey?: string;       // no finalizar: foto de INÍCIO do serviço (opcional)
   latitude: number | null;
   longitude: number | null;
+  /** Precisão da leitura em metros (quando conhecida). */
+  accuracy?: number | null;
+  /** Finalizar: grava a leitura também no atendimento (o Iniciar ficou sem
+   *  localização precisa — nova leitura feita ao finalizar). */
+  setServiceCoords?: boolean;
   capturedAt: string;          // ISO — momento real da ação
 }
 
@@ -31,6 +36,8 @@ export interface EnqueueInput {
   startPhotoBlob?: Blob | null;    // finish: foto de início (opcional)
   latitude?: number | null;
   longitude?: number | null;
+  accuracy?: number | null;
+  setServiceCoords?: boolean;
 }
 
 export async function enqueueOperatorAction(input: EnqueueInput): Promise<OperatorAction> {
@@ -57,6 +64,8 @@ export async function enqueueOperatorAction(input: EnqueueInput): Promise<Operat
     startBlobKey,
     latitude: input.latitude ?? null,
     longitude: input.longitude ?? null,
+    accuracy: input.accuracy ?? null,
+    setServiceCoords: input.setServiceCoords ?? false,
     capturedAt: new Date().toISOString(),
   };
   await set(id, action, actionStore);

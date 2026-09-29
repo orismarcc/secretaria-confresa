@@ -22,6 +22,10 @@ async function entrar(page, email) {
   await page.waitForURL((u) => !u.pathname.startsWith('/login'), { timeout: 30000 });
 }
 
+// Cartão (card) do atendimento de um produtor na tela do operador.
+const cartao = (page, nome) => page.locator('.rounded-lg, [class*="card"]').filter({ hasText: nome })
+  .filter({ has: page.getByRole('button') }).last();
+
 const browser = await chromium.launch();
 try {
   // ─── Administrador ───────────────────────────────────────────────────────
@@ -86,11 +90,11 @@ try {
   ok(await po.getByText('Produtor Fora E2E').first().isVisible().catch(() => false),
     'operador vê atendimento ATRIBUÍDO a ele fora dos assentamentos do cadastro');
 
-  await po.getByRole('button', { name: 'Iniciar' }).first().click();
-  await po.getByRole('button', { name: 'Finalizar' }).first().waitFor({ timeout: 30000 });
+  await cartao(po, PRODUTOR).getByRole('button', { name: 'Iniciar' }).click();
+  await cartao(po, PRODUTOR).getByRole('button', { name: 'Finalizar' }).waitFor({ timeout: 30000 });
   ok(true, 'operador iniciou (botão Finalizar liberado)');
 
-  await po.getByRole('button', { name: 'Finalizar' }).first().click();
+  await cartao(po, PRODUTOR).getByRole('button', { name: 'Finalizar' }).click();
   const dialogo = po.getByRole('dialog');
   await dialogo.getByText('Finalizar Atendimento').waitFor({ timeout: 15000 });
   await dialogo.getByRole('button', { name: 'Finalizar' }).click();
@@ -98,6 +102,25 @@ try {
   await po.getByText(PRODUTOR).first().waitFor({ state: 'hidden', timeout: 30000 }).catch(() => {});
   await po.waitForTimeout(3000);
   ok(!(await po.getByText(PRODUTOR).first().isVisible().catch(() => false)), 'operador finalizou (saiu dos pendentes)');
+
+  // ─── CASO REAL 29/09: GPS impreciso (Rio Branco-AC) ao iniciar ────────────
+  const FORA = 'Produtor Fora E2E';
+  await opc.setGeolocation({ latitude: -9.9756602, longitude: -67.2104895, accuracy: 25000 });
+  const t0 = Date.now();
+  await cartao(po, FORA).getByRole('button', { name: 'Iniciar' }).click();
+  await cartao(po, FORA).getByRole('button', { name: 'Finalizar' }).waitFor({ timeout: 30000 });
+  const segs = (Date.now() - t0) / 1000;
+  console.log(`  iniciar com GPS ruim levou ${segs.toFixed(1)} s`);
+  ok(segs <= 14, 'GPS impreciso: iniciar não trava o operador (espera curta)');
+  // Agora o GPS responde bem: ao finalizar, nova leitura vai para o atendimento
+  await opc.setGeolocation({ latitude: -10.62, longitude: -51.62, accuracy: 15 });
+  await cartao(po, FORA).getByRole('button', { name: 'Finalizar' }).click();
+  const dlg2 = po.getByRole('dialog');
+  await dlg2.getByText('Finalizar Atendimento').waitFor({ timeout: 15000 });
+  await dlg2.getByRole('button', { name: 'Finalizar' }).click();
+  await po.getByText(FORA).first().waitFor({ state: 'hidden', timeout: 30000 }).catch(() => {});
+  await po.waitForTimeout(3000);
+  ok(!(await po.getByText(FORA).first().isVisible().catch(() => false)), 'GPS impreciso: finalizou normalmente');
   await opc.close();
 } catch (e) {
   falhas++;

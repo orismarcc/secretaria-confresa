@@ -161,6 +161,16 @@ jobs:
           echo "localização do produtor: $loc"; test "$loc" = "-10.61,-51.61"
           pos=$(psql "$LOCAL_DB" -Atc "select count(*) from public.settlements where id = 'e2e00000-0000-0000-0000-000000000001' and latitude is not null and longitude is not null")
           echo "assentamento posicionado pelo mapa: $pos"; test "$pos" = "1"
+          # Caso Rio Branco: início SEM coordenada (leitura imprecisa descartada);
+          # a nova leitura do FINALIZAR foi para o atendimento e para o produtor.
+          ini=$(psql "$LOCAL_DB" -Atc "select count(*) from public.service_photos where service_id = 'e2e00000-0000-0000-0000-000000000014' and event_type = 'start' and latitude is not null")
+          echo "leituras de início gravadas (deve ser 0): $ini"; test "$ini" = "0"
+          fs=$(psql "$LOCAL_DB" -Atc "select status || ' ' || latitude::float || ',' || longitude::float from public.services where id = 'e2e00000-0000-0000-0000-000000000014'")
+          echo "atendimento com GPS do finalizar: $fs"; test "$fs" = "completed -10.62,-51.62"
+          fp=$(psql "$LOCAL_DB" -Atc "select latitude::float || ',' || longitude::float from public.producers where id = 'e2e00000-0000-0000-0000-000000000013'")
+          echo "produtor recebeu o GPS do finalizar: $fp"; test "$fp" = "-10.62,-51.62"
+          acc=$(psql "$LOCAL_DB" -Atc "select count(*) from public.service_photos where service_id = 'e2e00000-0000-0000-0000-000000000014' and event_type = 'finish' and accuracy_m is not null")
+          echo "precisão registrada no finalizar: $acc"; test "$acc" = "1"
 
       - name: Desligar
         if: always()

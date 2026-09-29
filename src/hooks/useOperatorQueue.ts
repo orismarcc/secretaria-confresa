@@ -30,9 +30,10 @@ async function pushAction(action: OperatorAction): Promise<void> {
         storage_path: null,
         latitude: action.latitude,
         longitude: action.longitude,
+        ...(action.accuracy != null ? { accuracy_m: action.accuracy } : {}),
         captured_at: action.capturedAt,
         event_type: 'start',
-      });
+      } as any);
       if (pErr) throw pErr;
     }
     const { error: sErr } = await supabase.from('services').update({
@@ -56,9 +57,10 @@ async function pushAction(action: OperatorAction): Promise<void> {
       storage_path: loadPath,
       latitude: action.latitude,
       longitude: action.longitude,
+      ...(action.accuracy != null ? { accuracy_m: action.accuracy } : {}),
       captured_at: action.capturedAt,
       event_type: 'loading',
-    }, { onConflict: 'id', ignoreDuplicates: true });
+    } as any, { onConflict: 'id', ignoreDuplicates: true });
     if (pErr) throw pErr;
     const { error: sErr } = await supabase.from('services')
       // loaded_at ainda não está nos tipos gerados do Supabase (desatualizados).
@@ -74,7 +76,7 @@ async function pushAction(action: OperatorAction): Promise<void> {
   const finishPath = await uploadPhoto(action.serviceId, action.blobKey, 'finish');
   const startPath = await uploadPhoto(action.serviceId, action.startBlobKey, 'start');
   const finishGps = action.latitude != null
-    ? { latitude: action.latitude, longitude: action.longitude }
+    ? { latitude: action.latitude, longitude: action.longitude, ...(action.accuracy != null ? { accuracy_m: action.accuracy } : {}) }
     : {};
 
   const rows: any[] = [];
@@ -91,13 +93,19 @@ async function pushAction(action: OperatorAction): Promise<void> {
     if (pErr) throw pErr;
   }
 
-  // NÃO sobrescreve latitude/longitude — foram gravadas ao Iniciar.
+  // Em regra NÃO sobrescreve latitude/longitude — foram gravadas ao Iniciar.
+  // Exceção: o Iniciar ficou sem localização precisa → a leitura feita agora,
+  // ao finalizar, vai para o atendimento (e daí para o cadastro da propriedade).
   // Quem finaliza passa a ser o operador do atendimento (operadores que dividem
   // o assentamento podem concluir o serviço iniciado/cadastrado pelo colega).
+  const coordsDoFinal = action.setServiceCoords && action.latitude != null && action.longitude != null
+    ? { latitude: action.latitude, longitude: action.longitude }
+    : {};
   const { error: sErr } = await supabase.from('services').update({
     status: 'completed',
     completed_at: action.capturedAt,
     sync_status: 'synced',
+    ...coordsDoFinal,
     ...(action.operatorId ? { operator_id: action.operatorId } : {}),
   }).eq('id', action.serviceId);
   if (sErr) throw sErr;

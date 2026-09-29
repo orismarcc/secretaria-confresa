@@ -15,6 +15,7 @@ import { isLogisticsCategory } from '@/lib/logistica';
 import { OperatorCompletedList } from '@/components/OperatorCompletedList';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useGeolocation } from '@/hooks/useGeolocation';
+import { lerPosicaoPrecisa, dentroDaRegiao, type LeituraGps } from '@/lib/gpsPreciso';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -477,7 +478,6 @@ export default function OperatorPage() {
   const isOnline = useOnlineStatus();
 
   // Iniciar: captura só GPS (sem modal). Finalizar: modal com duas fotos.
-  const { getCurrentPosition } = useGeolocation();
   const [startingId, setStartingId] = useState<string | null>(null);
   const [finalize, setFinalize] = useState<{ open: boolean; service: DbService | null }>({
     open: false, service: null,
@@ -565,13 +565,14 @@ export default function OperatorPage() {
   const sharedFromOf = (service: DbService) =>
     service.operator_id && service.operator_id !== user?.id ? (service.profiles?.name || 'outro operador') : null;
 
-  // Iniciar: tenta captar o GPS automaticamente (não trava se falhar) e enfileira
-  // a ação de início. Sem foto. O GPS captado alimenta o mapa "em execução".
+  // Iniciar: capta o GPS (só leitura PRECISA e na região; no máximo 8 s — segue
+  // na hora quando o GPS responde bem). Sem leitura boa, inicia SEM localização
+  // e o Finalizar faz nova leitura. Sem foto. Alimenta o mapa "em execução".
   const handleStart = async (service: DbService) => {
     if (startingId) return;
     setStartingId(service.id);
-    let coords: { latitude: number; longitude: number } | null = null;
-    try { coords = await getCurrentPosition(); } catch { /* sem GPS: inicia mesmo assim */ }
+    const leitura: LeituraGps | null = await lerPosicaoPrecisa();
+    const coords = leitura ? { latitude: leitura.latitude, longitude: leitura.longitude } : null;
 
     await enqueueOperatorAction({
       serviceId: service.id,
@@ -579,6 +580,7 @@ export default function OperatorPage() {
       type: 'start',
       latitude: coords?.latitude ?? null,
       longitude: coords?.longitude ?? null,
+      accuracy: leitura?.precisaoM ?? null,
     });
 
     queryClient.setQueryData<DbService[]>(['services', 'pending'], (old = []) =>
@@ -596,7 +598,7 @@ export default function OperatorPage() {
     toast({
       title: 'Atendimento iniciado',
       description: !coords
-        ? 'Iniciado sem localização (GPS indisponível).'
+        ? 'Iniciado sem localização precisa — ela será registrada ao finalizar.'
         : (isOnline ? undefined : 'Salvo no aparelho — sincroniza quando o sinal voltar.'),
     });
 
@@ -605,9 +607,19 @@ export default function OperatorPage() {
   };
 
   // Finalizar: recebe as duas fotos (opcionais) do modal, enfileira e sincroniza.
+  // Se o Iniciar ficou sem localização precisa (ou com ponto fora da região),
+  // faz NOVA leitura agora — o operador está na propriedade e o GPS já aqueceu.
   const handleFinalizeConfirm = async (data: { startPhotoBlob: Blob | null; finishPhotoBlob: Blob | null }) => {
     const service = finalize.service;
     if (!service) return;
+
+    const temLocalBoa = service.latitude != null && service.longitude != null
+      && dentroDaRegiao(Number(service.latitude), Number(service.longitude));
+    let leitura: LeituraGps | null = null;
+    if (!temLocalBoa) {
+      setBusy({ id: service.id, label: 'Obtendo localização…' });
+      try { leitura = await lerPosicaoPrecisa(); } finally { setBusy(null); }
+    }
 
     await enqueueOperatorAction({
       serviceId: service.id,
@@ -615,8 +627,10 @@ export default function OperatorPage() {
       type: 'finish',
       photoBlob: data.finishPhotoBlob,
       startPhotoBlob: data.startPhotoBlob,
-      latitude: null,
-      longitude: null,
+      latitude: leitura?.latitude ?? null,
+      longitude: leitura?.longitude ?? null,
+      accuracy: leitura?.precisaoM ?? null,
+      setServiceCoords: !!leitura,
     });
 
     queryClient.setQueryData<DbService[]>(['services', 'pending'], (old = []) =>
@@ -639,8 +653,8 @@ export default function OperatorPage() {
     const { mode, service } = photoStep;
     if (!service) return;
     setBusy({ id: service.id, label: 'Obtendo localização…' });
-    let coords: { latitude: number; longitude: number } | null = null;
-    try { coords = await getCurrentPosition(); } catch { /* sem GPS: registra mesmo assim */ }
+    const leitura: LeituraGps | null = await lerPosicaoPrecisa();
+    const coords = leitura ? { latitude: leitura.latitude, longitude: leitura.longitude } : null;
 
     try {
       await enqueueOperatorAction({
@@ -650,6 +664,7 @@ export default function OperatorPage() {
         photoBlob: photo,
         latitude: coords?.latitude ?? null,
         longitude: coords?.longitude ?? null,
+        accuracy: leitura?.precisaoM ?? null,
       });
     } finally {
       setBusy(null);
