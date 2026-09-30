@@ -71,8 +71,12 @@ try {
   ok((await dlgS.locator('#s-type option', { hasText: 'Boleto GTA' }).count()) === 1, 'SEFAZ: tipo "Boleto GTA" disponível');
   await dlgS.locator('#s-type').selectOption('Boleto GTA');
   await dlgS.getByRole('button', { name: 'Registrar' }).click();
-  await pa.waitForTimeout(1500);
-  await pa.keyboard.press('Escape');
+  await dlgS.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => {});
+  // fecha a ficha do produtor (enquanto aberta, a página ao fundo fica inacessível)
+  for (let i = 0; i < 3 && (await pa.getByRole('dialog').count()) > 0; i++) {
+    await pa.keyboard.press('Escape');
+    await pa.waitForTimeout(600);
+  }
   await pa.getByRole('tab', { name: 'Atendimentos' }).click();
   const mesAtual = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'America/Cuiaba' });
   const rotuloMes = mesAtual.charAt(0).toUpperCase() + mesAtual.slice(1);
