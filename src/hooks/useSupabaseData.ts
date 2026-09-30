@@ -2684,3 +2684,96 @@ export function useTransparencia(ano: number) {
     },
   });
 }
+
+// ============= SEFAZ: COMPROVANTES MENSAIS (folhas assinadas) =============
+export interface SefazComprovante {
+  id: string; mes: string; file_path: string; file_name: string;
+  mime_type: string; size_bytes: number | null; created_at: string;
+}
+const BUCKET_SEFAZ = 'sefaz-comprovantes';
+const TIPOS_COMPROVANTE = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+export const LIMITE_COMPROVANTE_MB = 10;
+
+export function useSefazComprovantes() {
+  return useQuery({
+    queryKey: ['sefaz_comprovantes'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from('sefaz_comprovantes')
+        .select('id, mes, file_path, file_name, mime_type, size_bytes, created_at')
+        .order('mes', { ascending: false }).order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as SefazComprovante[];
+    },
+  });
+}
+
+/** Envia um ou mais arquivos (imagem/PDF) para o mês (yyyy-MM). */
+export function useUploadSefazComprovantes() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ mes, arquivos }: { mes: string; arquivos: File[] }) => {
+      let enviados = 0;
+      for (const f of arquivos) {
+        if (!TIPOS_COMPROVANTE.includes(f.type)) throw new Error(`"${f.name}": envie imagem (JPG/PNG/WEBP) ou PDF.`);
+        if (f.size > LIMITE_COMPROVANTE_MB * 1024 * 1024) throw new Error(`"${f.name}" tem mais de ${LIMITE_COMPROVANTE_MB} MB.`);
+        const ext = f.type === 'application/pdf' ? 'pdf' : f.type.split('/')[1].replace('jpeg', 'jpg');
+        const path = `${mes}/${crypto.randomUUID()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from(BUCKET_SEFAZ).upload(path, f, { contentType: f.type, upsert: false });
+        if (upErr) throw upErr;
+        const { error: dbErr } = await (supabase as any).from('sefaz_comprovantes').insert({
+          mes: `${mes}-01`, file_path: path, file_name: f.name.slice(0, 200), mime_type: f.type, size_bytes: f.size,
+        });
+        if (dbErr) {
+          await supabase.storage.from(BUCKET_SEFAZ).remove([path]); // não deixa arquivo órfão
+          throw dbErr;
+        }
+        enviados++;
+      }
+      return enviados;
+    },
+    onSuccess: (n) => {
+      queryClient.invalidateQueries({ queryKey: ['sefaz_comprovantes'] });
+      toast({ title: `${n} comprovante(s) anexado(s)` });
+    },
+    onError: (error: Error) => {
+      queryClient.invalidateQueries({ queryKey: ['sefaz_comprovantes'] });
+      toast({ title: 'Erro ao anexar comprovante', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
+export function useDeleteSefazComprovante() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (c: SefazComprovante) => {
+      const { error } = await (supabase as any).from('sefaz_comprovantes').delete().eq('id', c.id);
+      if (error) throw error;
+      await supabase.storage.from(BUCKET_SEFAZ).remove([c.file_path]);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sefaz_comprovantes'] });
+      toast({ title: 'Comprovante removido' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao remover comprovante', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
+/**
+ * Abre o comprovante numa nova aba com link temporário (10 min). A aba é aberta
+ * JÁ no clique (antes da espera) para o navegador não bloquear.
+ */
+export async function abrirSefazComprovante(c: SefazComprovante) {
+  const aba = window.open('about:blank', '_blank');
+  try {
+    const { data, error } = await supabase.storage.from(BUCKET_SEFAZ).createSignedUrl(c.file_path, 600);
+    if (error || !data?.signedUrl) throw error ?? new Error('Não foi possível abrir o arquivo.');
+    if (aba) { aba.opener = null; aba.location.href = data.signedUrl; } else window.location.href = data.signedUrl;
+  } catch (e) {
+    aba?.close();
+    throw e;
+  }
+}

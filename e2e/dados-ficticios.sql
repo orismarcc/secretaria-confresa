@@ -30,3 +30,6 @@ insert into public.producers (id, name, cpf, settlement_id) values
 insert into public.services (id, producer_id, demand_type_id, settlement_id, scheduled_date, status, operator_id) values
   ('e2e00000-0000-0000-0000-000000000014', 'e2e00000-0000-0000-0000-000000000013', 'e2e00000-0000-0000-0000-000000000002',
    'e2e00000-0000-0000-0000-000000000011', current_date, 'pending', :'op_id');
+
+-- SEFAZ: produtor fictício (o atendimento Boleto GTA é lançado pela tela no e2e).
+insert into public.sefaz_producers (id, name) values ('e2e00000-0000-0000-0000-000000000021', 'PRODUTOR SEFAZ E2E');

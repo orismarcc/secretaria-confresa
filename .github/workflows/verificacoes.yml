@@ -171,6 +171,10 @@ jobs:
           echo "produtor recebeu o GPS do finalizar: $fp"; test "$fp" = "-10.62,-51.62"
           acc=$(psql "$LOCAL_DB" -Atc "select count(*) from public.service_photos where service_id = 'e2e00000-0000-0000-0000-000000000014' and event_type = 'finish' and accuracy_m is not null")
           echo "precisão registrada no finalizar: $acc"; test "$acc" = "1"
+          gta=$(psql "$LOCAL_DB" -Atc "select count(*) from public.sefaz_services where sefaz_producer_id = 'e2e00000-0000-0000-0000-000000000021' and service_type = 'Boleto GTA' and signed_list")
+          echo "SEFAZ Boleto GTA lançado e assinado: $gta"; test "$gta" = "1"
+          cmp=$(psql "$LOCAL_DB" -Atc "select count(*) from public.sefaz_comprovantes c join storage.objects o on o.bucket_id = 'sefaz-comprovantes' and o.name = c.file_path")
+          echo "SEFAZ comprovante no banco E no armazenamento: $cmp"; test "$cmp" = "1"
 
       - name: Desligar
         if: always()

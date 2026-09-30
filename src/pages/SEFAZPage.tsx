@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -20,9 +19,10 @@ import {
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import {
   Plus, Pencil, Trash2, User, Phone, MapPin, FileText,
-  ClipboardList, CheckSquare, Square, CalendarDays, BarChart3,
-  Users, TrendingUp,
+  ClipboardList, Square, CalendarDays, BarChart3,
+  Users, TrendingUp, ChevronLeft, ChevronRight, Paperclip, Receipt,
 } from 'lucide-react';
+import { SefazAtendimentosTab } from '@/components/sefaz/SefazAtendimentosTab';
 import { format, startOfMonth, subMonths, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -42,11 +42,12 @@ import {
 import {
   useSefazProducers, useCreateSefazProducer, useUpdateSefazProducer, useDeleteSefazProducer,
   useSefazServices, useCreateSefazService, useUpdateSefazService, useDeleteSefazService,
-  useSettlements,
+  useSettlements, useSefazComprovantes,
 } from '@/hooks/useSupabaseData';
 
 const SERVICE_TYPES = [
   'Nota Fiscal',
+  'Boleto GTA',
   'Declaração de Posse',
   'Outros',
 ] as const;
@@ -90,7 +91,10 @@ export default function SEFAZPage() {
   const updateService = useUpdateSefazService();
   const deleteService = useDeleteSefazService();
 
-  const [mainTab, setMainTab] = useState<'producers' | 'analytics'>('producers');
+  const [mainTab, setMainTab] = useState<'producers' | 'atendimentos' | 'analytics'>('producers');
+  // Paginação da lista de produtores (a lista inteira ficava "infinita").
+  const POR_PAGINA = 20;
+  const [pagina, setPagina] = useState(1);
   const [search, setSearch] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
 
@@ -119,7 +123,6 @@ export default function SEFAZPage() {
   const [toDeleteService, setToDeleteService] = useState<any | null>(null);
   const [sType, setSType] = useState<ServiceType>('Nota Fiscal');
   const [sDate, setSDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [sSigned, setSSigned] = useState(false);
   const [sNotes, setSNotes] = useState('');
 
   // services for current sheet producer
@@ -135,6 +138,10 @@ export default function SEFAZPage() {
       normalizeText(settlements.find((s: any) => s.id === p.settlement_id)?.name).includes(q)
     );
   }, [producers, search, settlements]);
+
+  const totalPaginas = Math.max(1, Math.ceil(filteredProducers.length / POR_PAGINA));
+  const paginaAtual = Math.min(pagina, totalPaginas);
+  const { data: comprovantes = [] } = useSefazComprovantes();
 
   // Services for selected month (analytics tab)
   const monthlyServices = useMemo(() => {
@@ -216,14 +223,13 @@ export default function SEFAZPage() {
   // Service form
   const openCreateService = () => {
     setEditingService(null);
-    setSType('Nota Fiscal'); setSDate(format(new Date(), 'yyyy-MM-dd')); setSSigned(false); setSNotes('');
+    setSType('Nota Fiscal'); setSDate(format(new Date(), 'yyyy-MM-dd')); setSNotes('');
     setServiceFormOpen(true);
   };
   const openEditService = (s: any) => {
     setEditingService(s);
     setSType(s.service_type as ServiceType);
     setSDate(s.service_date || format(new Date(), 'yyyy-MM-dd'));
-    setSSigned(s.signed_list || false);
     setSNotes(s.notes || '');
     setServiceFormOpen(true);
   };
@@ -235,7 +241,9 @@ export default function SEFAZPage() {
       sefaz_producer_id: sheetProducer.id,
       service_type: sType,
       service_date: sDate,
-      signed_list: sSigned,
+      // Todo atendimento lançado é de quem assinou a lista. Ao editar um
+      // registro antigo, o valor que ele já tinha é mantido.
+      signed_list: editingService ? (editingService.signed_list ?? true) : true,
       notes: sNotes || null,
     };
     if (editingService) {
@@ -275,6 +283,9 @@ export default function SEFAZPage() {
           <TabsTrigger value="producers" className="gap-1.5">
             <Users className="h-4 w-4" /> Produtores
           </TabsTrigger>
+          <TabsTrigger value="atendimentos" className="gap-1.5">
+            <ClipboardList className="h-4 w-4" /> Atendimentos
+          </TabsTrigger>
           <TabsTrigger value="analytics" className="gap-1.5">
             <BarChart3 className="h-4 w-4" /> Análises
           </TabsTrigger>
@@ -304,19 +315,17 @@ export default function SEFAZPage() {
             </Card>
             <Card className="col-span-2 sm:col-span-1">
               <CardContent className="p-4 flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-warning/10"><CheckSquare className="h-5 w-5 text-warning" /></div>
+                <div className="p-2 rounded-lg bg-warning/10"><Paperclip className="h-5 w-5 text-warning" /></div>
                 <div>
-                  <p className="text-2xl font-bold leading-none">
-                    {(allServices as any[]).filter(s => s.signed_list).length}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Assinaram lista</p>
+                  <p className="text-2xl font-bold leading-none">{comprovantes.length}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Comprovantes anexados</p>
                 </div>
               </CardContent>
             </Card>
           </div>
 
           <div className="mb-4">
-            <SearchInput value={search} onChange={setSearch} placeholder="Buscar por nome, CPF ou assentamento..." className="max-w-md" />
+            <SearchInput value={search} onChange={(v) => { setSearch(v); setPagina(1); }} placeholder="Buscar por nome, CPF ou assentamento..." className="max-w-md" />
           </div>
 
           {isLoading ? (
@@ -330,7 +339,7 @@ export default function SEFAZPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {filteredProducers.map((p: any) => {
+              {filteredProducers.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA).map((p: any) => {
                 const svcCount = (p.sefaz_services || []).length;
                 return (
                   <div
@@ -371,7 +380,41 @@ export default function SEFAZPage() {
                   </div>
                 );
               })}
+              {totalPaginas > 1 && (
+                <div className="flex items-center justify-between gap-2 pt-2 flex-wrap">
+                  <span className="text-sm text-muted-foreground">
+                    {filteredProducers.length} produtor(es) · página {paginaAtual} de {totalPaginas}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="icon" disabled={paginaAtual === 1} onClick={() => setPagina(paginaAtual - 1)}>
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    {Array.from({ length: totalPaginas }, (_, i) => i + 1)
+                      .filter((n) => n === 1 || n === totalPaginas || Math.abs(n - paginaAtual) <= 1)
+                      .reduce<(number | '…')[]>((acc, n, i, arr) => {
+                        if (i > 0 && n - (arr[i - 1] as number) > 1) acc.push('…');
+                        acc.push(n);
+                        return acc;
+                      }, [])
+                      .map((n, i) => n === '…'
+                        ? <span key={`r${i}`} className="px-2 text-sm text-muted-foreground">…</span>
+                        : <Button key={n} size="icon" variant={n === paginaAtual ? 'default' : 'outline'} className="w-8 h-8 text-xs" onClick={() => setPagina(n as number)}>{n}</Button>)}
+                    <Button variant="outline" size="icon" disabled={paginaAtual === totalPaginas} onClick={() => setPagina(paginaAtual + 1)}>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
+          )}
+        </TabsContent>
+
+        {/* ── ATENDIMENTOS POR MÊS (com comprovantes) ─────────────────────── */}
+        <TabsContent value="atendimentos">
+          {servicesLoading ? (
+            <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}</div>
+          ) : (
+            <SefazAtendimentosTab services={allServices as any[]} tipos={SERVICE_TYPES} />
           )}
         </TabsContent>
 
@@ -396,7 +439,7 @@ export default function SEFAZPage() {
           </div>
 
           {/* Monthly stats — colored cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
             <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/60">
               <CardContent className="p-4 flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-blue-500/20">
@@ -420,6 +463,21 @@ export default function SEFAZPage() {
                     {monthlyServices.filter(s => s.service_type === 'Nota Fiscal').length}
                   </p>
                   <p className="text-xs text-indigo-600/80 mt-0.5 font-medium">Nota Fiscal</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Boleto GTA */}
+            <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100/60">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-emerald-500/20">
+                  <Receipt className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-emerald-700">
+                    {monthlyServices.filter(s => s.service_type === 'Boleto GTA').length}
+                  </p>
+                  <p className="text-xs text-emerald-600/80 mt-0.5 font-medium">Boleto GTA</p>
                 </div>
               </CardContent>
             </Card>
@@ -466,13 +524,14 @@ export default function SEFAZPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 bg-gradient-to-b from-amber-50/30 to-transparent">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                 <div className="rounded-lg bg-amber-500 p-3 text-center text-white shadow-sm">
                   <p className="text-2xl font-bold">{yearServices.length}</p>
                   <p className="text-xs font-medium mt-0.5 opacity-90">Total</p>
                 </div>
                 {[
                   { type: 'Nota Fiscal', color: 'bg-indigo-500' },
+                  { type: 'Boleto GTA', color: 'bg-emerald-500' },
                   { type: 'Declaração de Posse', color: 'bg-violet-500' },
                   { type: 'Outros', color: 'bg-orange-400' },
                 ].map(({ type, color }) => {
@@ -565,6 +624,7 @@ export default function SEFAZPage() {
                     <Tooltip content={<CustomTooltip />} />
                     <Legend wrapperStyle={{ paddingTop: 16 }} formatter={v => <span className="text-foreground text-xs">{v}</span>} />
                     <Bar dataKey="Nota Fiscal" name="Nota Fiscal" fill="#6366f1" radius={[4,4,0,0]} />
+                    <Bar dataKey="Boleto GTA" name="Boleto GTA" fill="#10b981" radius={[4,4,0,0]} />
                     <Bar dataKey="Declaração de Posse" name="Declaração de Posse" fill="#8b5cf6" radius={[4,4,0,0]} />
                     <Bar dataKey="Outros" name="Outros" fill="#f97316" radius={[4,4,0,0]} />
                   </BarChart>
@@ -693,11 +753,6 @@ export default function SEFAZPage() {
                               <p className="font-medium text-sm">{s.service_type}</p>
                               <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                                 <span className="flex items-center gap-1"><CalendarDays className="h-3 w-3" />{date}</span>
-                                {s.signed_list ? (
-                                  <span className="flex items-center gap-1 text-success font-medium"><CheckSquare className="h-3 w-3" />Assinou lista</span>
-                                ) : (
-                                  <span className="flex items-center gap-1 text-muted-foreground"><Square className="h-3 w-3" />Não assinou</span>
-                                )}
                               </div>
                               {s.notes && <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{s.notes}</p>}
                             </div>
@@ -744,12 +799,6 @@ export default function SEFAZPage() {
             <div className="space-y-2">
               <Label htmlFor="s-date">Data do Atendimento *</Label>
               <Input id="s-date" type="date" value={sDate} onChange={e => setSDate(e.target.value)} required />
-            </div>
-            <div className="flex items-center gap-3 rounded-lg border p-3">
-              <Switch id="s-signed" checked={sSigned} onCheckedChange={setSSigned} />
-              <Label htmlFor="s-signed" className="cursor-pointer">
-                Produtor assinou a lista de presença
-              </Label>
             </div>
             <div className="space-y-2">
               <Label htmlFor="s-notes">Observações</Label>

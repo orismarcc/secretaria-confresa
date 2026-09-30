@@ -60,6 +60,30 @@ try {
   const avisos = await pa.locator('ol li').allInnerTexts().catch(() => []);
   console.log('  avisos após marcar:', JSON.stringify(avisos));
   ok(avisos.some((t) => t.includes('Posição do assentamento salva')), 'Mapa da demanda: clique no mapa salvou a posição');
+
+  // ─── SEFAZ: Boleto GTA pela ficha + comprovante mensal (PDF) ─────────────
+  await pa.goto(`${BASE}/sefaz`);
+  await pa.getByText('PRODUTOR SEFAZ E2E').first().click();
+  await pa.getByRole('button', { name: 'Adicionar Atendimento' }).click();
+  const dlgS = pa.getByRole('dialog').filter({ hasText: 'Novo Atendimento SEFAZ' });
+  await dlgS.waitFor({ timeout: 15000 });
+  ok((await dlgS.getByText(/assinou a lista/i).count()) === 0, 'SEFAZ: formulário sem a marcação de assinatura');
+  ok((await dlgS.locator('#s-type option', { hasText: 'Boleto GTA' }).count()) === 1, 'SEFAZ: tipo "Boleto GTA" disponível');
+  await dlgS.locator('#s-type').selectOption('Boleto GTA');
+  await dlgS.getByRole('button', { name: 'Registrar' }).click();
+  await pa.waitForTimeout(1500);
+  await pa.keyboard.press('Escape');
+  await pa.getByRole('tab', { name: 'Atendimentos' }).click();
+  const mesAtual = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'America/Cuiaba' });
+  const rotuloMes = mesAtual.charAt(0).toUpperCase() + mesAtual.slice(1);
+  await pa.getByText(rotuloMes).first().click();
+  const [seletor] = await Promise.all([
+    pa.waitForEvent('filechooser', { timeout: 15000 }),
+    pa.getByRole('button', { name: /Anexar imagem ou PDF/ }).first().click(),
+  ]);
+  await seletor.setFiles({ name: 'folha-assinada.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 teste e2e %%EOF') });
+  await pa.getByText('folha-assinada.pdf').first().waitFor({ timeout: 20000 }).catch(() => {});
+  ok(await pa.getByText('folha-assinada.pdf').first().isVisible().catch(() => false), 'SEFAZ: comprovante PDF anexado ao mês');
   await adm.close();
 
   // ─── Visitante sem login: painel público de transparência ────────────────
