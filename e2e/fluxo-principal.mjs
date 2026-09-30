@@ -104,9 +104,16 @@ try {
   await dlgT.locator('input[type=file]').setInputFiles({ name: 'termo-e2e.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 termo e2e %%EOF') });
   await dlgT.getByText('termo-e2e.pdf').first().waitFor({ timeout: 20000 }).catch(() => {});
   ok(await dlgT.getByText('termo-e2e.pdf').first().isVisible().catch(() => false), 'Entregas: termo (PDF) anexado à entrega do produtor');
-  await pa.keyboard.press('Escape');
-  await pa.getByRole('button', { name: /Termo de entrega anexado/ }).first().waitFor({ timeout: 15000 }).catch(() => {});
-  ok(await pa.getByRole('button', { name: /Termo de entrega anexado/ }).first().isVisible().catch(() => false), 'Entregas: card mostra o termo anexado');
+  // fecha a janela do termo (enquanto aberta, a página ao fundo fica inacessível)
+  for (let i = 0; i < 3 && (await pa.getByRole('dialog').count()) > 0; i++) {
+    await pa.keyboard.press('Escape');
+    await pa.waitForTimeout(600);
+  }
+  console.log('  janelas abertas após fechar o termo:', await pa.getByRole('dialog').count());
+  await pa.getByText('Termo de entrega anexado').first().waitFor({ timeout: 15000 }).catch(() => {});
+  const cardTermo = await pa.getByText('Termo de entrega anexado').first().isVisible().catch(() => false);
+  if (!cardTermo) console.log('  textos com "termo":', JSON.stringify((await pa.locator('body').innerText()).split('\n').filter((l) => /termo/i.test(l))));
+  ok(cardTermo, 'Entregas: card mostra o termo anexado');
   await adm.close();
 
   // ─── Visitante sem login: painel público de transparência ────────────────
