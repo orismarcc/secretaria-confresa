@@ -131,11 +131,16 @@ function resolver(D: number[][], n: number, voltar: boolean) {
 
 /**
  * Calcula a rota de menor tempo saindo de `partida`, passando por todas as
- * `paradas` (e voltando, se `voltar`).
+ * `paradas` (e voltando, se `voltar`). Com `ordemFixa` (índices 0-based das
+ * paradas, ex.: a ordem arrastada pelo usuário), NÃO reordena: só calcula
+ * tempos, distâncias e traçado nessa ordem.
  */
-export async function otimizarRota(partida: PontoRota, paradas: PontoRota[], voltar: boolean): Promise<ResultadoRota> {
+export async function otimizarRota(partida: PontoRota, paradas: PontoRota[], voltar: boolean, ordemFixa?: number[]): Promise<ResultadoRota> {
   const nos = [partida, ...paradas];
   const n = paradas.length;
+  const fixa = ordemFixa && ordemFixa.length === n && new Set(ordemFixa).size === n
+    && ordemFixa.every((i) => Number.isInteger(i) && i >= 0 && i < n)
+    ? ordemFixa.map((i) => i + 1) : null;
   const estimativaM = (a: number, b: number) => haversineM(nos[a], nos[b]) * FATOR_SINUOSIDADE;
   const estimativaS = (a: number, b: number) => estimativaM(a, b) / (VEL_ESTIMADA_KMH / 3.6);
 
@@ -145,7 +150,7 @@ export async function otimizarRota(partida: PontoRota, paradas: PontoRota[], vol
       row.map((v, j) => (v == null ? estimativaS(i, j) * 1.5 : v)));
     const M: number[][] = tab.distances.map((row: (number | null)[], i: number) =>
       row.map((v, j) => (v == null ? estimativaM(i, j) : v)));
-    const ordemNos = resolver(D, n, voltar);
+    const ordemNos = fixa ?? resolver(D, n, voltar);
     const seq = [0, ...ordemNos, ...(voltar ? [0] : [])];
     const trechos = seq.slice(1).map((b, i) => ({ segundos: D[seq[i]][b], metros: M[seq[i]][b] }));
 
@@ -162,7 +167,7 @@ export async function otimizarRota(partida: PontoRota, paradas: PontoRota[], vol
     return { ordem: ordemNos.map((x) => x - 1), trechos, geometria, fonte: 'estradas', longeDaEstrada };
   } catch {
     const D = nos.map((_, i) => nos.map((__, j) => (i === j ? 0 : estimativaS(i, j))));
-    const ordemNos = resolver(D, n, voltar);
+    const ordemNos = fixa ?? resolver(D, n, voltar);
     const seq = [0, ...ordemNos, ...(voltar ? [0] : [])];
     const trechos = seq.slice(1).map((b, i) => ({ segundos: D[seq[i]][b], metros: estimativaM(seq[i], b) }));
     return { ordem: ordemNos.map((x) => x - 1), trechos, geometria: null, fonte: 'estimativa', longeDaEstrada: [] };

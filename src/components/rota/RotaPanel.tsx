@@ -1,11 +1,17 @@
 // Painel "Rota de visitas técnicas" do mapa de Produtores.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, X, Loader2, Navigation, FileDown, AlertTriangle, ListPlus, Trash2 } from 'lucide-react';
+import { Route, X, Loader2, Navigation, FileDown, AlertTriangle, ListPlus, Trash2, GripVertical, RotateCcw } from 'lucide-react';
+import {
+  DndContext, closestCenter, KeyboardSensor, PointerSensor, TouchSensor, useSensor, useSensors, type DragEndEvent,
+} from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { cn } from '@/lib/utils';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useToast } from '@/hooks/use-toast';
 import { otimizarRota, linksGoogleMaps, linkGoogleMapsParada, type ResultadoRota, type PontoRota } from './otimizarRota';
@@ -42,6 +48,30 @@ const hhmm = (min: number) => {
   return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
 };
 
+// Parada da rota calculada — arrastável pela alça (mouse, toque ou teclado).
+function ParadaArrastavel({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn('flex gap-1.5 rounded-md border p-1.5 bg-background', isDragging && 'relative z-10 shadow-lg opacity-90')}
+    >
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="shrink-0 -ml-0.5 cursor-grab active:cursor-grabbing touch-none rounded p-0.5 text-muted-foreground hover:bg-muted"
+        aria-label="Arrastar para mudar a ordem"
+        title="Arrastar para mudar a ordem"
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      {children}
+    </li>
+  );
+}
+
 export function RotaPanel({ sede, selecionadas, disponiveis, onRemover, onAdicionarTodas, onLimpar, onDesenhar }: {
   sede: PontoRota & { nome: string };
   selecionadas: Parada[];
@@ -59,16 +89,28 @@ export function RotaPanel({ sede, selecionadas, disponiveis, onRemover, onAdicio
   const [saida, setSaida] = useState('07:00');
   const [visitaMin, setVisitaMin] = useState('30');
   const [calculando, setCalculando] = useState(false);
-  const [res, setRes] = useState<{ r: ResultadoRota; paradas: Parada[]; partida: PontoRota; voltar: boolean } | null>(null);
+  const [res, setRes] = useState<{
+    r: ResultadoRota; paradas: Parada[]; partida: PontoRota; voltar: boolean;
+    /** Lista enviada ao cálculo (os índices de longeDaEstrada se referem a ela). */
+    entrada: Parada[];
+    /** Ordem arrastada pelo usuário (não é a calculada). */
+    manual: boolean;
+    /** Tempo dirigindo da melhor ordem (para comparar com a ordem manual). */
+    melhor: { segundos: number; fonte: ResultadoRota['fonte'] };
+    /** Recalculando depois de arrastar (tempos da lista ainda são os anteriores). */
+    pendente: boolean;
+  } | null>(null);
+  const pedido = useRef(0); // só o último recálculo vale (arrastes seguidos)
 
   // Qualquer mudança nas paradas ou na partida invalida a rota calculada.
   const assinatura = selecionadas.map((p) => p.key).join(',') + `|${origem}|${voltar}`;
-  useEffect(() => { setRes(null); onDesenhar(null); }, [assinatura]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { pedido.current++; setRes(null); onDesenhar(null); }, [assinatura]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const naoSelecionadas = disponiveis.filter((d) => !selecionadas.some((s) => s.key === d.key));
 
   const calcular = async () => {
     if (selecionadas.length === 0) return;
+    const meu = ++pedido.current;
     setCalculando(true);
     try {
       let partida: PontoRota = { lat: sede.lat, lng: sede.lng };
@@ -82,8 +124,10 @@ export function RotaPanel({ sede, selecionadas, disponiveis, onRemover, onAdicio
         }
       }
       const r = await otimizarRota(partida, selecionadas.map((p) => ({ lat: p.lat, lng: p.lng })), voltar);
+      if (meu !== pedido.current) return;
       const ordenadas = r.ordem.map((i) => selecionadas[i]);
-      setRes({ r, paradas: ordenadas, partida, voltar });
+      const segundos = r.trechos.reduce((s, x) => s + x.segundos, 0);
+      setRes({ r, paradas: ordenadas, partida, voltar, entrada: selecionadas, manual: false, melhor: { segundos, fonte: r.fonte }, pendente: false });
       onDesenhar({ partida, paradas: ordenadas, geometria: r.geometria, voltar });
       if (r.fonte === 'estimativa') {
         toast({ title: 'Serviço de rotas indisponível', description: 'Ordem calculada por estimativa em linha reta.' });
@@ -91,6 +135,27 @@ export function RotaPanel({ sede, selecionadas, disponiveis, onRemover, onAdicio
     } finally {
       setCalculando(false);
     }
+  };
+
+  // Arrastar: recalcula tempos, distâncias, traçado e links NA ORDEM escolhida.
+  const sensores = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const aoSoltar = async (e: DragEndEvent) => {
+    if (!res || !e.over || e.active.id === e.over.id) return;
+    const de = res.paradas.findIndex((p) => p.key === e.active.id);
+    const para = res.paradas.findIndex((p) => p.key === e.over!.id);
+    if (de < 0 || para < 0) return;
+    const nova = arrayMove(res.paradas, de, para);
+    const base = res;
+    const meu = ++pedido.current;
+    setRes({ ...base, paradas: nova, pendente: true });
+    const r = await otimizarRota(base.partida, nova.map((p) => ({ lat: p.lat, lng: p.lng })), base.voltar, nova.map((_, i) => i));
+    if (meu !== pedido.current) return;
+    setRes({ ...base, r, paradas: nova, entrada: nova, manual: true, pendente: false });
+    onDesenhar({ partida: base.partida, paradas: nova, geometria: r.geometria, voltar: base.voltar });
   };
 
   // Horários previstos
@@ -107,7 +172,7 @@ export function RotaPanel({ sede, selecionadas, disponiveis, onRemover, onAdicio
 
   const [gerandoPdf, setGerandoPdf] = useState(false);
   const baixarPdf = async () => {
-    if (!res || gerandoPdf) return;
+    if (!res || res.pendente || gerandoPdf) return;
     setGerandoPdf(true);
     try {
       await exportarRoteiroPdf(
@@ -121,7 +186,7 @@ export function RotaPanel({ sede, selecionadas, disponiveis, onRemover, onAdicio
           `Distância total: ${fmtKm(totMetros)} · Tempo dirigindo: ${fmtMin(totDirigindo)} · ${retorno != null ? `Retorno previsto: ${hhmm(retorno)}` : `Término previsto: ${hhmm(t)}`}`,
         ],
         res.r.fonte === 'estradas'
-          ? 'Ordem de visitas otimizada para o menor tempo total de deslocamento, com tempos pelas estradas do OpenStreetMap. Tempos são estimativas; estradas vicinais podem variar com chuva e conservação.'
+          ? `${res.manual ? 'Ordem de visitas definida manualmente' : 'Ordem de visitas otimizada para o menor tempo total de deslocamento'}, com tempos pelas estradas do OpenStreetMap. Tempos são estimativas; estradas vicinais podem variar com chuva e conservação.`
           : 'Ordem calculada por estimativa em linha reta (serviço de rotas indisponível no momento). Tempos aproximados.',
       );
     } catch (e) {
@@ -196,7 +261,24 @@ export function RotaPanel({ sede, selecionadas, disponiveis, onRemover, onAdicio
 
       {res && (
         <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-1.5 text-center">
+          {(res.manual || res.pendente) && (
+            <div className="flex items-start gap-2 rounded-md border border-amber-300/70 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-800 dark:text-amber-300">
+              {res.pendente ? <Loader2 className="h-3.5 w-3.5 shrink-0 mt-0.5 animate-spin" /> : <GripVertical className="h-3.5 w-3.5 shrink-0 mt-0.5" />}
+              <span className="flex-1">
+                {res.pendente ? 'Recalculando na ordem escolhida…' : (() => {
+                  const dif = Math.round((totDirigindo - res.melhor.segundos) / 60);
+                  const comparavel = res.r.fonte === res.melhor.fonte;
+                  return <>Ordem definida por você{comparavel && dif > 0 ? <> — <b>+{fmtMin(dif * 60)}</b> dirigindo em relação à melhor ordem</> : comparavel && dif <= 0 ? ' — mesmo tempo da melhor ordem' : ''}.</>;
+                })()}
+              </span>
+              {!res.pendente && (
+                <button type="button" onClick={calcular} disabled={calculando} className="shrink-0 inline-flex items-center gap-1 font-medium underline-offset-2 hover:underline">
+                  <RotateCcw className="h-3 w-3" /> Melhor ordem
+                </button>
+              )}
+            </div>
+          )}
+          <div className={cn('grid grid-cols-2 gap-1.5 text-center', res.pendente && 'opacity-50')}>
             <div className="rounded-md bg-muted/50 p-1.5"><p className="font-bold">{fmtKm(totMetros)}</p><p className="text-[10px] text-muted-foreground">distância total</p></div>
             <div className="rounded-md bg-muted/50 p-1.5"><p className="font-bold">{fmtMin(totDirigindo)}</p><p className="text-[10px] text-muted-foreground">dirigindo</p></div>
             <div className="rounded-md bg-muted/50 p-1.5"><p className="font-bold">{fmtMin(totDirigindo + visitaS * res.paradas.length)}</p><p className="text-[10px] text-muted-foreground">com as visitas</p></div>
@@ -208,21 +290,28 @@ export function RotaPanel({ sede, selecionadas, disponiveis, onRemover, onAdicio
           {res.r.longeDaEstrada.length > 0 && (
             <p className="text-[11px] text-amber-700 dark:text-amber-400 flex gap-1">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              <span>Longe de estrada mapeada (tempo pode ser maior): {res.r.longeDaEstrada.map((x) => `${selecionadas[x.indice]?.nome} (${fmtKm(x.metros)})`).join(', ')}</span>
+              <span>Longe de estrada mapeada (tempo pode ser maior): {res.r.longeDaEstrada.map((x) => `${res.entrada[x.indice]?.nome} (${fmtKm(x.metros)})`).join(', ')}</span>
             </p>
           )}
+          {res.paradas.length > 1 && (
+            <p className="text-[10.5px] text-muted-foreground flex items-center gap-1">
+              <GripVertical className="h-3 w-3 shrink-0" /> Arraste pela alça para mudar a ordem — tempos, mapa e links são recalculados.
+            </p>
+          )}
+          <DndContext sensors={sensores} collisionDetection={closestCenter} onDragEnd={aoSoltar}>
+          <SortableContext items={res.paradas.map((p) => p.key)} strategy={verticalListSortingStrategy}>
           <ol className="space-y-1">
             <li className="text-xs text-muted-foreground">Saída {hhmm(saidaMin)} — {nomePartida}</li>
             {res.paradas.map((p, i) => (
-              <li key={p.key} className="flex gap-2 rounded-md border p-1.5">
+              <ParadaArrastavel key={p.key} id={p.key}>
                 <span className="h-5 w-5 shrink-0 rounded-full bg-primary text-primary-foreground text-[11px] font-bold flex items-center justify-center">{i + 1}</span>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium truncate">{p.nome}</p>
                   <p className="text-[10.5px] text-muted-foreground truncate">{p.propriedade}</p>
-                  <p className="text-[10.5px] text-muted-foreground">+{fmtKm(res.r.trechos[i].metros)} · {fmtMin(res.r.trechos[i].segundos)}</p>
+                  <p className="text-[10.5px] text-muted-foreground">{res.pendente ? '…' : `+${fmtKm(res.r.trechos[i].metros)} · ${fmtMin(res.r.trechos[i].segundos)}`}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
-                  <span className="text-xs font-semibold tabular-nums">{hhmm(chegadas[i])}</span>
+                  <span className="text-xs font-semibold tabular-nums">{res.pendente ? '…' : hhmm(chegadas[i])}</span>
                   <a
                     href={linkGoogleMapsParada(p)}
                     target="_blank"
@@ -233,16 +322,18 @@ export function RotaPanel({ sede, selecionadas, disponiveis, onRemover, onAdicio
                     <Navigation className="h-3 w-3" /> Ir
                   </a>
                 </div>
-              </li>
+              </ParadaArrastavel>
             ))}
-            {retorno != null && (
+            {retorno != null && !res.pendente && (
               <li className="text-xs text-muted-foreground">
                 Retorno {hhmm(retorno)} — +{fmtKm(res.r.trechos[res.r.trechos.length - 1].metros)} · {fmtMin(res.r.trechos[res.r.trechos.length - 1].segundos)}
               </li>
             )}
           </ol>
+          </SortableContext>
+          </DndContext>
           <div className="flex flex-col gap-1.5">
-            {linksGoogleMaps(res.partida, res.paradas, res.voltar).map((u, i, arr) => (
+            {!res.pendente && linksGoogleMaps(res.partida, res.paradas, res.voltar).map((u, i, arr) => (
               <Button key={u} asChild variant="outline" size="sm" className="h-8">
                 <a href={u} target="_blank" rel="noopener noreferrer">
                   <Navigation className="h-4 w-4 mr-1" /> Navegar no Google Maps{arr.length > 1 ? ` — trecho ${i + 1} de ${arr.length}` : ''}
@@ -252,7 +343,7 @@ export function RotaPanel({ sede, selecionadas, disponiveis, onRemover, onAdicio
             <p className="text-[10.5px] text-muted-foreground">
               Se o Google Maps não calcular a rota completa (alguma parada fora das estradas que ele conhece), use o botão <b>Ir</b> de cada parada.
             </p>
-            <Button type="button" variant="outline" size="sm" className="h-8" onClick={baixarPdf} disabled={gerandoPdf}>
+            <Button type="button" variant="outline" size="sm" className="h-8" onClick={baixarPdf} disabled={gerandoPdf || res.pendente}>
               {gerandoPdf ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <FileDown className="h-4 w-4 mr-1" />} Baixar roteiro (PDF)
             </Button>
           </div>

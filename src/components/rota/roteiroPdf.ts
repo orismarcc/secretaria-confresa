@@ -48,12 +48,14 @@ export async function exportarRoteiroPdf(linhas: LinhaRoteiro[], resumo: string[
 
   autoTable(doc, {
     startY: y + 1,
-    head: [['#', 'Produtor', 'Propriedade / local', 'Telefone', 'Chegada prevista', 'Trecho até aqui', 'Coordenadas', 'Visto']],
-    body: linhas.map((l) => [String(l.ordem), l.produtor, l.propriedade, l.telefone, l.chegada, l.trecho, l.coordenadas, '']),
+    // Coluna "Chegada prevista" retirada a pedido (30/09/2026) — o campo segue
+    // em LinhaRoteiro para voltar facilmente.
+    head: [['#', 'Produtor', 'Propriedade / local', 'Telefone', 'Trecho até aqui', 'Coordenadas', 'Visto']],
+    body: linhas.map((l) => [String(l.ordem), l.produtor, l.propriedade, l.telefone, l.trecho, l.coordenadas, '']),
     styles: { fontSize: 8, cellPadding: 1.8 },
     headStyles: { fillColor: GREEN, textColor: 255, fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [245, 250, 245] },
-    columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 7: { cellWidth: 18 } },
+    columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 6: { cellWidth: 18 } },
     margin: { left: 12, right: 12 },
   });
   const fy = (doc as any).lastAutoTable.finalY + 5;
