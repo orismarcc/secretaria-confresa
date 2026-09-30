@@ -15,7 +15,17 @@ export interface LinhaRoteiro {
   chegada: string;
   trecho: string;
   coordenadas: string;
+  /** Para o link clicável da coordenada (abre o app de mapa do celular). */
+  lat?: number | null;
+  lng?: number | null;
 }
+
+const COL_COORD = 5; // coluna "Coordenadas" na tabela abaixo
+const temCoord = (l: LinhaRoteiro) => l.lat != null && l.lng != null && Number.isFinite(l.lat) && Number.isFinite(l.lng)
+  && !(l.lat === 0 && l.lng === 0);
+/** Link universal: no celular abre o app de mapa (Google Maps); no computador, o site. */
+const linkMapa = (l: LinhaRoteiro) =>
+  `https://www.google.com/maps/search/?api=1&query=${Number(l.lat).toFixed(6)},${Number(l.lng).toFixed(6)}`;
 
 function carregarLogo(): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
@@ -26,7 +36,8 @@ function carregarLogo(): Promise<HTMLImageElement | null> {
   });
 }
 
-export async function exportarRoteiroPdf(linhas: LinhaRoteiro[], resumo: string[], rodapeRota: string) {
+/** Monta o PDF do roteiro (sem salvar). */
+export async function montarRoteiroPdf(linhas: LinhaRoteiro[], resumo: string[], rodapeRota: string): Promise<jsPDF> {
   const doc = new jsPDF({ orientation: 'landscape' });
   const W = doc.internal.pageSize.getWidth();
   const img = await carregarLogo();
@@ -57,10 +68,21 @@ export async function exportarRoteiroPdf(linhas: LinhaRoteiro[], resumo: string[
     alternateRowStyles: { fillColor: [245, 250, 245] },
     columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 6: { cellWidth: 18 } },
     margin: { left: 12, right: 12 },
+    // Coordenada clicável (azul) quando a parada tem localização.
+    didParseCell: (d) => {
+      if (d.section === 'body' && d.column.index === COL_COORD && temCoord(linhas[d.row.index])) {
+        d.cell.styles.textColor = [29, 78, 216];
+      }
+    },
+    didDrawCell: (d) => {
+      if (d.section === 'body' && d.column.index === COL_COORD && temCoord(linhas[d.row.index])) {
+        doc.link(d.cell.x, d.cell.y, d.cell.width, d.cell.height, { url: linkMapa(linhas[d.row.index]) });
+      }
+    },
   });
   const fy = (doc as any).lastAutoTable.finalY + 5;
   doc.setFontSize(7); doc.setTextColor(110);
-  doc.text(rodapeRota, 12, Math.min(fy, doc.internal.pageSize.getHeight() - 14), { maxWidth: W - 24 });
+  doc.text(`${rodapeRota} Toque na coordenada (em azul) para abrir o local no app de mapa.`, 12, Math.min(fy, doc.internal.pageSize.getHeight() - 14), { maxWidth: W - 24 });
 
   const n = doc.getNumberOfPages();
   for (let p = 1; p <= n; p++) {
@@ -68,5 +90,10 @@ export async function exportarRoteiroPdf(linhas: LinhaRoteiro[], resumo: string[
     doc.setFontSize(7); doc.setTextColor(150);
     doc.text(`Secretaria de Agricultura de Confresa/MT · Página ${p} de ${n}`, W / 2, doc.internal.pageSize.getHeight() - 6, { align: 'center' });
   }
+  return doc;
+}
+
+export async function exportarRoteiroPdf(linhas: LinhaRoteiro[], resumo: string[], rodapeRota: string) {
+  const doc = await montarRoteiroPdf(linhas, resumo, rodapeRota);
   doc.save(`roteiro-visitas-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
 }

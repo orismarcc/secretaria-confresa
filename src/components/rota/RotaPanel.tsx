@@ -180,6 +180,7 @@ export function RotaPanel({ sede, selecionadas, disponiveis, onRemover, onAdicio
           ordem: i + 1, produtor: p.nome, propriedade: p.propriedade, telefone: p.telefone || '—',
           chegada: hhmm(chegadas[i]), trecho: `${fmtKm(res.r.trechos[i].metros)} · ${fmtMin(res.r.trechos[i].segundos)}`,
           coordenadas: `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`,
+          lat: p.lat, lng: p.lng,
         })),
         [
           `Partida: ${nomePartida} às ${hhmm(saidaMin)} · ${res.paradas.length} visita(s) · ${visitaMin || 0} min por visita`,

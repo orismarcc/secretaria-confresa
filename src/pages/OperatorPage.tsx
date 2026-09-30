@@ -293,7 +293,9 @@ function OperatorCardBody({
             <a
               href={`geo:${service.producers.latitude},${service.producers.longitude}?q=${service.producers.latitude},${service.producers.longitude}`}
               onClick={(e) => {
-                if (!/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+                // geo: só funciona no Android (abre o app de mapa escolhido). No
+                // iPhone/computador, o link do Google Maps (app, se instalado).
+                if (!/Android/i.test(navigator.userAgent)) {
                   e.preventDefault();
                   window.open(`https://www.google.com/maps?q=${service.producers!.latitude},${service.producers!.longitude}`, '_blank');
                 }
