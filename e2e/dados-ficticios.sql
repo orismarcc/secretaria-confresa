@@ -33,3 +33,17 @@ insert into public.services (id, producer_id, demand_type_id, settlement_id, sch
 
 -- SEFAZ: produtor fictício (o atendimento Boleto GTA é lançado pela tela no e2e).
 insert into public.sefaz_producers (id, name) values ('e2e00000-0000-0000-0000-000000000021', 'PRODUTOR SEFAZ E2E');
+
+-- Logística (calcário): Início (odômetro) → Carregamento → Entrega → Finalização.
+insert into public.demand_types (id, name, category) values ('e2e00000-0000-0000-0000-000000000032', 'Calcario E2E', 'calcario');
+insert into public.producers (id, name, cpf, settlement_id, latitude, longitude) values
+  ('e2e00000-0000-0000-0000-000000000033', 'Produtor Logistica E2E', '39053344705', 'e2e00000-0000-0000-0000-000000000001', null, null);
+insert into public.services (id, producer_id, demand_type_id, settlement_id, scheduled_date, status, operator_id) values
+  ('e2e00000-0000-0000-0000-000000000034', 'e2e00000-0000-0000-0000-000000000033', 'e2e00000-0000-0000-0000-000000000032',
+   'e2e00000-0000-0000-0000-000000000001', current_date, 'pending', :'op_id');
+
+-- Entregas: entrega realizada SEM termo (o termo é anexado pela tela no e2e).
+insert into public.demand_types (id, name, category) values ('e2e00000-0000-0000-0000-000000000042', 'Entrega Alevinos E2E', 'entregas');
+insert into public.deliveries (id, producer_id, demand_type_id, settlement_id, quantity, delivery_date_start, delivery_date_end, status, completed_at) values
+  ('e2e00000-0000-0000-0000-000000000044', 'e2e00000-0000-0000-0000-000000000003', 'e2e00000-0000-0000-0000-000000000042',
+   'e2e00000-0000-0000-0000-000000000001', 10, current_date, current_date, 'completed', now());

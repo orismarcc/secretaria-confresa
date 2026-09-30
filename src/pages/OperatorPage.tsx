@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/StatusBadge';
-import { MapPin, Phone, Calendar, Clock, GripVertical, Navigation, User, Users, ChevronDown, MessageCircle, RefreshCw, CheckCircle2, Banknote, Truck } from 'lucide-react';
+import { MapPin, Phone, Calendar, Clock, GripVertical, Navigation, User, Users, ChevronDown, MessageCircle, RefreshCw, CheckCircle2, Banknote, Truck, PackageCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { OnlineIndicator } from '@/components/ConnectionStatus';
@@ -74,14 +74,58 @@ interface DbService {
   worked_hours?: number | null;
   dam_paid?: boolean | null;
   dam_issued?: boolean | null;
-  /** Logística: momento em que o carregamento foi registrado ("Entrega"). */
+  /** Logística: momento em que o carregamento foi registrado. */
   loaded_at?: string | null;
+  /** Logística: momento em que a entrega na propriedade foi registrada. */
+  delivered_at?: string | null;
   producers?: { name: string; phone?: string | null; location_name?: string | null; latitude?: number | null; longitude?: number | null } | null;
   demand_types?: { name: string; category?: string | null } | null;
   settlements?: { name: string } | null;
   locations?: { name: string } | null;
   profiles?: { name: string } | null;
 }
+
+// ─── Logística: etapas com foto ──────────────────────────────────────────────
+// Início (odômetro) → Carregamento → Entrega na propriedade → Finalização (odômetro).
+
+type PhotoMode = 'start' | 'load' | 'deliver' | 'finish';
+
+const PHOTO_STEP: Record<PhotoMode, {
+  title: string; photoLabel: string; hint: string; confirmLabel: string; confirmClassName: string; toast: string;
+}> = {
+  start: {
+    title: 'Iniciar — odômetro',
+    photoLabel: 'Foto do odômetro (km inicial)',
+    hint: 'Ao confirmar, o atendimento é iniciado e a localização de partida é registrada automaticamente.',
+    confirmLabel: 'Iniciar',
+    confirmClassName: 'flex-1',
+    toast: 'Atendimento iniciado',
+  },
+  load: {
+    title: 'Carregamento',
+    photoLabel: 'Foto do caminhão sendo carregado',
+    hint: 'Ao confirmar, a localização do local de carregamento é registrada automaticamente.',
+    confirmLabel: 'Registrar carregamento',
+    confirmClassName: 'flex-1 bg-amber-600 hover:bg-amber-600/90 text-white',
+    toast: 'Carregamento registrado',
+  },
+  deliver: {
+    title: 'Entrega na propriedade',
+    photoLabel: 'Foto da entrega na propriedade',
+    hint: 'Ao confirmar, a localização da entrega (propriedade do produtor) é registrada automaticamente. O atendimento continua em execução até a finalização.',
+    confirmLabel: 'Registrar entrega',
+    confirmClassName: 'flex-1 bg-blue-600 hover:bg-blue-600/90 text-white',
+    toast: 'Entrega registrada',
+  },
+  finish: {
+    title: 'Finalizar — odômetro',
+    photoLabel: 'Foto do odômetro (km final)',
+    hint: 'Ao confirmar, o atendimento é finalizado.',
+    confirmLabel: 'Finalizar',
+    confirmClassName: 'flex-1 bg-success hover:bg-success/90',
+    toast: 'Atendimento finalizado',
+  },
+};
 
 // ─── Shared card body ────────────────────────────────────────────────────────
 
@@ -94,8 +138,10 @@ interface OperatorCardBodyProps {
   isStarting?: boolean;
   /** Nome do colega em cujo nome o atendimento está (assentamento compartilhado). */
   sharedFrom?: string | null;
-  /** Logística: registrar o carregamento ("Entrega"). */
+  /** Logística: registrar o carregamento. */
   onLoad?: (service: DbService) => void;
+  /** Logística: registrar a entrega na propriedade. */
+  onDeliver?: (service: DbService) => void;
   /** Texto de espera (ex.: obtendo localização) — bloqueia os botões. */
   busyLabel?: string | null;
 }
@@ -109,16 +155,24 @@ function OperatorCardBody({
   isStarting,
   sharedFrom,
   onLoad,
+  onDeliver,
   busyLabel,
 }: OperatorCardBodyProps) {
   const canStart = service.status === 'pending' || service.status === 'proximo';
   // Só finaliza depois de iniciar (passa por "em execução") e só o que é seu.
   const isMineInProgress = service.status === 'in_progress' && !sharedFrom;
-  // Logística (calcário/insumos): antes de finalizar, registra o carregamento.
+  // Logística (calcário/insumos): antes de finalizar, registra o carregamento
+  // e depois a entrega na propriedade.
   const isLogistics = isLogisticsCategory(service.demand_types?.category);
   const needsLoad = isLogistics && isMineInProgress && !service.loaded_at;
-  const canFinalize = isMineInProgress && !needsLoad;
-  const loadedAt = service.loaded_at ? new Date(String(service.loaded_at).replace(' ', 'T')) : null;
+  const needsDelivery = isLogistics && isMineInProgress && !!service.loaded_at && !service.delivered_at;
+  const canFinalize = isMineInProgress && !needsLoad && !needsDelivery;
+  const toDate = (v?: string | null) => {
+    const d = v ? new Date(String(v).replace(' ', 'T')) : null;
+    return d && !Number.isNaN(d.getTime()) ? d : null;
+  };
+  const loadedAt = toDate(service.loaded_at);
+  const deliveredAt = toDate(service.delivered_at);
   const horas = Number(service.worked_hours) || 0;
 
   return (
@@ -160,14 +214,22 @@ function OperatorCardBody({
         needsLoad ? (
           <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-300/70 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-800 dark:text-amber-300">
             <Truck className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-            <span>No local de carregamento, toque em <strong>Entrega</strong> e tire a foto do caminhão sendo carregado.</span>
+            <span>No local de carregamento, toque em <strong>Carregamento</strong> e tire a foto do caminhão sendo carregado.</span>
+          </div>
+        ) : needsDelivery ? (
+          <div className="mb-3 flex items-start gap-2 rounded-md border border-blue-300/70 bg-blue-500/10 px-2.5 py-1.5 text-xs text-blue-800 dark:text-blue-300">
+            <PackageCheck className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            <span>
+              Carregado{loadedAt ? ` às ${format(loadedAt, 'HH:mm')}` : ''}.
+              {' '}Na propriedade do produtor, toque em <strong>Entrega</strong> e tire a foto da entrega.
+            </span>
           </div>
         ) : (
           <div className="mb-3 flex items-start gap-2 rounded-md border border-emerald-300/70 bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-800 dark:text-emerald-300">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
             <span>
-              Carregado{loadedAt && !Number.isNaN(loadedAt.getTime()) ? ` às ${format(loadedAt, 'HH:mm')}` : ''}.
-              {' '}Na propriedade do produtor, toque em <strong>Finalizar</strong> e tire a foto da entrega.
+              Entregue{deliveredAt ? ` às ${format(deliveredAt, 'HH:mm')}` : ''}.
+              {' '}Ao encerrar, toque em <strong>Finalizar</strong> e tire a foto do odômetro (km final).
             </span>
           </div>
         )
@@ -256,7 +318,15 @@ function OperatorCardBody({
                 className="flex-1 bg-amber-600 hover:bg-amber-600/90 text-white"
                 onClick={() => onLoad(service)}
               >
-                <Truck className="h-4 w-4 mr-2" /> Entrega
+                <Truck className="h-4 w-4 mr-2" /> Carregamento
+              </Button>
+            )}
+            {needsDelivery && onDeliver && (
+              <Button
+                className="flex-1 bg-blue-600 hover:bg-blue-600/90 text-white"
+                onClick={() => onDeliver(service)}
+              >
+                <PackageCheck className="h-4 w-4 mr-2" /> Entrega
               </Button>
             )}
             {canFinalize && (
@@ -462,14 +532,16 @@ export default function OperatorPage() {
   const overlaidServices = useMemo(() => {
     const startIds = new Set(pendingActions.filter((a) => a.type === 'start').map((a) => a.serviceId));
     const finishIds = new Set(pendingActions.filter((a) => a.type === 'finish').map((a) => a.serviceId));
-    // Carregamento registrado offline: libera o Finalizar mesmo sem sinal.
+    // Carregamento/entrega registrados offline: liberam o passo seguinte mesmo sem sinal.
     const loadedAt = new Map(pendingActions.filter((a) => a.type === 'load').map((a) => [a.serviceId, a.capturedAt]));
+    const deliveredAt = new Map(pendingActions.filter((a) => a.type === 'deliver').map((a) => [a.serviceId, a.capturedAt]));
     return visibleServices
       .filter((s) => !finishIds.has(s.id))
       .map((s) => (startIds.has(s.id)
         ? { ...s, status: 'in_progress', operator_id: user?.id ?? s.operator_id, profiles: s.profiles ?? { name: '' } }
         : s))
-      .map((s) => (loadedAt.has(s.id) && !s.loaded_at ? { ...s, loaded_at: loadedAt.get(s.id) } : s));
+      .map((s) => (loadedAt.has(s.id) && !s.loaded_at ? { ...s, loaded_at: loadedAt.get(s.id) } : s))
+      .map((s) => (deliveredAt.has(s.id) && !s.delivered_at ? { ...s, delivered_at: deliveredAt.get(s.id) } : s));
   }, [visibleServices, pendingActions, user?.id]);
 
   const updatePositions = useUpdateServicePositions();
@@ -482,8 +554,9 @@ export default function OperatorPage() {
   const [finalize, setFinalize] = useState<{ open: boolean; service: DbService | null }>({
     open: false, service: null,
   });
-  // Logística: modal de UMA foto — 'load' (Entrega = carregamento) ou 'finish'.
-  const [photoStep, setPhotoStep] = useState<{ open: boolean; mode: 'load' | 'finish'; service: DbService | null }>({
+  // Logística: modal de UMA foto — 'start' (odômetro), 'load' (carregamento),
+  // 'deliver' (entrega na propriedade) ou 'finish' (odômetro).
+  const [photoStep, setPhotoStep] = useState<{ open: boolean; mode: PhotoMode; service: DbService | null }>({
     open: false, mode: 'load', service: null,
   });
   // Card aguardando GPS depois da foto (bloqueia botões e mostra o motivo).
@@ -560,6 +633,7 @@ export default function OperatorPage() {
     }
   };
   const openLoad = (service: DbService) => setPhotoStep({ open: true, mode: 'load', service });
+  const openDeliver = (service: DbService) => setPhotoStep({ open: true, mode: 'deliver', service });
 
   // Atendimento em nome de um colega (assentamento compartilhado): nome dele.
   const sharedFromOf = (service: DbService) =>
@@ -567,8 +641,18 @@ export default function OperatorPage() {
 
   // Iniciar: capta o GPS (só leitura PRECISA e na região; no máximo 8 s — segue
   // na hora quando o GPS responde bem). Sem leitura boa, inicia SEM localização
-  // e o Finalizar faz nova leitura. Sem foto. Alimenta o mapa "em execução".
-  const handleStart = async (service: DbService) => {
+  // e o Finalizar faz nova leitura. Alimenta o mapa "em execução". Sem foto,
+  // exceto na logística: antes, a foto do odômetro (km inicial).
+  const handleStart = (service: DbService) => {
+    if (startingId) return;
+    if (isLogisticsCategory(service.demand_types?.category)) {
+      setPhotoStep({ open: true, mode: 'start', service });
+      return;
+    }
+    void startService(service, null);
+  };
+
+  const startService = async (service: DbService, photo: Blob | null) => {
     if (startingId) return;
     setStartingId(service.id);
     const leitura: LeituraGps | null = await lerPosicaoPrecisa();
@@ -578,6 +662,7 @@ export default function OperatorPage() {
       serviceId: service.id,
       operatorId: user?.id ?? null,
       type: 'start',
+      photoBlob: photo,
       latitude: coords?.latitude ?? null,
       longitude: coords?.longitude ?? null,
       accuracy: leitura?.precisaoM ?? null,
@@ -648,10 +733,15 @@ export default function OperatorPage() {
   };
 
   // Logística: foto obrigatória + GPS automático. 'load' registra o carregamento
-  // (o atendimento segue em execução); 'finish' finaliza com o GPS da entrega.
+  // e 'deliver' a entrega na propriedade (o atendimento segue em execução);
+  // 'finish' finaliza (foto do odômetro). 'start' inicia (foto do odômetro).
   const handlePhotoStepConfirm = async (photo: Blob) => {
     const { mode, service } = photoStep;
     if (!service) return;
+    if (mode === 'start') {
+      await startService(service, photo);
+      return;
+    }
     setBusy({ id: service.id, label: 'Obtendo localização…' });
     const leitura: LeituraGps | null = await lerPosicaoPrecisa();
     const coords = leitura ? { latitude: leitura.latitude, longitude: leitura.longitude } : null;
@@ -660,7 +750,7 @@ export default function OperatorPage() {
       await enqueueOperatorAction({
         serviceId: service.id,
         operatorId: user?.id ?? null,
-        type: mode === 'load' ? 'load' : 'finish',
+        type: mode,
         photoBlob: photo,
         latitude: coords?.latitude ?? null,
         longitude: coords?.longitude ?? null,
@@ -670,10 +760,11 @@ export default function OperatorPage() {
       setBusy(null);
     }
 
-    if (mode === 'load') {
+    if (mode === 'load' || mode === 'deliver') {
       const now = new Date().toISOString();
       queryClient.setQueryData<DbService[]>(['services', 'pending'], (old = []) =>
-        old.map((s) => (s.id === service.id ? { ...s, loaded_at: now } : s)),
+        old.map((s) => (s.id !== service.id ? s
+          : mode === 'load' ? { ...s, loaded_at: now } : { ...s, delivered_at: now })),
       );
     } else {
       queryClient.setQueryData<DbService[]>(['services', 'pending'], (old = []) =>
@@ -684,7 +775,7 @@ export default function OperatorPage() {
     queryClient.invalidateQueries({ queryKey: ['operator_queue_actions'] });
 
     toast({
-      title: mode === 'load' ? 'Carregamento registrado' : 'Entrega finalizada',
+      title: PHOTO_STEP[mode].toast,
       description: !coords
         ? 'Registrado sem localização (GPS indisponível).'
         : (isOnline ? undefined : 'Salvo no aparelho — sincroniza quando o sinal voltar.'),
@@ -834,6 +925,7 @@ export default function OperatorPage() {
                       onFinalize={openFinalize}
                       sharedFrom={sharedFromOf(service)}
                       onLoad={openLoad}
+                      onDeliver={openDeliver}
                       busyLabel={busy?.id === service.id ? busy.label : null}
                     />
                   );
@@ -890,6 +982,7 @@ export default function OperatorPage() {
                           isStarting={startingId === service.id}
                           sharedFrom={sharedFromOf(service)}
                           onLoad={openLoad}
+                          onDeliver={openDeliver}
                           busyLabel={busy?.id === service.id ? busy.label : null}
                         />
                       );
@@ -913,16 +1006,12 @@ export default function OperatorPage() {
       <SinglePhotoModal
         open={photoStep.open}
         onOpenChange={(o) => setPhotoStep((st) => ({ ...st, open: o }))}
-        title={photoStep.mode === 'load' ? 'Entrega — carregamento' : 'Finalizar entrega'}
+        title={PHOTO_STEP[photoStep.mode].title}
         subtitle={[photoStep.service?.producers?.name, photoStep.service?.demand_types?.name].filter(Boolean).join(' — ')}
-        photoLabel={photoStep.mode === 'load' ? 'Foto do caminhão sendo carregado' : 'Foto da entrega na propriedade'}
-        hint={photoStep.mode === 'load'
-          ? 'Ao confirmar, a localização do local de carregamento é registrada automaticamente.'
-          : 'Ao confirmar, a localização da entrega (propriedade do produtor) é registrada automaticamente e o atendimento é finalizado.'}
-        confirmLabel={photoStep.mode === 'load' ? 'Registrar carregamento' : 'Finalizar'}
-        confirmClassName={photoStep.mode === 'load'
-          ? 'flex-1 bg-amber-600 hover:bg-amber-600/90 text-white'
-          : 'flex-1 bg-success hover:bg-success/90'}
+        photoLabel={PHOTO_STEP[photoStep.mode].photoLabel}
+        hint={PHOTO_STEP[photoStep.mode].hint}
+        confirmLabel={PHOTO_STEP[photoStep.mode].confirmLabel}
+        confirmClassName={PHOTO_STEP[photoStep.mode].confirmClassName}
         onConfirm={handlePhotoStepConfirm}
       />
     </AppLayout>

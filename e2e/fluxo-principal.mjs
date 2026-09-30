@@ -10,6 +10,9 @@ const BASE = process.env.E2E_BASE_URL || 'http://127.0.0.1:4173';
 const SENHA = process.env.E2E_SENHA;
 const PRODUTOR = 'Produtor Ficticio E2E';
 const GPS = { latitude: -10.61, longitude: -51.61 };
+// Imagem mínima válida (1x1 PNG) para as fotos da logística.
+const FOTO = { name: 'foto.png', mimeType: 'image/png',
+  buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') };
 
 let falhas = 0;
 const ok = (c, msg) => { console.log(`${c ? '✓' : '✗'} ${msg}`); if (!c) falhas++; };
@@ -88,6 +91,22 @@ try {
   await seletor.setFiles({ name: 'folha-assinada.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 teste e2e %%EOF') });
   await pa.getByText('folha-assinada.pdf').first().waitFor({ timeout: 20000 }).catch(() => {});
   ok(await pa.getByText('folha-assinada.pdf').first().isVisible().catch(() => false), 'SEFAZ: comprovante PDF anexado ao mês');
+
+  // ─── Entregas: anexar o termo de entrega que estava faltando ─────────────
+  await pa.goto(`${BASE}/deliveries`);
+  await pa.getByRole('tab', { name: /Realizadas/ }).click();
+  await pa.getByText('Entrega Alevinos E2E').first().waitFor({ timeout: 30000 }).catch(() => {});
+  ok(await pa.getByText('1 sem termo').first().isVisible().catch(() => false), 'Entregas: resumo aponta a entrega sem termo');
+  await pa.getByText('Entrega Alevinos E2E').first().click();
+  await pa.getByRole('button', { name: /Sem termo de entrega/ }).first().click();
+  const dlgT = pa.getByRole('dialog').filter({ hasText: 'Termo de entrega' });
+  await dlgT.waitFor({ timeout: 15000 });
+  await dlgT.locator('input[type=file]').setInputFiles({ name: 'termo-e2e.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 termo e2e %%EOF') });
+  await dlgT.getByText('termo-e2e.pdf').first().waitFor({ timeout: 20000 }).catch(() => {});
+  ok(await dlgT.getByText('termo-e2e.pdf').first().isVisible().catch(() => false), 'Entregas: termo (PDF) anexado à entrega do produtor');
+  await pa.keyboard.press('Escape');
+  await pa.getByRole('button', { name: /Termo de entrega anexado/ }).first().waitFor({ timeout: 15000 }).catch(() => {});
+  ok(await pa.getByRole('button', { name: /Termo de entrega anexado/ }).first().isVisible().catch(() => false), 'Entregas: card mostra o termo anexado');
   await adm.close();
 
   // ─── Visitante sem login: painel público de transparência ────────────────
@@ -151,6 +170,34 @@ try {
   await po.getByText(FORA).first().waitFor({ state: 'hidden', timeout: 30000 }).catch(() => {});
   await po.waitForTimeout(3000);
   ok(!(await po.getByText(FORA).first().isVisible().catch(() => false)), 'GPS impreciso: finalizou normalmente');
+
+  // ─── Logística: Início (odômetro) → Carregamento → Entrega → Finalização ──
+  const LOG = 'Produtor Logistica E2E';
+  const etapa = async (botao, titulo, confirmar, gps) => {
+    await opc.setGeolocation({ ...gps, accuracy: 10 });
+    await cartao(po, LOG).getByRole('button', { name: botao, exact: true }).click();
+    const d = po.getByRole('dialog').filter({ hasText: titulo });
+    await d.waitFor({ timeout: 15000 });
+    await d.locator('input[type=file]').setInputFiles(FOTO);
+    await d.getByRole('button', { name: confirmar, exact: true }).click();
+    await d.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => {});
+  };
+  const botaoLog = (nome) => cartao(po, LOG).getByRole('button', { name: nome, exact: true });
+  await po.getByText(LOG).first().waitFor({ timeout: 30000 }).catch(() => {});
+  await etapa('Iniciar', 'Iniciar — odômetro', 'Iniciar', { latitude: -10.60, longitude: -51.60 });
+  await botaoLog('Carregamento').waitFor({ timeout: 30000 }).catch(() => {});
+  ok(await botaoLog('Carregamento').isVisible().catch(() => false), 'Logística: iniciou com foto do odômetro → Carregamento');
+  await etapa('Carregamento', 'Carregamento', 'Registrar carregamento', { latitude: -10.55, longitude: -51.55 });
+  await botaoLog('Entrega').waitFor({ timeout: 30000 }).catch(() => {});
+  ok(await botaoLog('Entrega').isVisible().catch(() => false), 'Logística: carregamento → Entrega');
+  ok((await botaoLog('Finalizar').count()) === 0, 'Logística: Finalizar só depois da entrega');
+  await etapa('Entrega', 'Entrega na propriedade', 'Registrar entrega', { latitude: -10.66, longitude: -51.66 });
+  await botaoLog('Finalizar').waitFor({ timeout: 30000 }).catch(() => {});
+  ok(await botaoLog('Finalizar').isVisible().catch(() => false), 'Logística: entrega NÃO finaliza (segue em execução)');
+  await etapa('Finalizar', 'Finalizar — odômetro', 'Finalizar', { latitude: -10.64, longitude: -51.57 });
+  await po.getByText(LOG).first().waitFor({ state: 'hidden', timeout: 30000 }).catch(() => {});
+  await po.waitForTimeout(3000);
+  ok(!(await po.getByText(LOG).first().isVisible().catch(() => false)), 'Logística: finalizou com foto do odômetro');
   await opc.close();
 } catch (e) {
   falhas++;

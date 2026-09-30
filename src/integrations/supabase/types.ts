@@ -65,6 +65,27 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_grade_pa_maquina: {
+        Row: {
+          backed_up_at: string
+          old_machinery_id: string | null
+          old_operator_id: string | null
+          service_id: string
+        }
+        Insert: {
+          backed_up_at?: string
+          old_machinery_id?: string | null
+          old_operator_id?: string | null
+          service_id: string
+        }
+        Update: {
+          backed_up_at?: string
+          old_machinery_id?: string | null
+          old_operator_id?: string | null
+          service_id?: string
+        }
+        Relationships: []
+      }
       backup_localizacao_produtor: {
         Row: {
           alvo: string
@@ -1388,6 +1409,39 @@ export type Database = {
         }
         Relationships: []
       }
+      sefaz_comprovantes: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_path: string
+          id: string
+          mes: string
+          mime_type: string
+          size_bytes: number | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_path: string
+          id?: string
+          mes: string
+          mime_type: string
+          size_bytes?: number | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          id?: string
+          mes?: string
+          mime_type?: string
+          size_bytes?: number | null
+          uploaded_by?: string | null
+        }
+        Relationships: []
+      }
       sefaz_producers: {
         Row: {
           cpf: string | null
@@ -1478,6 +1532,7 @@ export type Database = {
       }
       service_photos: {
         Row: {
+          accuracy_m: number | null
           captured_at: string | null
           created_at: string | null
           event_type: string | null
@@ -1490,6 +1545,7 @@ export type Database = {
           storage_path: string | null
         }
         Insert: {
+          accuracy_m?: number | null
           captured_at?: string | null
           created_at?: string | null
           event_type?: string | null
@@ -1502,6 +1558,7 @@ export type Database = {
           storage_path?: string | null
         }
         Update: {
+          accuracy_m?: number | null
           captured_at?: string | null
           created_at?: string | null
           event_type?: string | null
@@ -1562,6 +1619,7 @@ export type Database = {
           responsible_technician_id: string | null
           scheduled_date: string
           settlement_id: string | null
+          started_at: string | null
           status: string
           sync_status: string | null
           updated_at: string | null
@@ -1606,6 +1664,7 @@ export type Database = {
           responsible_technician_id?: string | null
           scheduled_date: string
           settlement_id?: string | null
+          started_at?: string | null
           status?: string
           sync_status?: string | null
           updated_at?: string | null
@@ -1650,6 +1709,7 @@ export type Database = {
           responsible_technician_id?: string | null
           scheduled_date?: string
           settlement_id?: string | null
+          started_at?: string | null
           status?: string
           sync_status?: string | null
           updated_at?: string | null

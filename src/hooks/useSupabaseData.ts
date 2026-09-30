@@ -2793,3 +2793,88 @@ export async function abrirSefazComprovante(c: SefazComprovante) {
     throw e;
   }
 }
+
+// ============= ENTREGAS: TERMO / COMPROVANTE DE ENTREGA (por produtor) =============
+export interface TermoEntrega {
+  id: string; delivery_id: string; file_path: string; file_name: string;
+  mime_type: string; size_bytes: number | null; created_at: string;
+}
+const BUCKET_TERMOS = 'delivery-documents';
+
+/** Todos os termos anexados (para marcar nos cards quem ainda não tem). */
+export function useTermosEntrega() {
+  return useQuery({
+    queryKey: ['delivery_documents'],
+    queryFn: () => fetchAllRows<TermoEntrega>(() => (supabase as any).from('delivery_documents')
+      .select('id, delivery_id, file_path, file_name, mime_type, size_bytes, created_at')
+      .order('created_at', { ascending: true }).order('id', { ascending: true })),
+  });
+}
+
+/** Anexa um ou mais arquivos (imagem/PDF) à entrega. */
+export function useUploadTermosEntrega() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ deliveryId, arquivos }: { deliveryId: string; arquivos: File[] }) => {
+      let enviados = 0;
+      for (const f of arquivos) {
+        if (!TIPOS_COMPROVANTE.includes(f.type)) throw new Error(`"${f.name}": envie imagem (JPG/PNG/WEBP) ou PDF.`);
+        if (f.size > LIMITE_COMPROVANTE_MB * 1024 * 1024) throw new Error(`"${f.name}" tem mais de ${LIMITE_COMPROVANTE_MB} MB.`);
+        const ext = f.type === 'application/pdf' ? 'pdf' : f.type.split('/')[1].replace('jpeg', 'jpg');
+        const path = `${deliveryId}/${crypto.randomUUID()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from(BUCKET_TERMOS).upload(path, f, { contentType: f.type, upsert: false });
+        if (upErr) throw upErr;
+        const { error: dbErr } = await (supabase as any).from('delivery_documents').insert({
+          delivery_id: deliveryId, file_path: path, file_name: f.name.slice(0, 200), mime_type: f.type, size_bytes: f.size,
+        });
+        if (dbErr) {
+          await supabase.storage.from(BUCKET_TERMOS).remove([path]); // não deixa arquivo órfão
+          throw dbErr;
+        }
+        enviados++;
+      }
+      return enviados;
+    },
+    onSuccess: (n) => {
+      queryClient.invalidateQueries({ queryKey: ['delivery_documents'] });
+      toast({ title: `${n} arquivo(s) anexado(s) ao termo de entrega` });
+    },
+    onError: (error: Error) => {
+      queryClient.invalidateQueries({ queryKey: ['delivery_documents'] });
+      toast({ title: 'Erro ao anexar termo', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
+export function useDeleteTermoEntrega() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (t: TermoEntrega) => {
+      const { error } = await (supabase as any).from('delivery_documents').delete().eq('id', t.id);
+      if (error) throw error;
+      await supabase.storage.from(BUCKET_TERMOS).remove([t.file_path]);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['delivery_documents'] });
+      toast({ title: 'Arquivo removido' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao remover arquivo', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
+/** Abre o arquivo do termo numa nova aba (link temporário de 10 min). */
+export async function abrirTermoEntrega(t: TermoEntrega) {
+  const aba = window.open('about:blank', '_blank');
+  try {
+    const { data, error } = await supabase.storage.from(BUCKET_TERMOS).createSignedUrl(t.file_path, 600);
+    if (error || !data?.signedUrl) throw error ?? new Error('Não foi possível abrir o arquivo.');
+    if (aba) { aba.opener = null; aba.location.href = data.signedUrl; } else window.location.href = data.signedUrl;
+  } catch (e) {
+    aba?.close();
+    throw e;
+  }
+}

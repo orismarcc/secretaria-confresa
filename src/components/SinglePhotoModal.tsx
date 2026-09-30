@@ -24,7 +24,7 @@ interface SinglePhotoModalProps {
 
 /**
  * Registro com UMA foto obrigatória (câmera ou galeria). Usado nas etapas da
- * logística ("Entrega" = carregamento e Finalizar = entrega na propriedade).
+ * logística (odômetro no início e na finalização, carregamento e entrega).
  * A localização é captada automaticamente por quem chama, após confirmar.
  */
 export function SinglePhotoModal({

@@ -197,6 +197,19 @@ jobs:
           echo "SEFAZ Boleto GTA lançado e assinado: $gta"; test "$gta" = "1"
           cmp=$(psql "$LOCAL_DB" -Atc "select count(*) from public.sefaz_comprovantes c join storage.objects o on o.bucket_id = 'sefaz-comprovantes' and o.name = c.file_path")
           echo "SEFAZ comprovante no banco E no armazenamento: $cmp"; test "$cmp" = "1"
+          # Início do serviço gravado pelo app
+          ini2=$(psql "$LOCAL_DB" -Atc "select count(*) from public.services where id = 'e2e00000-0000-0000-0000-000000000004' and started_at is not null and started_at <= completed_at")
+          echo "início do serviço gravado: $ini2"; test "$ini2" = "1"
+          # Logística: 4 etapas com foto, entrega separada da finalização
+          lg=$(psql "$LOCAL_DB" -Atc "select status || ' ' || (started_at is not null) || ' ' || (loaded_at is not null) || ' ' || (delivered_at is not null) from public.services where id = 'e2e00000-0000-0000-0000-000000000034'")
+          echo "logística (status início carreg. entrega): $lg"; test "$lg" = "completed true true true"
+          ev=$(psql "$LOCAL_DB" -Atc "select string_agg(sp.event_type, ',' order by sp.event_type) from public.service_photos sp join storage.objects o on o.bucket_id = 'service-photos' and o.name = sp.storage_path where sp.service_id = 'e2e00000-0000-0000-0000-000000000034'")
+          echo "logística: etapas com foto no armazenamento: $ev"; test "$ev" = "delivery,finish,loading,start"
+          lp=$(psql "$LOCAL_DB" -Atc "select latitude::float || ',' || longitude::float from public.producers where id = 'e2e00000-0000-0000-0000-000000000033'")
+          echo "logística: produtor recebeu o GPS da ENTREGA: $lp"; test "$lp" = "-10.66,-51.66"
+          # Entregas: termo anexado (banco E armazenamento)
+          tm=$(psql "$LOCAL_DB" -Atc "select count(*) from public.delivery_documents d join storage.objects o on o.bucket_id = 'delivery-documents' and o.name = d.file_path where d.delivery_id = 'e2e00000-0000-0000-0000-000000000044'")
+          echo "termo de entrega no banco E no armazenamento: $tm"; test "$tm" = "1"
 
       - name: Desligar
         if: always()

@@ -18,13 +18,27 @@ async function uploadPhoto(serviceId: string, blobKey: string | undefined, tag: 
   return filename;
 }
 
-// Envia UMA ação (Iniciar/Finalizar) para o Supabase: foto(s) -> storage,
+// Envia UMA ação (Iniciar/Carregamento/Entrega/Finalizar) para o Supabase: foto(s) -> storage,
 // registro em service_photos e atualização do status do atendimento.
 async function pushAction(action: OperatorAction): Promise<void> {
   if (action.type === 'start') {
-    // Iniciar: só GPS (sem foto). Grava as coordenadas no atendimento para o
-    // mapa já aparecer "em execução" para a equipe interna.
-    if (action.latitude != null) {
+    // Iniciar: GPS (e, na logística, a foto do odômetro — km inicial). Grava as
+    // coordenadas no atendimento para o mapa já aparecer "em execução".
+    const odometroPath = await uploadPhoto(action.serviceId, action.blobKey, 'start');
+    if (odometroPath) {
+      // id da ação: se o envio for repetido, não duplica (ON CONFLICT DO NOTHING).
+      const { error: pErr } = await supabase.from('service_photos').upsert({
+        id: action.id,
+        service_id: action.serviceId,
+        storage_path: odometroPath,
+        latitude: action.latitude,
+        longitude: action.longitude,
+        ...(action.accuracy != null ? { accuracy_m: action.accuracy } : {}),
+        captured_at: action.capturedAt,
+        event_type: 'start',
+      } as any, { onConflict: 'id', ignoreDuplicates: true });
+      if (pErr) throw pErr;
+    } else if (action.latitude != null) {
       const { error: pErr } = await supabase.from('service_photos').insert({
         service_id: action.serviceId,
         storage_path: null,
@@ -38,6 +52,8 @@ async function pushAction(action: OperatorAction): Promise<void> {
     }
     const { error: sErr } = await supabase.from('services').update({
       status: 'in_progress',
+      // horário do toque em "Iniciar" (mesmo que tenha sincronizado depois)
+      started_at: action.capturedAt,
       operator_id: action.operatorId,
       latitude: action.latitude,
       longitude: action.longitude,
@@ -46,11 +62,14 @@ async function pushAction(action: OperatorAction): Promise<void> {
     return;
   }
 
-  if (action.type === 'load') {
-    // Logística — "Entrega": foto do caminhão sendo carregado + GPS do local de
-    // carregamento. O registro usa o id da ação: se o envio cair no meio e for
+  if (action.type === 'load' || action.type === 'deliver') {
+    // Logística — Carregamento (foto do caminhão sendo carregado + GPS do local)
+    // ou Entrega (foto da entrega + GPS da propriedade). O atendimento segue em
+    // execução. O registro usa o id da ação: se o envio cair no meio e for
     // repetido, não duplica (ON CONFLICT DO NOTHING).
-    const loadPath = await uploadPhoto(action.serviceId, action.blobKey, 'loading');
+    const isLoad = action.type === 'load';
+    const eventType = isLoad ? 'loading' : 'delivery';
+    const loadPath = await uploadPhoto(action.serviceId, action.blobKey, eventType);
     const { error: pErr } = await supabase.from('service_photos').upsert({
       id: action.id,
       service_id: action.serviceId,
@@ -59,19 +78,20 @@ async function pushAction(action: OperatorAction): Promise<void> {
       longitude: action.longitude,
       ...(action.accuracy != null ? { accuracy_m: action.accuracy } : {}),
       captured_at: action.capturedAt,
-      event_type: 'loading',
+      event_type: eventType,
     } as any, { onConflict: 'id', ignoreDuplicates: true });
     if (pErr) throw pErr;
     const { error: sErr } = await supabase.from('services')
-      // loaded_at ainda não está nos tipos gerados do Supabase (desatualizados).
-      .update({ loaded_at: action.capturedAt } as any)
+      // delivered_at entra nos tipos gerados após a migração 20260930000002.
+      .update((isLoad ? { loaded_at: action.capturedAt } : { delivered_at: action.capturedAt }) as any)
       .eq('id', action.serviceId);
     if (sErr) throw sErr;
     return;
   }
 
   // Finalizar: até duas fotos (início e término), ambas opcionais.
-  // Na logística vem também o GPS do local de entrega (propriedade do produtor);
+  // Na logística vem a foto do odômetro (km final) e o GPS do local onde foi
+  // finalizado (a entrega na propriedade já foi registrada no passo 'deliver');
   // no fluxo normal latitude/longitude chegam nulos (sem mudança).
   const finishPath = await uploadPhoto(action.serviceId, action.blobKey, 'finish');
   const startPath = await uploadPhoto(action.serviceId, action.startBlobKey, 'start');

@@ -67,6 +67,7 @@ import {
   TrendingUp,
   MinusCircle,
   Download,
+  Paperclip,
 } from 'lucide-react';
 import { format, parseISO, subMonths, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -91,7 +92,10 @@ import {
   useDeliveryItems,
   useSaveDeliveryItems,
   useResponsibleTechnicians,
+  useTermosEntrega,
+  type TermoEntrega,
 } from '@/hooks/useSupabaseData';
+import { TermoEntregaDialog } from '@/components/entregas/TermoEntregaDialog';
 
 // ─── Delivery type color palette ─────────────────────────────────────────────
 
@@ -1156,6 +1160,14 @@ export default function DeliveriesPage() {
   const updateDelivery = useUpdateDelivery();
   const deleteDelivery = useDeleteDelivery();
   const saveDeliveryItems = useSaveDeliveryItems();
+  // Termo / comprovante de entrega anexado (por entrega = por produtor)
+  const { data: termos = [] } = useTermosEntrega();
+  const termosPorEntrega = useMemo(() => {
+    const m = new Map<string, TermoEntrega[]>();
+    termos.forEach((t) => { const l = m.get(t.delivery_id) ?? []; l.push(t); m.set(t.delivery_id, l); });
+    return m;
+  }, [termos]);
+  const [termoDe, setTermoDe] = useState<any | null>(null);
 
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<TabType>('pending');
@@ -1582,6 +1594,31 @@ export default function DeliveriesPage() {
           </div>
         )}
 
+        {/* Termo / comprovante de entrega */}
+        {(() => {
+          const n = termosPorEntrega.get(d.id)?.length ?? 0;
+          return (
+            <button
+              type="button"
+              onClick={() => setTermoDe(d)}
+              className={cn(
+                'w-full flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium text-left transition-colors',
+                n > 0
+                  ? 'border-success/30 bg-success/10 text-success hover:bg-success/15'
+                  : isCompleted
+                    ? 'border-amber-400/60 bg-amber-500/10 text-amber-800 hover:bg-amber-500/15 dark:text-amber-300'
+                    : 'border-dashed text-muted-foreground hover:bg-muted/50',
+              )}
+              title={n > 0 ? 'Ver / anexar termo de entrega' : 'Anexar termo de entrega'}
+            >
+              <Paperclip className="h-3.5 w-3.5 shrink-0" />
+              <span className="flex-1">
+                {n > 0 ? `Termo de entrega anexado${n > 1 ? ` (${n} arquivos)` : ''}` : 'Sem termo de entrega — anexar'}
+              </span>
+            </button>
+          );
+        })()}
+
         <div className="space-y-1.5 text-sm">
           {d.producers?.cpf && (
             <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -1742,6 +1779,14 @@ export default function DeliveriesPage() {
                           <Badge variant="secondary" className="shrink-0 bg-success/10 text-success border-success/20">
                             {group.deliveries.length} realizada{group.deliveries.length !== 1 ? 's' : ''}
                           </Badge>
+                          {(() => {
+                            const semTermo = group.deliveries.filter((d) => !termosPorEntrega.has(d.id)).length;
+                            return semTermo > 0 ? (
+                              <Badge variant="outline" className="shrink-0 gap-1 border-amber-400/60 bg-amber-500/10 text-amber-800 dark:text-amber-300">
+                                <Paperclip className="h-3 w-3" /> {semTermo} sem termo
+                              </Badge>
+                            ) : null;
+                          })()}
                         </div>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 pl-6 text-xs">
                           <span className="inline-flex items-center gap-1 text-muted-foreground">
@@ -2123,6 +2168,15 @@ export default function DeliveriesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <TermoEntregaDialog
+        open={!!termoDe}
+        onOpenChange={(o) => { if (!o) setTermoDe(null); }}
+        deliveryId={termoDe?.id ?? null}
+        producerName={termoDe?.producers?.name}
+        demandName={termoDe?.demand_types?.name}
+        arquivos={termoDe ? termosPorEntrega.get(termoDe.id) ?? [] : []}
+      />
 
       {/* Confirm Dialogs */}
       <ConfirmDialog

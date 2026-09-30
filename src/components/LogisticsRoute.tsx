@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Navigation, Truck, Flag, ExternalLink, Camera } from 'lucide-react';
+import { Navigation, Truck, Flag, ExternalLink, Camera, PackageCheck, Gauge } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -16,7 +16,7 @@ interface EventRow {
   url?: string;
 }
 
-/** Eventos (início, carregamento, finalização) com GPS e foto de um atendimento. */
+/** Eventos (início, carregamento, entrega, finalização) com GPS e foto de um atendimento. */
 function useServiceEvents(serviceId: string) {
   return useQuery({
     queryKey: ['service_events', serviceId],
@@ -61,25 +61,34 @@ interface Props {
 }
 
 /**
- * Rota da logística (calcário/insumos): Partida → Carregamento → Entrega na
- * propriedade, cada etapa com horário, coordenadas (mapa) e foto.
+ * Rota da logística (calcário/insumos). Fluxo atual: Início (odômetro) →
+ * Carregamento → Entrega na propriedade → Finalização (odômetro), cada etapa
+ * com horário, coordenadas (mapa) e foto. Atendimentos do fluxo antigo (sem o
+ * registro de entrega, em que a finalização era feita na propriedade)
+ * continuam exibidos como antes: Partida → Carregamento → Entrega.
  */
 export function LogisticsRoute({ serviceId, fallbackStart }: Props) {
   const { data: events = [], isLoading } = useServiceEvents(serviceId);
 
   const last = (type: string) => [...events].reverse().find((e) => e.event_type === type) || null;
-  // Partida: o registro de GPS do início (e não a foto opcional de início da finalização comum).
-  const start = [...events].reverse().find((e) => e.event_type === 'start' && e.latitude != null) || null;
+  // Partida: o registro de início com GPS; sem GPS, o que tiver a foto do odômetro.
+  const start = [...events].reverse().find((e) => e.event_type === 'start' && e.latitude != null)
+    || [...events].reverse().find((e) => e.event_type === 'start' && e.storage_path) || null;
+  const startPhoto = [...events].reverse().find((e) => e.event_type === 'start' && e.url) || null;
   const loading = last('loading');
+  const delivery = last('delivery');
   const finish = last('finish');
+  // Fluxo antigo: finalizado sem registro de entrega → a finalização foi a entrega.
+  const legado = !delivery && !!finish;
 
   const steps = [
     {
-      key: 'start', icon: Navigation, title: 'Partida', subtitle: 'Início do atendimento',
+      key: 'start', icon: Navigation, title: legado ? 'Partida' : 'Início',
+      subtitle: legado ? 'Início do atendimento' : 'Partida — foto do odômetro (km inicial)',
       at: start?.captured_at ?? null,
       lat: start?.latitude ?? fallbackStart?.latitude ?? null,
       lng: start?.longitude ?? fallbackStart?.longitude ?? null,
-      url: undefined as string | undefined, done: !!(start || fallbackStart?.latitude),
+      url: startPhoto?.url, done: !!(start || fallbackStart?.latitude),
       color: 'text-blue-600 bg-blue-500/10 border-blue-500/30',
     },
     {
@@ -88,12 +97,23 @@ export function LogisticsRoute({ serviceId, fallbackStart }: Props) {
       url: loading?.url, done: !!loading,
       color: 'text-amber-700 bg-amber-500/10 border-amber-500/30',
     },
-    {
+    legado ? {
       key: 'finish', icon: Flag, title: 'Entrega', subtitle: 'Propriedade do produtor',
       at: finish?.captured_at ?? null, lat: finish?.latitude ?? null, lng: finish?.longitude ?? null,
       url: finish?.url, done: !!finish,
       color: 'text-emerald-700 bg-emerald-500/10 border-emerald-500/30',
+    } : {
+      key: 'delivery', icon: PackageCheck, title: 'Entrega', subtitle: 'Propriedade do produtor',
+      at: delivery?.captured_at ?? null, lat: delivery?.latitude ?? null, lng: delivery?.longitude ?? null,
+      url: delivery?.url, done: !!delivery,
+      color: 'text-sky-700 bg-sky-500/10 border-sky-500/30',
     },
+    ...(legado ? [] : [{
+      key: 'finish', icon: Gauge, title: 'Finalização', subtitle: 'Foto do odômetro (km final)',
+      at: finish?.captured_at ?? null, lat: finish?.latitude ?? null, lng: finish?.longitude ?? null,
+      url: finish?.url, done: !!finish,
+      color: 'text-emerald-700 bg-emerald-500/10 border-emerald-500/30',
+    }]),
   ];
 
   return (

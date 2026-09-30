@@ -27,6 +27,7 @@ import {
   Package,
   Banknote,
   Receipt,
+  PlayCircle,
 } from 'lucide-react';
 import { isDamOverdue } from '@/lib/damUtils';
 import { getUserColorClass } from '@/lib/userColors';
@@ -63,6 +64,12 @@ function completedAtLabel(raw: string): string {
   return format(d, manualDateOnly ? 'dd/MM/yyyy' : "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
 }
 
+function startedAtLabel(raw: string): string {
+  const d = new Date(raw.replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return raw;
+  return format(d, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
+}
+
 interface ServiceDetailViewProps {
   service: {
     id: string;
@@ -75,6 +82,7 @@ interface ServiceDetailViewProps {
     appointment_date?: string | null;
     created_at?: string | null;
     completed_at?: string | null;
+    started_at?: string | null;
     cancellation_reason?: string | null;
     notes?: string | null;
     completion_notes?: string | null;
@@ -459,6 +467,17 @@ export function ServiceDetailView({
         </div>
       )}
 
+      {/* Início do serviço — enquanto está em execução */}
+      {!isCompleted && service.status === 'in_progress' && service.started_at && (
+        <div className="flex items-center gap-2">
+          <PlayCircle className="h-4 w-4 text-blue-500" />
+          <div>
+            <p className="text-sm text-muted-foreground">Iniciado em</p>
+            <p className="font-medium">{startedAtLabel(service.started_at)}</p>
+          </div>
+        </div>
+      )}
+
       {/* Completion Info - Only for archived services */}
       {isCompleted && (
         <>
@@ -466,6 +485,16 @@ export function ServiceDetailView({
 
           <div className="space-y-3">
             <h3 className="font-semibold text-sm text-primary">Informações da Finalização</h3>
+
+            {service.started_at && (
+              <div className="flex items-center gap-2">
+                <PlayCircle className="h-4 w-4 text-blue-500" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Iniciado em</p>
+                  <p className="font-medium">{startedAtLabel(service.started_at)}</p>
+                </div>
+              </div>
+            )}
 
             {service.completed_at && (
               <div className="flex items-center gap-2">
