@@ -169,6 +169,19 @@ export async function otimizarRota(partida: PontoRota, paradas: PontoRota[], vol
   }
 }
 
+/**
+ * Link do Google Maps até UMA parada, saindo de onde o aparelho está. Útil
+ * quando o Google recusa a rota completa: basta uma parada que ele não alcança
+ * (estrada vicinal que não está no mapa dele) para a rota inteira falhar.
+ */
+export function linkGoogleMapsParada(p: PontoRota): string {
+  const u = new URL('https://www.google.com/maps/dir/');
+  u.searchParams.set('api', '1');
+  u.searchParams.set('destination', `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`);
+  u.searchParams.set('travelmode', 'driving');
+  return u.toString();
+}
+
 /** Links do Google Maps para navegar (máx. 9 paradas intermediárias por link). */
 export function linksGoogleMaps(partida: PontoRota, paradasOrdenadas: PontoRota[], voltar: boolean): string[] {
   const pts = [partida, ...paradasOrdenadas, ...(voltar ? [partida] : [])];

@@ -8,7 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Route, X, Loader2, Navigation, FileDown, AlertTriangle, ListPlus, Trash2 } from 'lucide-react';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useToast } from '@/hooks/use-toast';
-import { otimizarRota, linksGoogleMaps, type ResultadoRota, type PontoRota } from './otimizarRota';
+import { otimizarRota, linksGoogleMaps, linkGoogleMapsParada, type ResultadoRota, type PontoRota } from './otimizarRota';
+// Import direto (não sob demanda): o jsPDF já está no pacote principal, e o
+// carregamento sob demanda falhava para quem estava com a página aberta desde
+// antes de uma atualização do sistema (o arquivo antigo deixa de existir).
+import { exportarRoteiroPdf } from './roteiroPdf';
 
 export const MAX_PARADAS = 25;
 
@@ -101,23 +105,34 @@ export function RotaPanel({ sede, selecionadas, disponiveis, onRemover, onAdicio
   const totMetros = res ? res.r.trechos.reduce((s, x) => s + x.metros, 0) : 0;
   const nomePartida = origem === 'gps' && gps ? 'Minha localização' : sede.nome;
 
+  const [gerandoPdf, setGerandoPdf] = useState(false);
   const baixarPdf = async () => {
-    if (!res) return;
-    const { exportarRoteiroPdf } = await import('./roteiroPdf');
-    await exportarRoteiroPdf(
-      res.paradas.map((p, i) => ({
-        ordem: i + 1, produtor: p.nome, propriedade: p.propriedade, telefone: p.telefone || '—',
-        chegada: hhmm(chegadas[i]), trecho: `${fmtKm(res.r.trechos[i].metros)} · ${fmtMin(res.r.trechos[i].segundos)}`,
-        coordenadas: `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`,
-      })),
-      [
-        `Partida: ${nomePartida} às ${hhmm(saidaMin)} · ${res.paradas.length} visita(s) · ${visitaMin || 0} min por visita`,
-        `Distância total: ${fmtKm(totMetros)} · Tempo dirigindo: ${fmtMin(totDirigindo)} · ${retorno != null ? `Retorno previsto: ${hhmm(retorno)}` : `Término previsto: ${hhmm(t)}`}`,
-      ],
-      res.r.fonte === 'estradas'
-        ? 'Ordem de visitas otimizada para o menor tempo total de deslocamento, com tempos pelas estradas do OpenStreetMap. Tempos são estimativas; estradas vicinais podem variar com chuva e conservação.'
-        : 'Ordem calculada por estimativa em linha reta (serviço de rotas indisponível no momento). Tempos aproximados.',
-    );
+    if (!res || gerandoPdf) return;
+    setGerandoPdf(true);
+    try {
+      await exportarRoteiroPdf(
+        res.paradas.map((p, i) => ({
+          ordem: i + 1, produtor: p.nome, propriedade: p.propriedade, telefone: p.telefone || '—',
+          chegada: hhmm(chegadas[i]), trecho: `${fmtKm(res.r.trechos[i].metros)} · ${fmtMin(res.r.trechos[i].segundos)}`,
+          coordenadas: `${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`,
+        })),
+        [
+          `Partida: ${nomePartida} às ${hhmm(saidaMin)} · ${res.paradas.length} visita(s) · ${visitaMin || 0} min por visita`,
+          `Distância total: ${fmtKm(totMetros)} · Tempo dirigindo: ${fmtMin(totDirigindo)} · ${retorno != null ? `Retorno previsto: ${hhmm(retorno)}` : `Término previsto: ${hhmm(t)}`}`,
+        ],
+        res.r.fonte === 'estradas'
+          ? 'Ordem de visitas otimizada para o menor tempo total de deslocamento, com tempos pelas estradas do OpenStreetMap. Tempos são estimativas; estradas vicinais podem variar com chuva e conservação.'
+          : 'Ordem calculada por estimativa em linha reta (serviço de rotas indisponível no momento). Tempos aproximados.',
+      );
+    } catch (e) {
+      toast({
+        title: 'Não foi possível gerar o PDF do roteiro',
+        description: e instanceof Error ? e.message : 'Tente novamente; se continuar, recarregue a página.',
+        variant: 'destructive',
+      });
+    } finally {
+      setGerandoPdf(false);
+    }
   };
 
   return (
@@ -206,7 +221,18 @@ export function RotaPanel({ sede, selecionadas, disponiveis, onRemover, onAdicio
                   <p className="text-[10.5px] text-muted-foreground truncate">{p.propriedade}</p>
                   <p className="text-[10.5px] text-muted-foreground">+{fmtKm(res.r.trechos[i].metros)} · {fmtMin(res.r.trechos[i].segundos)}</p>
                 </div>
-                <span className="text-xs font-semibold tabular-nums">{hhmm(chegadas[i])}</span>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="text-xs font-semibold tabular-nums">{hhmm(chegadas[i])}</span>
+                  <a
+                    href={linkGoogleMapsParada(p)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Navegar até esta parada no Google Maps (a partir de onde você está)"
+                    className="inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10.5px] font-medium text-primary hover:bg-muted"
+                  >
+                    <Navigation className="h-3 w-3" /> Ir
+                  </a>
+                </div>
               </li>
             ))}
             {retorno != null && (
@@ -223,8 +249,11 @@ export function RotaPanel({ sede, selecionadas, disponiveis, onRemover, onAdicio
                 </a>
               </Button>
             ))}
-            <Button type="button" variant="outline" size="sm" className="h-8" onClick={baixarPdf}>
-              <FileDown className="h-4 w-4 mr-1" /> Baixar roteiro (PDF)
+            <p className="text-[10.5px] text-muted-foreground">
+              Se o Google Maps não calcular a rota completa (alguma parada fora das estradas que ele conhece), use o botão <b>Ir</b> de cada parada.
+            </p>
+            <Button type="button" variant="outline" size="sm" className="h-8" onClick={baixarPdf} disabled={gerandoPdf}>
+              {gerandoPdf ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <FileDown className="h-4 w-4 mr-1" />} Baixar roteiro (PDF)
             </Button>
           </div>
         </div>

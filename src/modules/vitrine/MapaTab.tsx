@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { adicionarLimitesMunicipio } from '@/lib/mapa/limitesMunicipio';
+import { adicionarCamadaBase } from '@/lib/mapa/camadaBase';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MapPinOff } from 'lucide-react';
@@ -81,14 +82,11 @@ export function MapaTab({ onOpenFornecedor }: { onOpenFornecedor: (id: string) =
   useEffect(() => {
     if (!divRef.current || mapRef.current) return;
     const map = L.map(divRef.current, { zoomControl: true }).setView([SEDE.lat, SEDE.lng], 9);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18,
-      attribution: '&copy; colaboradores do OpenStreetMap',
-    }).addTo(map);
+    const tirarFundo = adicionarCamadaBase(map); // Mapa (OSM, padrão) / Satélite
     const tirarLimites = adicionarLimitesMunicipio(map); // limite IBGE, por baixo dos pontos
     layerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
-    return () => { tirarLimites(); map.remove(); mapRef.current = null; layerRef.current = null; };
+    return () => { tirarLimites(); tirarFundo(); map.remove(); mapRef.current = null; layerRef.current = null; };
   }, []);
 
   // Atualiza os pontos.
