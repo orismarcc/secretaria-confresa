@@ -1006,25 +1006,41 @@ export function useReassignServicesOperator() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: async ({ serviceIds, toOperatorId }: { serviceIds: string[]; toOperatorId: string }) => {
-      if (serviceIds.length === 0) return { count: 0 };
+    mutationFn: async ({ serviceIds, toOperatorId, maquinas = {} }: {
+      serviceIds: string[]; toOperatorId: string;
+      /** atendimento → máquina que passa a constar (ausente = mantém a atual). */
+      maquinas?: Record<string, string>;
+    }) => {
+      if (serviceIds.length === 0) return { count: 0, maquinasAlteradas: 0 };
+      // Agrupa por máquina de destino ('' = só troca o operador, como antes).
+      const grupos = new Map<string, string[]>();
+      serviceIds.forEach((id) => {
+        const m = maquinas[id] || '';
+        grupos.set(m, [...(grupos.get(m) || []), id]);
+      });
       // Atualiza em lotes para não estourar o tamanho da URL do PostgREST quando
       // há muitos atendimentos. Se um lote falhar, aborta e propaga o erro.
       const CHUNK = 150;
-      for (let i = 0; i < serviceIds.length; i += CHUNK) {
-        const slice = serviceIds.slice(i, i + CHUNK);
-        const { error } = await supabase
-          .from('services')
-          .update({ operator_id: toOperatorId })
-          .in('id', slice);
-        if (error) throw error;
+      for (const [maq, ids] of grupos) {
+        for (let i = 0; i < ids.length; i += CHUNK) {
+          const slice = ids.slice(i, i + CHUNK);
+          const { error } = await supabase
+            .from('services')
+            .update(maq ? { operator_id: toOperatorId, machinery_id: maq } : { operator_id: toOperatorId })
+            .in('id', slice);
+          if (error) throw error;
+        }
       }
-      return { count: serviceIds.length };
+      return { count: serviceIds.length, maquinasAlteradas: serviceIds.filter((id) => maquinas[id]).length };
     },
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
       queryClient.invalidateQueries({ queryKey: ['services', 'pending'] });
-      toast({ title: `${res.count} atendimento(s) reatribuído(s).` });
+      toast({
+        title: `${res.count} atendimento(s) reatribuído(s).`,
+        description: res.maquinasAlteradas ? `Maquinário atualizado em ${res.maquinasAlteradas}.` : undefined,
+      });
+      queryClient.invalidateQueries({ queryKey: ['custo_maquinas'] });
     },
     onError: (error: Error) => {
       toast({ title: 'Erro ao reatribuir atendimentos', description: friendlyDbError(error), variant: 'destructive' });

@@ -8,12 +8,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { ArrowRight, Users, Loader2, AlertTriangle } from 'lucide-react';
+import { ArrowRight, Users, Loader2, AlertTriangle, Tractor } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   useServices, useSettlements, useGlebas, useDemandTypes,
   useReassignServicesOperator, useUnassignedServices,
+  useOperatorMachineryMap, useMachinery,
 } from '@/hooks/useSupabaseData';
+import { escolherMaquina, historicoDeMaquinas, type EscolhaMaquina } from '@/lib/reatribuicao';
 import { useOperators } from '@/hooks/useOperatorData';
 
 interface ReassignOperatorDialogProps {
@@ -50,6 +52,9 @@ export function ReassignOperatorDialog({ open, onOpenChange }: ReassignOperatorD
   const { data: glebas = [] } = useGlebas();
   const { data: demandTypes = [] } = useDemandTypes();
   const reassign = useReassignServicesOperator();
+  // Maquinário acompanha o operador (quando for possível decidir).
+  const { data: vinculos = {} } = useOperatorMachineryMap();
+  const { data: maquinarios = [] } = useMachinery();
 
   const [settlementId, setSettlementId] = useState('');
   const [glebaId, setGlebaId] = useState(NONE);
@@ -103,6 +108,26 @@ export function ReassignOperatorDialog({ open, onOpenChange }: ReassignOperatorD
 
   const targetIds = isUnassigned ? matched.filter((s) => selected.has(s.id)).map((s) => s.id) : matched.map((s) => s.id);
 
+  // Máquina de cada atendimento reatribuído (regra em lib/reatribuicao).
+  const historico = useMemo(() => historicoDeMaquinas(services as any[], vinculos), [services, vinculos]);
+  const planoMaquinas = useMemo(() => {
+    const porId = new Map<string, EscolhaMaquina>();
+    if (!toOp) return porId;
+    const alvo = new Set(targetIds);
+    matched.forEach((s) => { if (alvo.has(s.id)) porId.set(s.id, escolherMaquina(s, toOp, vinculos, historico)); });
+    return porId;
+  }, [matched, targetIds.join(','), toOp, vinculos, historico]); // eslint-disable-line react-hooks/exhaustive-deps
+  const resumoMaquinas = useMemo(() => {
+    const trocar = new Map<string, number>(); let mantidos = 0; let iguais = 0; let motivoMantido = '';
+    planoMaquinas.forEach((e) => {
+      if (e.machineryId) trocar.set(e.machineryId, (trocar.get(e.machineryId) || 0) + 1);
+      else if (e.motivo === 'ja_igual') iguais++;
+      else { mantidos++; motivoMantido = e.motivo; }
+    });
+    return { trocar: [...trocar.entries()], mantidos, iguais, motivoMantido };
+  }, [planoMaquinas]);
+  const nomeMaquina = (id: string) => (maquinarios as any[]).find((m) => m.id === id)?.name || 'máquina vinculada';
+
   const opName = (id: string) => (operators as any[]).find((o) => o.id === id)?.name || '—';
   const canPreview = !!fromOp && !!toOp && fromOp !== toOp && (isUnassigned || !!settlementId);
 
@@ -119,7 +144,9 @@ export function ReassignOperatorDialog({ open, onOpenChange }: ReassignOperatorD
   const allChecked = matched.length > 0 && matched.every((s) => selected.has(s.id));
 
   const doReassign = async () => {
-    await reassign.mutateAsync({ serviceIds: targetIds, toOperatorId: toOp });
+    const maquinas: Record<string, string> = {};
+    planoMaquinas.forEach((e, id) => { if (e.machineryId) maquinas[id] = e.machineryId; });
+    await reassign.mutateAsync({ serviceIds: targetIds, toOperatorId: toOp, maquinas });
     close(false);
   };
 
@@ -262,6 +289,23 @@ export function ReassignOperatorDialog({ open, onOpenChange }: ReassignOperatorD
                 {glebaId !== NONE ? ' (gleba selecionada)' : ''}
                 {demandTypeId !== NONE ? ' (tipo de serviço selecionado)' : ''}.
               </p>
+              {targetIds.length > 0 && (
+                <div className="mt-2 border-t pt-2 space-y-0.5 text-xs">
+                  <p className="font-medium flex items-center gap-1.5"><Tractor className="h-3.5 w-3.5" /> Maquinário</p>
+                  {resumoMaquinas.trocar.map(([id, n]) => (
+                    <p key={id} className="text-foreground">{n} atendimento(s) passam para <strong>{nomeMaquina(id)}</strong></p>
+                  ))}
+                  {resumoMaquinas.iguais > 0 && <p className="text-muted-foreground">{resumoMaquinas.iguais} já estão com a máquina de {opName(toOp)}</p>}
+                  {resumoMaquinas.mantidos > 0 && (
+                    <p className="text-amber-700 dark:text-amber-400">
+                      {resumoMaquinas.mantidos} mantêm a máquina atual —{' '}
+                      {resumoMaquinas.motivoMantido === 'sem_vinculo'
+                        ? `${opName(toOp)} não tem máquina vinculada (Colaboradores)`
+                        : `${opName(toOp)} tem mais de uma máquina e não há histórico que indique qual usar neste tipo de serviço`}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -269,7 +313,7 @@ export function ReassignOperatorDialog({ open, onOpenChange }: ReassignOperatorD
             <div className="flex items-start gap-2 rounded-lg border border-amber-400/50 bg-amber-500/10 p-2.5 text-xs text-amber-800 dark:text-amber-300">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
               <span>
-                Isso altera o operador nos atendimentos <strong>{scopeLabel}</strong> selecionados.
+                Isso altera o operador{resumoMaquinas.trocar.length ? ' e o maquinário' : ''} nos atendimentos <strong>{scopeLabel}</strong> selecionados.
                 {isUnassigned
                   ? ' Para desfazer, edite o operador desses atendimentos.'
                   : ' A ação é reversível refazendo a reatribuição no sentido contrário.'}
