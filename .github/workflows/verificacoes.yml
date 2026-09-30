@@ -110,20 +110,21 @@ jobs:
       - name: Copiar configuração de armazenamento (buckets e regras, sem arquivos)
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGOPTIONS: -c default_transaction_read_only=on
         run: |
           PROD="$(cat supabase/.temp/pooler-url)"
-          psql "$PROD" -v ON_ERROR_STOP=1 -Atc "set default_transaction_read_only = on;
+          psql "$PROD" -v ON_ERROR_STOP=1 -Atc "
             select format('insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types) values (%L, %L, %L, %s, %L) on conflict (id) do nothing;',
                           id, name, public, coalesce(file_size_limit::text, 'null'), allowed_mime_types)
             from storage.buckets order by id;" > "$RUNNER_TEMP/buckets.sql"
-          psql "$PROD" -v ON_ERROR_STOP=1 -Atc "set default_transaction_read_only = on;
+          psql "$PROD" -v ON_ERROR_STOP=1 -Atc "
             select format('drop policy if exists %I on storage.objects; create policy %I on storage.objects as %s for %s to %s%s%s;',
                           policyname, policyname, permissive, cmd, array_to_string(roles, ', '),
                           coalesce(' using (' || qual || ')', ''), coalesce(' with check (' || with_check || ')', ''))
             from pg_policies where schemaname = 'storage' and tablename = 'objects' order by policyname;" > "$RUNNER_TEMP/regras_storage.sql"
           echo "Buckets: $(grep -c . "$RUNNER_TEMP/buckets.sql") | regras: $(grep -c . "$RUNNER_TEMP/regras_storage.sql")"
-          psql "$LOCAL_DB" -v ON_ERROR_STOP=1 -q -f "$RUNNER_TEMP/buckets.sql"
-          psql "$LOCAL_DB" -v ON_ERROR_STOP=1 -q -f "$RUNNER_TEMP/regras_storage.sql"
+          PGOPTIONS= psql "$LOCAL_DB" -v ON_ERROR_STOP=1 -q -f "$RUNNER_TEMP/buckets.sql"
+          PGOPTIONS= psql "$LOCAL_DB" -v ON_ERROR_STOP=1 -q -f "$RUNNER_TEMP/regras_storage.sql"
 
       - name: Aplicar SÓ as migrations que ainda não estão na produção
         run: |
