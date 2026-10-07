@@ -241,7 +241,7 @@ export default function ServicesPage() {
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   // Ordenação: 'default' (preferência proximo/DAM) ou por data de cadastro
-  const [sortBy, setSortBy] = useState<'default' | 'created_desc' | 'created_asc' | 'dam_paid_desc' | 'dam_paid_asc' | 'completed_desc' | 'completed_asc'>('default');
+  const [sortBy, setSortBy] = useState<'default' | 'created_desc' | 'created_asc' | 'dam_paid_desc' | 'dam_paid_asc' | 'completed_desc' | 'completed_asc' | 'settlement_asc' | 'settlement_desc'>('default');
   // Ordem por finalização só existe na aba de finalizados: ao voltar para os
   // ativos, retorna à ordem padrão.
   useEffect(() => {
@@ -357,7 +357,22 @@ export default function ServicesPage() {
     return matchesSearch && matchesDemandType && matchesCategory && matchesStatus && matchesExactStatus && matchesSettlement && matchesGleba && matchesDateFrom && matchesDateTo && matchesDam;
   }), [services, producers, demandTypes, search, demandTypeFilter, categoryFilter, statusFilter, exactStatus, settlementFilter, glebaFilter, dateFrom, dateTo, damFilter, yearFilter]);
 
+  const nomeAssentamento = useMemo(() => {
+    const m = new Map<string, string>();
+    (settlements as { id: string; name: string }[]).forEach((st) => m.set(st.id, st.name));
+    return m;
+  }, [settlements]);
+
   const sortedServices = useMemo(() => [...filteredServices].sort((a: DbService, b: DbService) => {
+    // Ordenação por assentamento (A–Z / Z–A). Sem assentamento vão para o fim;
+    // dentro do mesmo assentamento segue a ordem padrão da aba (abaixo).
+    if (sortBy === 'settlement_asc' || sortBy === 'settlement_desc') {
+      const nA = (a.settlement_id && nomeAssentamento.get(a.settlement_id)) || (a as any).settlements?.name || '';
+      const nB = (b.settlement_id && nomeAssentamento.get(b.settlement_id)) || (b as any).settlements?.name || '';
+      if (!nA !== !nB) return nA ? -1 : 1;
+      const cmp = nA.localeCompare(nB, 'pt-BR', { sensitivity: 'base', numeric: true });
+      if (cmp !== 0) return sortBy === 'settlement_asc' ? cmp : -cmp;
+    }
     // Ordenação explícita por data de cadastro (sobrepõe a ordem padrão, mantendo os filtros)
     if (sortBy === 'created_desc' || sortBy === 'created_asc') {
       const aC = parseSupabaseDate(a.created_at)?.getTime() ?? 0;
@@ -407,7 +422,7 @@ export default function ServicesPage() {
     const aDate = parseSupabaseDate(a.completed_at || a.updated_at);
     const bDate = parseSupabaseDate(b.completed_at || b.updated_at);
     return (bDate?.getTime() ?? 0) - (aDate?.getTime() ?? 0);
-  }), [filteredServices, statusFilter, sortBy]);
+  }), [filteredServices, statusFilter, sortBy, nomeAssentamento]);
 
   // Pagination
   const totalPages = Math.max(1, Math.ceil(sortedServices.length / ITEMS_PER_PAGE));
@@ -1252,6 +1267,8 @@ export default function ServicesPage() {
                   <SelectItem value="completed_asc">Finalização (mais antiga)</SelectItem>
                 </>
               )}
+              <SelectItem value="settlement_asc">Assentamento (A–Z)</SelectItem>
+              <SelectItem value="settlement_desc">Assentamento (Z–A)</SelectItem>
               <SelectItem value="created_desc">Cadastro (mais recente)</SelectItem>
               <SelectItem value="created_asc">Cadastro (mais antigo)</SelectItem>
               <SelectItem value="dam_paid_desc">DAM paga (mais recente)</SelectItem>
