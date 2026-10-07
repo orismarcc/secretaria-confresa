@@ -671,6 +671,10 @@ export default function OperatorsPage() {
   ];
 
   const metricsData = metricsOperator ? getOperatorMetrics(metricsOperator.id) : null;
+  // Pendentes cadastrados para o operador (pendente, próximo e em execução).
+  const pendentesOperador = metricsOperator
+    ? (services as any[]).filter((s) => s.operator_id === metricsOperator.id && s.status !== 'completed' && s.status !== 'cancelled')
+    : [];
 
   return (
     <AppLayout>
@@ -769,35 +773,66 @@ export default function OperatorsPage() {
                   <p className="text-sm text-muted-foreground">{metricsOperator.email}</p>
                 </div>
               </div>
-              {/* Relatório do Operador — mesmo PDF padrão (Relatório de Atividades),
-                  só com os atendimentos finalizados DESTE operador. */}
-              <Button
-                variant="outline"
-                className="w-full gap-2"
-                disabled={metricsData.total === 0}
-                onClick={() => generateExecutiveReport({
-                  services: (services as any[]).filter((s) => s.operator_id === metricsOperator.id),
-                  deliveries: [],
-                  producers: [],
-                  demandTypes: demandTypes as any[],
-                  settlements: settlements as any[],
-                  category: 'all',
-                  settlementId: 'all',
-                  servicesOnly: true,
-                  includeDamRevenue: isFullAdmin,
-                  scope: 'completed',
-                  operator: {
-                    name: metricsOperator.name,
-                    extraKpis: [
-                      { label: 'Dias de operação', value: String((metricsData as any).dias ?? 0) },
-                      { label: 'Assentamentos atendidos', value: String((metricsData as any).assentamentosAtendidos ?? 0) },
-                    ],
-                  },
-                })}
-              >
-                <FileDown className="h-4 w-4" />
-                Relatório do Operador (PDF)
-              </Button>
+              {/* Relatórios do Operador — mesmo PDF padrão (Relatório de Atividades),
+                  só com os atendimentos DESTE operador: realizados (finalizados) e
+                  pendentes (cadastrados para ele e ainda não finalizados). */}
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  disabled={metricsData.total === 0}
+                  onClick={() => generateExecutiveReport({
+                    services: (services as any[]).filter((s) => s.operator_id === metricsOperator.id),
+                    deliveries: [],
+                    producers: [],
+                    demandTypes: demandTypes as any[],
+                    settlements: settlements as any[],
+                    category: 'all',
+                    settlementId: 'all',
+                    servicesOnly: true,
+                    includeDamRevenue: isFullAdmin,
+                    scope: 'completed',
+                    operator: {
+                      name: metricsOperator.name,
+                      extraKpis: [
+                        { label: 'Dias de operação', value: String((metricsData as any).dias ?? 0) },
+                        { label: 'Assentamentos atendidos', value: String((metricsData as any).assentamentosAtendidos ?? 0) },
+                      ],
+                    },
+                  })}
+                >
+                  <FileDown className="h-4 w-4" />
+                  Realizados (PDF)
+                </Button>
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  disabled={pendentesOperador.length === 0}
+                  title={pendentesOperador.length === 0 ? 'Nenhum atendimento pendente cadastrado para este operador' : undefined}
+                  onClick={() => generateExecutiveReport({
+                    services: pendentesOperador,
+                    deliveries: [],
+                    producers: [],
+                    demandTypes: demandTypes as any[],
+                    settlements: settlements as any[],
+                    category: 'all',
+                    settlementId: 'all',
+                    servicesOnly: true,
+                    includeDamRevenue: false,
+                    scope: 'active',
+                    operator: {
+                      name: metricsOperator.name,
+                      extraKpis: [
+                        { label: 'Em execução', value: String(pendentesOperador.filter((s) => s.status === 'in_progress').length) },
+                        { label: 'Assentamentos', value: String(new Set(pendentesOperador.map((s) => s.settlement_id).filter(Boolean)).size) },
+                      ],
+                    },
+                  })}
+                >
+                  <FileDown className="h-4 w-4" />
+                  Pendentes ({pendentesOperador.length})
+                </Button>
+              </div>
               <Separator />
               <Card className="bg-gradient-to-br from-primary/10 to-primary/5">
                 <CardContent className="p-6 flex items-center gap-4">

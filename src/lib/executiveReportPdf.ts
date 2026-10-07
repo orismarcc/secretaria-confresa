@@ -780,7 +780,7 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
     const loteSlug = lotFilterName ? '-' + slug(lotFilterName) : '';
     const assentSlug = settlementId !== 'all' ? '-' + slug(settlementName(settlementId)) : '';
     doc.save(opts.operator
-      ? `relatorio-operador-${slug(opts.operator.name)}-${format(now, 'yyyy-MM-dd')}.pdf`
+      ? `relatorio-operador-${slug(opts.operator.name)}${isActive ? '-pendentes' : ''}-${format(now, 'yyyy-MM-dd')}.pdf`
       : `relatorio-atividades-${tipoSlug}${loteSlug}${assentSlug}-${format(now, 'yyyy-MM-dd')}.pdf`);
   };
   img.src = logoTransparent;
