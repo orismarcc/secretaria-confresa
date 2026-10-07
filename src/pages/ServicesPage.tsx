@@ -76,6 +76,7 @@ import { PRINCIPAL_PROPERTY } from '@/components/forms/ServiceForm';
 import { useOperators } from '@/hooks/useOperatorData';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { otimizarComprovanteDam } from '@/lib/jpegSemMetadados';
 import { useQueryClient } from '@tanstack/react-query';
 
 const ITEMS_PER_PAGE = 10;
@@ -111,7 +112,9 @@ function isoToDateInput(raw: string | null | undefined): string {
   return raw.replace(' ', 'T').substring(0, 10);
 }
 
-async function uploadDamReceipt(file: File, serviceId: string): Promise<string | null> {
+async function uploadDamReceipt(arquivo: File, serviceId: string): Promise<string | null> {
+  // JPEG: retira só metadados (sem perda, pixels idênticos); demais tipos intactos.
+  const file = await otimizarComprovanteDam(arquivo);
   const ext = file.name.split('.').pop() ?? 'pdf';
   const path = `${serviceId}/${Date.now()}.${ext}`;
   const { error } = await supabase.storage.from('dam-receipts').upload(path, file, { upsert: true });

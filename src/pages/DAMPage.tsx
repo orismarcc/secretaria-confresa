@@ -36,6 +36,7 @@ import {
 import { format, differenceInDays } from 'date-fns';
 import { isDamOverdue } from '@/lib/damUtils';
 import { supabase } from '@/integrations/supabase/client';
+import { otimizarComprovanteDam } from '@/lib/jpegSemMetadados';
 import { ptBR } from 'date-fns/locale';
 import {
   useServices,
@@ -163,7 +164,9 @@ export default function DAMPage() {
       .sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name, 'pt-BR'));
   }, [filtered, demandTypes]);
 
-  async function uploadReceipt(file: File, serviceId: string): Promise<string | null> {
+  async function uploadReceipt(arquivo: File, serviceId: string): Promise<string | null> {
+    // JPEG: retira só metadados (sem perda, pixels idênticos); demais tipos intactos.
+    const file = await otimizarComprovanteDam(arquivo);
     const ext = file.name.split('.').pop() ?? 'pdf';
     const path = `${serviceId}/${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from('dam-receipts').upload(path, file, { upsert: true });
