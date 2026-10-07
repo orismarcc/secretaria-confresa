@@ -241,7 +241,12 @@ export default function ServicesPage() {
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   // Ordenação: 'default' (preferência proximo/DAM) ou por data de cadastro
-  const [sortBy, setSortBy] = useState<'default' | 'created_desc' | 'created_asc' | 'dam_paid_desc' | 'dam_paid_asc'>('default');
+  const [sortBy, setSortBy] = useState<'default' | 'created_desc' | 'created_asc' | 'dam_paid_desc' | 'dam_paid_asc' | 'completed_desc' | 'completed_asc'>('default');
+  // Ordem por finalização só existe na aba de finalizados: ao voltar para os
+  // ativos, retorna à ordem padrão.
+  useEffect(() => {
+    if (statusFilter !== 'archived' && (sortBy === 'completed_desc' || sortBy === 'completed_asc')) setSortBy('default');
+  }, [statusFilter, sortBy]);
   const [damFilter, setDamFilter] = useState<'all' | 'paid' | 'pending' | 'comunicado'>('all');
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -358,6 +363,16 @@ export default function ServicesPage() {
       const aC = parseSupabaseDate(a.created_at)?.getTime() ?? 0;
       const bC = parseSupabaseDate(b.created_at)?.getTime() ?? 0;
       return sortBy === 'created_desc' ? bC - aC : aC - bC;
+    }
+    // Ordenação por data de finalização (aba de finalizados). Sem data de
+    // finalização (ex.: cancelados) vão para o fim da lista.
+    if (sortBy === 'completed_desc' || sortBy === 'completed_asc') {
+      const aF = parseSupabaseDate(a.completed_at)?.getTime() ?? null;
+      const bF = parseSupabaseDate(b.completed_at)?.getTime() ?? null;
+      if (aF === null && bF === null) return 0;
+      if (aF === null) return 1;
+      if (bF === null) return -1;
+      return sortBy === 'completed_desc' ? bF - aF : aF - bF;
     }
     // Ordenação por data de pagamento da DAM — DAMs pagas primeiro (por data),
     // atendimentos sem DAM paga vão para o fim da lista.
@@ -1231,6 +1246,12 @@ export default function ServicesPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="default">Ordem padrão</SelectItem>
+              {statusFilter === 'archived' && (
+                <>
+                  <SelectItem value="completed_desc">Finalização (mais recente)</SelectItem>
+                  <SelectItem value="completed_asc">Finalização (mais antiga)</SelectItem>
+                </>
+              )}
               <SelectItem value="created_desc">Cadastro (mais recente)</SelectItem>
               <SelectItem value="created_asc">Cadastro (mais antigo)</SelectItem>
               <SelectItem value="dam_paid_desc">DAM paga (mais recente)</SelectItem>
