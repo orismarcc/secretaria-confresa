@@ -39,7 +39,8 @@ import {
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useToast } from '@/hooks/use-toast';
 import { ProdutoresParecidosAviso } from '@/components/ProdutoresParecidosAviso';
-import { MapPin, Loader2 } from 'lucide-react';
+import { MapPin, Loader2, Map as MapIcon } from 'lucide-react';
+import { EscolherNoMapaDialog } from '@/components/mapa/EscolherNoMapaDialog';
 
 const producerSchema = z.object({
   name: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres').max(100, 'Nome muito longo'),
@@ -105,6 +106,19 @@ export function ProducerForm({
       caf: (producer as any)?.caf || '',
     },
   });
+
+  // "Procurar no mapa": escolhe o ponto clicando no mapa e preenche os campos.
+  const [mapaAberto, setMapaAberto] = useState(false);
+  const coordAtual = () => {
+    const lat = Number(String(form.getValues('latitude') || '').replace(',', '.'));
+    const lng = Number(String(form.getValues('longitude') || '').replace(',', '.'));
+    return form.getValues('latitude') && form.getValues('longitude') && Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  };
+  const centroAssentamento = () => {
+    const st = (settlements as any[]).find((x) => x.id === form.getValues('settlementId'));
+    const lat = Number(st?.latitude), lng = Number(st?.longitude);
+    return st?.latitude != null && st?.longitude != null && Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  };
 
   // Captura a localização atual e preenche os campos (pode ser ajustada depois).
   const handleMarkLocation = async () => {
@@ -400,6 +414,27 @@ export function ProducerForm({
                 {gpsLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <MapPin className="h-4 w-4 mr-2" />}
                 {gpsLoading ? 'Obtendo localização…' : 'Marcar localização atual'}
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setMapaAberto(true)}
+                className="mt-3 sm:ml-2 w-full sm:w-auto border-primary/40 text-primary hover:bg-primary/10 hover:text-primary"
+              >
+                <MapIcon className="h-4 w-4 mr-2" />
+                Procurar no mapa
+              </Button>
+              <EscolherNoMapaDialog
+                open={mapaAberto}
+                onOpenChange={setMapaAberto}
+                inicial={mapaAberto ? coordAtual() : null}
+                centroSugerido={mapaAberto ? centroAssentamento() : null}
+                onConfirm={({ lat, lng }) => {
+                  form.setValue('latitude', lat.toFixed(6), { shouldDirty: true, shouldValidate: true });
+                  form.setValue('longitude', lng.toFixed(6), { shouldDirty: true, shouldValidate: true });
+                  toast({ title: 'Ponto marcado no mapa', description: `${lat.toFixed(6)}, ${lng.toFixed(6)} — salve o cadastro para gravar.` });
+                }}
+              />
             </div>
 
             {/* Aviso de cadastro parecido (não bloqueia o salvamento) */}

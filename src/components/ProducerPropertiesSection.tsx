@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { Home, Plus, Pencil, Trash2, Navigation, Crosshair, Loader2, MapPin } from 'lucide-react';
+import { Home, Plus, Pencil, Trash2, Navigation, Crosshair, Loader2, MapPin, Map as MapIcon } from 'lucide-react';
+import { EscolherNoMapaDialog } from '@/components/mapa/EscolherNoMapaDialog';
 import {
   useAllProducerProperties, useSaveProducerProperty, useDeleteProducerProperty,
   useSettlements, useGlebas, type ProducerProperty,
@@ -47,6 +48,12 @@ export function ProducerPropertiesSection({ producerId, principal }: Props) {
   const { getCurrentPosition, isLoading: gpsLoading } = useGeolocation();
 
   const extras = useMemo(() => all.filter((p) => p.producer_id === producerId), [all, producerId]);
+  // "Procurar no mapa" (ponto atual dos campos ou centro do assentamento).
+  const [mapaAberto, setMapaAberto] = useState(false);
+  const pontoDe = (lat: unknown, lng: unknown) => {
+    const a = Number(String(lat ?? '').replace(',', '.')), b = Number(String(lng ?? '').replace(',', '.'));
+    return lat != null && lng != null && String(lat).trim() !== '' && String(lng).trim() !== '' && Number.isFinite(a) && Number.isFinite(b) ? { lat: a, lng: b } : null;
+  };
   const settlementName = (id?: string | null) => (settlements as any[]).find((s) => s.id === id)?.name || '—';
   const glebaName = (id?: string | null) => (glebas as any[]).find((g) => g.id === id)?.name || null;
 
@@ -224,6 +231,19 @@ export function ProducerPropertiesSection({ producerId, principal }: Props) {
               {gpsLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Crosshair className="h-4 w-4 mr-2" />}
               {gpsLoading ? 'Obtendo localização…' : 'Marcar localização atual'}
             </Button>
+            <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setMapaAberto(true)}>
+              <MapIcon className="h-4 w-4 mr-2" /> Procurar no mapa
+            </Button>
+            <EscolherNoMapaDialog
+              open={mapaAberto}
+              onOpenChange={setMapaAberto}
+              inicial={mapaAberto ? pontoDe(f.latitude, f.longitude) : null}
+              centroSugerido={mapaAberto ? (() => { const st = (settlements as any[]).find((x) => x.id === f.settlement_id); return pontoDe(st?.latitude, st?.longitude); })() : null}
+              onConfirm={({ lat, lng }) => {
+                setF((s) => ({ ...s, latitude: lat.toFixed(6), longitude: lng.toFixed(6) }));
+                toast({ title: 'Ponto marcado no mapa', description: `${lat.toFixed(6)}, ${lng.toFixed(6)} — salve para gravar.` });
+              }}
+            />
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
               <Button type="submit" disabled={save.isPending || !f.settlement_id}>
