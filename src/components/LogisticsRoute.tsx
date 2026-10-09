@@ -70,7 +70,16 @@ interface Props {
 export function LogisticsRoute({ serviceId, fallbackStart }: Props) {
   const { data: events = [], isLoading } = useServiceEvents(serviceId);
 
-  const last = (type: string) => [...events].reverse().find((e) => e.event_type === type) || null;
+  // Por etapa: o registro com GPS (localização/horário do evento) e a foto
+  // mais recente — podem ser registros diferentes (ex.: foto adicionada ou
+  // trocada depois por um administrador, sem GPS).
+  const last = (type: string) => {
+    const doTipo = [...events].reverse().filter((e) => e.event_type === type);
+    if (doTipo.length === 0) return null;
+    const comGps = doTipo.find((e) => e.latitude != null) ?? doTipo[0];
+    const comFoto = doTipo.find((e) => e.url);
+    return { ...comGps, url: comFoto?.url };
+  };
   // Partida: o registro de início com GPS; sem GPS, o que tiver a foto do odômetro.
   const start = [...events].reverse().find((e) => e.event_type === 'start' && e.latitude != null)
     || [...events].reverse().find((e) => e.event_type === 'start' && e.storage_path) || null;

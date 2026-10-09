@@ -32,6 +32,7 @@ import {
 import { isDamOverdue } from '@/lib/damUtils';
 import { getUserColorClass } from '@/lib/userColors';
 import { useAuth } from '@/contexts/AuthContext';
+import { EditarFotosAtendimento } from '@/components/fotos/EditarFotosAtendimento';
 
 function buildWhatsAppUrl(phone: string): string {
   const digits = phone.replace(/\D/g, '');
@@ -139,7 +140,7 @@ export function ServiceDetailView({
   onComunicado,
 }: ServiceDetailViewProps) {
   const { photos, isLoading: photosLoading } = useCombinedServicePhotos(service.id);
-  const { isCoordenador } = useAuth();
+  const { isCoordenador, isFullAdmin } = useAuth();
   // DAM (documento e valor) é restrito a admin pleno — Coordenador não vê.
   const canSeeDam = !isCoordenador;
   const isCompleted = service.status === 'completed';
@@ -567,6 +568,11 @@ export function ServiceDetailView({
                 </div>
               )}
             </div>)}
+
+            {/* Edição das fotos — só administradores plenos (Secretário/Diretor/Supervisor) */}
+            {isFullAdmin && (
+              <EditarFotosAtendimento serviceId={service.id} isLogistics={isLogistics} />
+            )}
           </div>
         </>
       )}
