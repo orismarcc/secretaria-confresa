@@ -86,6 +86,7 @@ interface ServiceDetailViewProps {
     started_at?: string | null;
     cancellation_reason?: string | null;
     notes?: string | null;
+    purpose?: string | null;
     completion_notes?: string | null;
     priority: string;
     operator_id?: string | null;
@@ -274,6 +275,14 @@ export function ServiceDetailView({
         <div>
           <p className="text-sm text-muted-foreground">Tipo de Demanda</p>
           <p className="font-medium">{demandType?.name || service.demand_types?.name || 'N/A'}</p>
+        </div>
+
+        {/* Finalidade — em destaque (pendentes e finalizados) */}
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Finalidade</p>
+          {service.purpose?.trim()
+            ? <p className="mt-0.5 font-medium whitespace-pre-line break-words">{service.purpose}</p>
+            : <p className="mt-0.5 text-sm text-muted-foreground">Não informada</p>}
         </div>
 
         <div className="flex gap-4">
