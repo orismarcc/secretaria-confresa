@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { DataTable } from '@/components/DataTable';
@@ -46,6 +47,9 @@ export default function SettlementsPage() {
   const deleteSettlement = useDeleteSettlement();
 
   const [search, setSearch] = useState('');
+  // Clique na quantidade de produtores → página Produtores já filtrada.
+  const navigate = useNavigate();
+  const verProdutores = (settlementId: string) => navigate(`/producers?assentamento=${settlementId}`);
   const [formOpen, setFormOpen] = useState(false);
   const [editingSettlement, setEditingSettlement] = useState<Settlement | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -138,10 +142,15 @@ export default function SettlementsPage() {
       render: (s: Settlement) => {
         const stat = settlementStats[s.id];
         return (
-          <div className="flex items-center justify-center gap-1.5">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); verProdutores(s.id); }}
+            className="inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1 hover:bg-primary/10 hover:underline"
+            title="Ver os produtores deste assentamento"
+          >
             <Users2 className="h-4 w-4 text-primary" />
             <span className="font-semibold">{stat?.producersCount ?? 0}</span>
-          </div>
+          </button>
         );
       },
     },
@@ -273,7 +282,12 @@ export default function SettlementsPage() {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3 p-4 rounded-xl bg-primary/10 border border-primary/20">
+            <button
+              type="button"
+              onClick={() => detailSettlement && verProdutores(detailSettlement.id)}
+              className="flex w-full items-center gap-3 p-4 rounded-xl bg-primary/10 border border-primary/20 text-left hover:bg-primary/15"
+              title="Ver os produtores deste assentamento"
+            >
               <Users2 className="h-6 w-6 text-primary shrink-0" />
               <div>
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
@@ -283,7 +297,7 @@ export default function SettlementsPage() {
                   {detailSettlement ? (settlementStats[detailSettlement.id]?.producersCount ?? 0) : 0}
                 </p>
               </div>
-            </div>
+            </button>
           </div>
         </SheetContent>
       </Sheet>

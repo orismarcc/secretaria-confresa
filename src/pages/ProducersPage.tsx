@@ -1,4 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { SearchInput } from '@/components/SearchInput';
@@ -69,7 +70,9 @@ export default function ProducersPage() {
   const deleteProducers = useDeleteProducers();
 
   const [search, setSearch] = useState('');
-  const [settlementFilter, setSettlementFilter] = useState<string>('all');
+  // ?assentamento=<id> (ex.: clique na quantidade de produtores em Assentamentos)
+  const [searchParams] = useSearchParams();
+  const [settlementFilter, setSettlementFilter] = useState<string>(() => searchParams.get('assentamento') || 'all');
   const [glebaFilter, setGlebaFilter] = useState<string>('all');
   const [formOpen, setFormOpen] = useState(false);
 

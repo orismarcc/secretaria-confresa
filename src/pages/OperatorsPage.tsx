@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -58,6 +58,7 @@ import {
   Eye, Landmark, RefreshCw, FileDown,
 } from 'lucide-react';
 import { generateExecutiveReport } from '@/lib/executiveReportPdf';
+import { DetalhesTecnicoSheet } from '@/components/tecnicos/DetalhesTecnicoSheet';
 import {
   formatDocument,
   formatCpf,
@@ -80,16 +81,22 @@ interface ResponsibleTechnician {
 
 // ─── Responsável Técnico Form ─────────────────────────────────────────────────
 
+/** Pessoa da equipe interna ou operador que pode virar responsável técnico. */
+interface PessoaEquipe { id: string; name: string; cpf: string | null; cargo: string; avatarUrl: string | null; grupo: 'Equipe interna' | 'Operadores' }
+
 function TechnicianForm({
   initial,
   onSubmit,
   onCancel,
   isPending,
+  equipe = [],
 }: {
   initial?: Partial<ResponsibleTechnician>;
   onSubmit: (data: { name: string; cpf: string; cargo: string; photoUrl: string | null }) => void;
   onCancel: () => void;
   isPending?: boolean;
+  /** Ao cadastrar: permite puxar nome, CPF, cargo e foto da equipe interna/operadores. */
+  equipe?: PessoaEquipe[];
 }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [cpf, setCpf] = useState(initial?.cpf ?? '');
@@ -109,8 +116,43 @@ function TechnicianForm({
     onSubmit({ name, cpf, cargo, photoUrl });
   };
 
+  // Puxar os dados de alguém da equipe (dá para ajustar antes de salvar).
+  const puxar = (id: string) => {
+    const p = equipe.find((x) => x.id === id);
+    if (!p) return;
+    const digits = onlyDigits(p.cpf || '');
+    const tipo: DocType = digits.length === 14 ? 'cnpj' : 'cpf';
+    setName((p.name || '').toUpperCase());
+    setDocType(tipo);
+    setCpf(digits ? (tipo === 'cnpj' ? formatCnpj(digits) : formatCpf(digits)) : '');
+    setCargo(p.cargo || '');
+    setPhotoUrl(p.avatarUrl || null);
+  };
+  const grupos = (['Equipe interna', 'Operadores'] as const)
+    .map((g) => ({ g, pessoas: equipe.filter((p) => p.grupo === g).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')) }))
+    .filter((x) => x.pessoas.length > 0);
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {!initial?.id && grupos.length > 0 && (
+        <div className="space-y-1.5 rounded-lg border bg-muted/30 p-3">
+          <Label>Puxar da equipe interna / operadores (opcional)</Label>
+          <Select onValueChange={puxar}>
+            <SelectTrigger><SelectValue placeholder="Escolha uma pessoa para preencher os dados" /></SelectTrigger>
+            <SelectContent>
+              {grupos.map(({ g, pessoas }) => (
+                <SelectGroup key={g}>
+                  <SelectLabel>{g}</SelectLabel>
+                  {pessoas.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}{p.cargo ? ` — ${p.cargo}` : ''}</SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[11px] text-muted-foreground">Preenche nome, CPF, cargo e foto — confira e ajuste antes de cadastrar.</p>
+        </div>
+      )}
       <AvatarUpload value={photoUrl} onChange={setPhotoUrl} />
       <div className="space-y-2">
         <Label htmlFor="tech-name">Nome Completo *</Label>
@@ -321,6 +363,7 @@ export default function OperatorsPage() {
   // ── Technicians state ──────────────────────────────────────────────────────
   const [techFormOpen, setTechFormOpen] = useState(false);
   const [editingTech, setEditingTech] = useState<ResponsibleTechnician | null>(null);
+  const [detalheTech, setDetalheTech] = useState<ResponsibleTechnician | null>(null);
   const [deletingTech, setDeletingTech] = useState<ResponsibleTechnician | null>(null);
 
   const { data: technicians = [], isLoading: techLoading } = useResponsibleTechnicians();
@@ -449,6 +492,19 @@ export default function OperatorsPage() {
   const handleToggleStatus = (operator: Operator) => {
     toggleStatus.mutate({ userId: operator.id, is_active: !operator.is_active });
   };
+
+  // Equipe interna (administradores) e operadores — para "puxar" ao cadastrar responsável técnico.
+  const equipeParaTecnico = useMemo<PessoaEquipe[]>(() => {
+    const out: PessoaEquipe[] = (adminUsers as AppUser[]).map((u) => ({
+      id: u.id, name: u.name, cpf: u.cpf, cargo: u.jobTitle || '', avatarUrl: u.avatarUrl ?? null, grupo: 'Equipe interna' as const,
+    }));
+    ((operators ?? []) as Operator[]).forEach((o) => {
+      if (out.some((x) => x.id === o.id)) return;
+      const p = (profilesMap as Map<string, any> | undefined)?.get(o.id);
+      out.push({ id: o.id, name: o.name, cpf: p?.cpf ?? null, cargo: 'Operador', avatarUrl: p?.avatarUrl ?? null, grupo: 'Operadores' });
+    });
+    return out.filter((p) => p.name);
+  }, [adminUsers, operators, profilesMap]);
 
   // ── Technician helpers ─────────────────────────────────────────────────────
   const getTechnicianServiceCount = (techId: string) =>
@@ -608,6 +664,9 @@ export default function OperatorsPage() {
       header: 'Ações',
       render: (row: ResponsibleTechnician) => (
         <div className="flex gap-1">
+          <Button variant="ghost" size="icon" title="Ver detalhes e atendimentos" onClick={(e) => { e.stopPropagation(); setDetalheTech(row); }}>
+            <Eye className="h-4 w-4 text-primary" />
+          </Button>
           <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditingTech(row); }}>
             <Pencil className="h-4 w-4" />
           </Button>
@@ -1005,11 +1064,15 @@ export default function OperatorsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Detalhes do responsável técnico ─────────────────────────────────── */}
+      <DetalhesTecnicoSheet tecnico={detalheTech} services={services as any[]} onClose={() => setDetalheTech(null)} />
+
       {/* ── Technician Dialogs ───────────────────────────────────────────────── */}
       <Dialog open={techFormOpen} onOpenChange={setTechFormOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Novo Responsável Técnico</DialogTitle></DialogHeader>
           <TechnicianForm
+            equipe={equipeParaTecnico}
             onSubmit={handleTechCreate}
             onCancel={() => setTechFormOpen(false)}
             isPending={createTech.isPending}
