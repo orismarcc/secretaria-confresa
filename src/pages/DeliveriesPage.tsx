@@ -68,6 +68,7 @@ import {
   MinusCircle,
   Download,
   Paperclip,
+  FileText,
 } from 'lucide-react';
 import { format, parseISO, subMonths, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -96,6 +97,7 @@ import {
   type TermoEntrega,
 } from '@/hooks/useSupabaseData';
 import { TermoEntregaDialog } from '@/components/entregas/TermoEntregaDialog';
+import { baixarTermoPdf } from '@/lib/termoEntregaPdf';
 
 // ─── Delivery type color palette ─────────────────────────────────────────────
 
@@ -354,6 +356,9 @@ interface LotFormState {
   lot_date: string;
   notes: string;
   responsible_technician_id: string;
+  /** Termo de compromisso pelo modelo padrão (só o objeto muda). */
+  usa_termo_padrao: boolean;
+  termo_objeto: string;
 }
 
 const EMPTY_LOT: LotFormState = {
@@ -365,6 +370,8 @@ const EMPTY_LOT: LotFormState = {
   lot_date: format(new Date(), 'yyyy-MM-dd'),
   notes: '',
   responsible_technician_id: '',
+  usa_termo_padrao: false,
+  termo_objeto: '',
 };
 
 function LotFormDialog({
@@ -397,13 +404,16 @@ function LotFormDialog({
               lot_date: editing.lot_date || format(new Date(), 'yyyy-MM-dd'),
               notes: editing.notes || '',
               responsible_technician_id: editing.responsible_technician_id || '',
+              usa_termo_padrao: editing.usa_termo_padrao === true,
+              termo_objeto: editing.termo_objeto || '',
             }
           : EMPTY_LOT,
       );
     }
   }, [open, editing]);
 
-  const valid = form.demand_type_id && form.name && form.initial_quantity && Number(form.initial_quantity) > 0;
+  const valid = form.demand_type_id && form.name && form.initial_quantity && Number(form.initial_quantity) > 0
+    && (!form.usa_termo_padrao || form.termo_objeto.trim().length > 0);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -502,6 +512,35 @@ function LotFormDialog({
               onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
             />
           </div>
+          {/* Termo de compromisso pelo modelo padrão */}
+          <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <Checkbox
+                checked={form.usa_termo_padrao}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, usa_termo_padrao: v === true }))}
+                className="mt-0.5"
+              />
+              <span className="text-sm">
+                Usar modelo padrão de termo
+                <span className="block text-xs text-muted-foreground">
+                  Permite gerar, para cada produtor, o termo de compromisso com os dados dele e a quantidade. Só o objeto muda.
+                </span>
+              </span>
+            </label>
+            {form.usa_termo_padrao && (
+              <div className="space-y-1.5">
+                <Label>Objeto do termo *</Label>
+                <Input
+                  placeholder="Ex.: mudas de açaí"
+                  value={form.termo_objeto}
+                  onChange={(e) => setForm((f) => ({ ...f, termo_objeto: e.target.value }))}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Aparece no título ("Termo de compromisso de entrega e uso de …") e na quantidade ("Serão entregues 50 …").
+                </p>
+              </div>
+            )}
+          </div>
         </div>
         <DialogFooter className="pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
@@ -565,6 +604,8 @@ function LotsTab({ demandTypes }: { demandTypes: any[] }) {
       lot_date: form.lot_date || null,
       notes: form.notes || null,
       responsible_technician_id: form.responsible_technician_id || null,
+      usa_termo_padrao: form.usa_termo_padrao,
+      termo_objeto: form.usa_termo_padrao ? form.termo_objeto.trim() : (editing?.termo_objeto ?? null),
     };
     if (editing) {
       updateLot.mutate({ id: editing.id, ...payload });
@@ -1597,12 +1638,24 @@ export default function DeliveriesPage() {
         {/* Termo / comprovante de entrega */}
         {(() => {
           const n = termosPorEntrega.get(d.id)?.length ?? 0;
+          // Itens de lote que usam o modelo padrão de termo
+          const itensComModelo = ((d.delivery_items ?? []) as any[]).filter((it) => it.delivery_lots?.usa_termo_padrao && it.delivery_lots?.termo_objeto);
+          const gerarTermo = () => {
+            itensComModelo.forEach((it) => baixarTermoPdf({
+              objeto: it.delivery_lots.termo_objeto,
+              quantidade: Number(it.quantity) || 0,
+              unidade: it.delivery_lots.unit,
+              produtor: d.producers?.name || '',
+              cpf: d.producers?.cpf || null,
+            }));
+          };
           return (
+            <div className="flex gap-1.5">
             <button
               type="button"
               onClick={() => setTermoDe(d)}
               className={cn(
-                'w-full flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium text-left transition-colors',
+                'flex-1 min-w-0 flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium text-left transition-colors',
                 n > 0
                   ? 'border-success/30 bg-success/10 text-success hover:bg-success/15'
                   : isCompleted
@@ -1616,6 +1669,20 @@ export default function DeliveriesPage() {
                 {n > 0 ? `Termo de entrega anexado${n > 1 ? ` (${n} arquivos)` : ''}` : 'Sem termo de entrega — anexar'}
               </span>
             </button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-auto shrink-0 gap-1 px-2 py-1.5 text-xs"
+              disabled={itensComModelo.length === 0}
+              title={itensComModelo.length === 0
+                ? 'O lote desta entrega não usa o modelo padrão de termo'
+                : 'Gerar o termo de compromisso com os dados do produtor e a quantidade'}
+              onClick={gerarTermo}
+            >
+              <FileText className="h-3.5 w-3.5" /> Gerar termo
+            </Button>
+            </div>
           );
         })()}
 

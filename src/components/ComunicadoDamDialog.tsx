@@ -21,6 +21,7 @@ import {
   triggerDownload,
   formatHoras,
   formatLitros,
+  ASSINANTES_COMUNICADO,
   type ComunicadoData,
 } from '@/lib/comunicado';
 
@@ -64,6 +65,7 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
   const [valorLitro, setValorLitro] = useState('');
   const [upfm, setUpfm] = useState('71,15');
   const [somenteTaxa, setSomenteTaxa] = useState(false);
+  const [assinanteId, setAssinanteId] = useState<string>(ASSINANTES_COMUNICADO[0].id);
   const [gerando, setGerando] = useState(false);
 
   // Reinicia ao abrir
@@ -72,6 +74,7 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
       setValorLitro('');
       setUpfm('71,15');
       setSomenteTaxa(false);
+      setAssinanteId(ASSINANTES_COMUNICADO[0].id); // padrão: Cassio
     }
   }, [open]);
 
@@ -101,6 +104,7 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
         valorCombustivel: combustivel,
         valorUpfm: upfmNum,
         somenteTaxa,
+        assinante: ASSINANTES_COMUNICADO.find((a) => a.id === assinanteId) ?? ASSINANTES_COMUNICADO[0],
       };
       // 1) Monta o arquivo em memória (sem baixar ainda).
       const { blob, filename } = formato === 'pdf'
@@ -225,6 +229,21 @@ export function ComunicadoDamDialog({ open, onOpenChange, source }: ComunicadoDa
               placeholder="71,15"
               inputMode="decimal"
             />
+          </div>
+
+          {/* Responsável pela assinatura */}
+          <div className="space-y-1.5">
+            <Label htmlFor="com-assinante">Responsável pela assinatura</Label>
+            <select
+              id="com-assinante"
+              value={assinanteId}
+              onChange={(e) => setAssinanteId(e.target.value)}
+              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {ASSINANTES_COMUNICADO.map((a) => (
+                <option key={a.id} value={a.id}>{a.nome} — {a.cargo}</option>
+              ))}
+            </select>
           </div>
 
           {/* Total */}

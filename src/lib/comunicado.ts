@@ -118,7 +118,17 @@ export interface ComunicadoData {
   valorUpfm: number;        // R$
   /** true = cobra só a taxa (produtor já tem o combustível) — omite combustível. */
   somenteTaxa?: boolean;
+  /** Quem assina (padrão: Secretário de Agricultura). */
+  assinante?: AssinanteComunicado;
 }
+
+/** Responsáveis pela assinatura do comunicado de DAM. O 1º é o padrão (o do modelo). */
+export const ASSINANTES_COMUNICADO = [
+  { id: 'cassio', nome: 'CASSIO RODRIGUES DA COSTA', cargo: 'SECRETÁRIO DE AGRICULTURA' },
+  { id: 'pablo', nome: 'PABLO COELHO CARDOSO', cargo: 'DIRETOR DE CAMPO' },
+] as const;
+export type AssinanteComunicado = (typeof ASSINANTES_COMUNICADO)[number];
+const assinanteDe = (d: ComunicadoData) => d.assinante ?? ASSINANTES_COMUNICADO[0];
 
 /** Nome de arquivo seguro a partir do nome do produtor. */
 function nomeArquivo(nome: string): string {
@@ -154,6 +164,16 @@ export async function buildComunicadoDamDocx(dados: ComunicadoData): Promise<{ b
   const content = await resp.arrayBuffer();
 
   const zip = new PizZip(content);
+  // Assinatura: o modelo traz o nome e o cargo do Secretário escritos (uma vez
+  // cada, num único trecho de texto). Viram campos só aqui, em memória — o
+  // arquivo do modelo não muda. Se o modelo for trocado e o texto não existir,
+  // o comunicado sai como no modelo.
+  const xml = zip.file('word/document.xml')?.asText();
+  if (xml) {
+    zip.file('word/document.xml', xml
+      .replace('>CASSIO RODRIGUES DA COSTA<', '>{assinante_nome}<')
+      .replace('>SECRETÁRIO DE AGRICULTURA<', '>{assinante_cargo}<'));
+  }
   const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
 
   doc.render({
@@ -170,6 +190,8 @@ export async function buildComunicadoDamDocx(dados: ComunicadoData): Promise<{ b
     upfm_ext: valorPorExtenso(dados.valorUpfm),
     total: formatBRLNumber(total),
     total_ext: valorPorExtenso(total),
+    assinante_nome: assinanteDe(dados).nome,
+    assinante_cargo: assinanteDe(dados).cargo,
   });
 
   const blob = doc.getZip().generate({
@@ -302,8 +324,8 @@ export async function buildComunicadoDamPdf(dados: ComunicadoData): Promise<{ bl
   // Assinatura
   ensure(50);
   para('_______________________________', { center: true, gap: 2 });
-  para('CASSIO RODRIGUES DA COSTA', { bold: true, center: true, gap: 1 });
-  para('SECRETÁRIO DE AGRICULTURA', { center: true, gap: 0 });
+  para(assinanteDe(dados).nome, { bold: true, center: true, gap: 1 });
+  para(assinanteDe(dados).cargo, { center: true, gap: 0 });
 
   return { blob: doc.output('blob'), filename: `Comunicado-DAM-${nomeArquivo(dados.nome)}.pdf` };
 }
