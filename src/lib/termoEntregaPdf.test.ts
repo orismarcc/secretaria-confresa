@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { textoTermo, quantidadeComObjeto, montarTermoPdf } from './termoEntregaPdf';
 
-const base = { objeto: 'mudas de açaí', quantidade: 50, unidade: 'unidade', produtor: 'Maria Teste da Silva', cpf: '52998224725', data: new Date(2026, 9, 14) };
+const base = { objeto: 'mudas de açaí', quantidade: 50, unidade: 'unidade', produtor: 'Maria Teste da Silva', cpf: '12345678900', data: new Date(2026, 9, 14) };
 
 describe('termo de entrega (modelo padrão)', () => {
   it('troca só o objeto, a quantidade e os dados do produtor', () => {
@@ -13,7 +13,7 @@ describe('termo de entrega (modelo padrão)', () => {
     expect(tudo).toContain('CNPJ nº 37.464.716/0001-50');
     expect(tudo).toContain('CLÁUSULA OITAVA – DO FORO');
     expect(t.produtor).toBe('MARIA TESTE DA SILVA');
-    expect(t.cpf).toBe('529.982.247-25');
+    expect(t.cpf).toBe('123.456.789-00');
     expect(t.data).toBe('Confresa/MT, 14 de outubro de 2026.');
   });
 

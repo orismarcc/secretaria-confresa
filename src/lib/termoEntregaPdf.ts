@@ -98,9 +98,16 @@ export function montarTermoPdf(d: DadosTermo): jsPDF {
     const alt = size * 1.35;
     linhas.forEach((ln, i) => {
       quebra(alt);
+      const palavras = ln.trim().split(/\s+/);
       if (opts.center) doc.text(ln, W / 2, y, { align: 'center' });
-      else if (i < linhas.length - 1) doc.text(ln, M + ind, y, { maxWidth: larg - ind, align: 'justify' });
-      else doc.text(ln, M + ind, y);
+      else if (i < linhas.length - 1 && palavras.length > 1) {
+        // Justificado (como no modelo): distribui o espaço entre as palavras;
+        // a última linha do parágrafo fica alinhada à esquerda.
+        const larguras = palavras.map((p) => doc.getTextWidth(p));
+        const espaco = (larg - ind - larguras.reduce((s, w) => s + w, 0)) / (palavras.length - 1);
+        let x = M + ind;
+        palavras.forEach((p, k) => { doc.text(p, x, y); x += larguras[k] + espaco; });
+      } else doc.text(ln, M + ind, y);
       y += alt;
     });
     y += opts.gap ?? 8;
