@@ -74,6 +74,8 @@ interface DbService {
   worked_hours?: number | null;
   dam_paid?: boolean | null;
   dam_issued?: boolean | null;
+  /** Logística de calcário: pedido do calcário pago. */
+  limestone_paid?: boolean | null;
   /** Logística: momento em que o carregamento foi registrado. */
   loaded_at?: string | null;
   /** Logística: momento em que a entrega na propriedade foi registrada. */
@@ -257,7 +259,7 @@ function OperatorCardBody({
         {(() => {
           const damPaid = (service as any).dam_paid === true;
           return (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Banknote className={cn('h-4 w-4 shrink-0', damPaid ? 'text-success' : 'text-amber-600')} />
               <span className={cn(
                 'text-xs font-semibold rounded-full px-2 py-0.5',
@@ -265,6 +267,15 @@ function OperatorCardBody({
               )}>
                 {damPaid ? 'DAM paga' : 'DAM não paga'}
               </span>
+              {/* Logística de calcário: pedido do calcário pago (além da DAM) */}
+              {service.demand_types?.category === 'calcario' && (
+                <span className={cn(
+                  'text-xs font-semibold rounded-full px-2 py-0.5',
+                  service.limestone_paid ? 'bg-success/10 text-success' : 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+                )}>
+                  {service.limestone_paid ? 'Calcário pago' : 'Calcário não pago'}
+                </span>
+              )}
             </div>
           );
         })()}

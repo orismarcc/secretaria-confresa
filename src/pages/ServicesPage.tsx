@@ -764,6 +764,18 @@ export default function ServicesPage() {
                 Comunicado emitido
               </span>
             ) : null}
+            {/* Logística de calcário: pedido do calcário pago (além da DAM) */}
+            {(demandTypes.find(d => d.id === s.demand_type_id) as any)?.category === 'calcario' && s.status !== 'cancelled' && (
+              s.limestone_paid ? (
+                <span className="inline-flex items-center gap-1 text-[10px] text-success bg-success/10 rounded px-1.5 py-0.5 w-fit">
+                  Calcário pago
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-400 bg-amber-500/10 rounded px-1.5 py-0.5 w-fit">
+                  Calcário não pago
+                </span>
+              )
+            )}
           </div>
         );
       },
