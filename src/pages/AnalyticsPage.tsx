@@ -34,7 +34,6 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { getPatrulhaIds, getDemandIdsByCategory, getDemandIdsByNameSubstring, serviceExerciseYear, deliveryExerciseYear, dateYear } from '@/lib/analyticsUtils';
-import { ReportsCenter } from '@/components/ReportsCenter';
 import { useMaintenances, maintenanceMinutes, formatDuration } from '@/hooks/useMaintenanceData';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -1599,8 +1598,10 @@ export default function AnalyticsPage() {
                 {/* Botão */}
                 <Button
                   onClick={() => generateExecutiveReport({
-                    services: services as any[],
-                    deliveries: deliveries as any[],
+                    // Respeita o exercício (ano) selecionado na página, como em Atendimentos.
+                    services: scopedServices as any[],
+                    deliveries: scopedDeliveries as any[],
+                    periodo: exercicio === 'all' ? 'Todos os exercícios' : `Exercício ${exercicio}`,
                     producers: producers as any[],
                     demandTypes: demandTypes as any[],
                     settlements: settlements as any[],
@@ -1619,13 +1620,6 @@ export default function AnalyticsPage() {
             </CardContent>
           </Card>
 
-          {/* ── Central de Relatórios ───────────────────────────────────── */}
-          <ReportsCenter
-            services={services as any[]}
-            producers={producers as any[]}
-            demandTypes={demandTypes as any[]}
-            settlements={settlements as any[]}
-          />
           </>
           )}
         </div>

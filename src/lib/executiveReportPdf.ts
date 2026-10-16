@@ -9,7 +9,7 @@
  * (todos ou apenas um). Considera apenas trabalho FINALIZADO — o que foi feito.
  *
  * Mantém o mesmo padrão visual dos demais exports (verde institucional, logo no
- * topo, zebra clara). É um módulo isolado para não afetar reportsPdf.ts.
+ * topo, zebra clara).
  */
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
