@@ -112,6 +112,13 @@ function isoToDateInput(raw: string | null | undefined): string {
   return raw.replace(' ', 'T').substring(0, 10);
 }
 
+/** O status pertence à aba? (Ativos / Finalizados / Cancelados) */
+function statusDaAba(status: string, aba: string): boolean {
+  if (aba === 'active') return status === 'pending' || status === 'in_progress' || status === 'proximo';
+  if (aba === 'cancelled') return status === 'cancelled';
+  return status === 'completed';
+}
+
 async function uploadDamReceipt(arquivo: File, serviceId: string): Promise<string | null> {
   // JPEG: retira só metadados (sem perda, pixels idênticos); demais tipos intactos.
   const file = await otimizarComprovanteDam(arquivo);
@@ -228,8 +235,11 @@ export default function ServicesPage() {
   const [exactStatus, setExactStatus] = useState<string>(
     ['pending', 'in_progress', 'proximo', 'completed', 'cancelled'].includes(statusParam) ? statusParam : ''
   );
+  // Abas: 'active' (pendente/próximo/em execução), 'archived' (finalizados) e
+  // 'cancelled' (cancelados — separados para não somarem aos finalizados).
   const [statusFilter, setStatusFilter] = useState<string>(
-    searchParams.get('tab') === 'archived' || ['completed', 'cancelled'].includes(statusParam) ? 'archived' : 'active'
+    searchParams.get('tab') === 'cancelled' || statusParam === 'cancelled' ? 'cancelled'
+      : searchParams.get('tab') === 'archived' || statusParam === 'completed' ? 'archived' : 'active'
   );
   const [demandTypeFilter, setDemandTypeFilter] = useState<string>('all');
   // Filtro global de exercício (ano) — padrão sempre o ano atual
@@ -287,7 +297,7 @@ export default function ServicesPage() {
         setDetailOpen(true);
         // Switch tab so the background list matches the service's status group
         setStatusFilter(
-          found.status === 'completed' || found.status === 'cancelled' ? 'archived' : 'active'
+          found.status === 'cancelled' ? 'cancelled' : found.status === 'completed' ? 'archived' : 'active'
         );
         // Alinha o filtro de ano ao exercício do serviço para a lista de fundo bater
         const y = serviceExerciseYear(found);
@@ -341,9 +351,7 @@ export default function ServicesPage() {
       phoneMatches(s.producers?.phone, search);
     const matchesDemandType = demandTypeFilter === 'all' || s.demand_type_id === demandTypeFilter;
     const matchesCategory = categoryFilter === 'all' || (dt as any)?.category === categoryFilter;
-    const matchesStatus = statusFilter === 'active'
-      ? s.status === 'pending' || s.status === 'in_progress' || s.status === 'proximo'
-      : s.status === 'completed' || s.status === 'cancelled';
+    const matchesStatus = statusDaAba(s.status, statusFilter);
     const matchesSettlement =
       settlementFilter === 'all' || s.settlement_id === settlementFilter;
     const matchesExactStatus = !exactStatus || s.status === exactStatus;
@@ -867,9 +875,8 @@ export default function ServicesPage() {
   const activeCount = services.filter((s: DbService) =>
     inYear(s) && (s.status === 'pending' || s.status === 'in_progress' || s.status === 'proximo')
   ).length;
-  const archivedCount = services.filter((s: DbService) =>
-    inYear(s) && (s.status === 'completed' || s.status === 'cancelled')
-  ).length;
+  const archivedCount = services.filter((s: DbService) => inYear(s) && s.status === 'completed').length;
+  const cancelledCount = services.filter((s: DbService) => inYear(s) && s.status === 'cancelled').length;
 
   // Base para os cards de contagem — respeita a aba (Ativos/Arquivados) e TODOS os
   // filtros da página, EXCETO os de tipo e categoria (assim os cards mostram sempre
@@ -889,9 +896,7 @@ export default function ServicesPage() {
       textIncludes(s.producers?.name, search) ||
       phoneMatches((producer as any)?.phone, search) ||
       phoneMatches(s.producers?.phone, search);
-    const matchesStatus = statusFilter === 'active'
-      ? s.status === 'pending' || s.status === 'in_progress' || s.status === 'proximo'
-      : s.status === 'completed' || s.status === 'cancelled';
+    const matchesStatus = statusDaAba(s.status, statusFilter);
     const matchesSettlement = settlementFilter === 'all' || s.settlement_id === settlementFilter;
     const matchesExactStatus = !exactStatus || s.status === exactStatus;
     const matchesGleba = glebaFilter === 'all' || s.producers?.gleba_id === glebaFilter;
@@ -973,7 +978,7 @@ export default function ServicesPage() {
       doc.setFontSize(9);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(100);
-      const tabLabel = statusFilter === 'active' ? 'Ativos' : 'Arquivados';
+      const tabLabel = statusFilter === 'active' ? 'Ativos' : statusFilter === 'cancelled' ? 'Cancelados' : 'Finalizados';
       doc.text(
         `${tabLabel} · Gerado em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`,
         pageWidth / 2, 23, { align: 'center' }
@@ -1117,6 +1122,10 @@ export default function ServicesPage() {
               <CheckCircle className="h-4 w-4" />
               Finalizados <span className="bg-muted px-2 py-0.5 rounded-full text-xs">{archivedCount}</span>
             </TabsTrigger>
+            <TabsTrigger value="cancelled" className="gap-2">
+              <XCircle className="h-4 w-4" />
+              Cancelados <span className="bg-muted px-2 py-0.5 rounded-full text-xs">{cancelledCount}</span>
+            </TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -1206,7 +1215,7 @@ export default function ServicesPage() {
           </Button>
           {/* Um único relatório em PDF — segue a aba (Ativos ou Finalizados).
               Restrito a admin pleno (Coordenador não baixa). */}
-          {isFullAdmin && (
+          {isFullAdmin && statusFilter !== 'cancelled' && (
             <Button
               variant="outline"
               size="sm"
@@ -1371,7 +1380,7 @@ export default function ServicesPage() {
         data={pagedServices}
         columns={columns}
         keyExtractor={(s) => s.id}
-        emptyMessage={statusFilter === 'active' ? 'Nenhum atendimento ativo' : 'Nenhum atendimento arquivado'}
+        emptyMessage={statusFilter === 'active' ? 'Nenhum atendimento ativo' : statusFilter === 'cancelled' ? 'Nenhum atendimento cancelado' : 'Nenhum atendimento finalizado'}
       />
 
       {/* Pagination */}
