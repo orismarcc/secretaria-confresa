@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Home, Plus, Pencil, Trash2, Navigation, Crosshair, Loader2, MapPin, Map as MapIcon } from 'lucide-react';
 import { EscolherNoMapaDialog } from '@/components/mapa/EscolherNoMapaDialog';
+import { BotaoFotosPropriedade } from '@/components/fotos/FotosPropriedade';
 import {
   useAllProducerProperties, useSaveProducerProperty, useDeleteProducerProperty,
   useSettlements, useGlebas, type ProducerProperty,
@@ -142,6 +143,8 @@ export function ProducerPropertiesSection({ producerId, principal }: Props) {
                 : 'Sem GPS'}
             </p>
           </div>
+          <BotaoFotosPropriedade producerId={producerId} propertyId={null}
+            titulo={`Principal — ${principal.settlementName || ''}${principal.locationName ? ` · ${principal.locationName}` : ''}`} />
           {principal.latitude != null && principal.longitude != null && (
             <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Abrir no mapa" onClick={() => openInMaps(principal.latitude!, principal.longitude!)}>
               <Navigation className="h-4 w-4 text-blue-600" />
@@ -164,6 +167,8 @@ export function ProducerPropertiesSection({ producerId, principal }: Props) {
                   : 'Sem GPS'}
               </p>
             </div>
+            <BotaoFotosPropriedade producerId={producerId} propertyId={p.id}
+              titulo={`${p.name ? `${p.name} — ` : ''}${settlementName(p.settlement_id)}${p.location_name ? ` · ${p.location_name}` : ''}`} />
             {p.latitude != null && p.longitude != null && (
               <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Abrir no mapa" onClick={() => openInMaps(p.latitude!, p.longitude!)}>
                 <Navigation className="h-4 w-4 text-blue-600" />

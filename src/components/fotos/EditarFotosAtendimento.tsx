@@ -61,21 +61,26 @@ async function enviarArquivo(serviceId: string, file: File): Promise<string> {
   return path;
 }
 
-export function EditarFotosAtendimento({ serviceId, isLogistics }: { serviceId: string; isLogistics: boolean }) {
+export function EditarFotosAtendimento({ serviceId, isLogistics, podeAlterar = true }: {
+  serviceId: string;
+  isLogistics: boolean;
+  /** Trocar/remover (administradores plenos). Sem isso, só adicionar. */
+  podeAlterar?: boolean;
+}) {
   const [aberto, setAberto] = useState(false);
   return (
     <>
       <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAberto(true)}>
-        <Pencil className="h-3.5 w-3.5" /> Editar fotos
+        <Pencil className="h-3.5 w-3.5" /> {podeAlterar ? 'Editar fotos' : 'Adicionar fotos'}
       </Button>
       {aberto && (
-        <EditarFotosDialog serviceId={serviceId} isLogistics={isLogistics} onClose={() => setAberto(false)} />
+        <EditarFotosDialog serviceId={serviceId} isLogistics={isLogistics} podeAlterar={podeAlterar} onClose={() => setAberto(false)} />
       )}
     </>
   );
 }
 
-function EditarFotosDialog({ serviceId, isLogistics, onClose }: { serviceId: string; isLogistics: boolean; onClose: () => void }) {
+function EditarFotosDialog({ serviceId, isLogistics, podeAlterar, onClose }: { serviceId: string; isLogistics: boolean; podeAlterar: boolean; onClose: () => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: fotos = [], isLoading } = useServicePhotos(serviceId);
@@ -146,7 +151,7 @@ function EditarFotosDialog({ serviceId, isLogistics, onClose }: { serviceId: str
         className="block aspect-[9/16] w-24 overflow-hidden rounded-md border bg-muted" title="Abrir foto">
         {f.url && <img src={f.url} alt="Foto do atendimento" className="h-full w-full object-cover" />}
       </button>
-      <div className="flex gap-1">
+      {podeAlterar && <div className="flex gap-1">
         <Button type="button" variant="outline" size="icon" className="h-7 flex-1" title="Trocar foto"
           disabled={ocupado} onClick={() => escolher({ tipo: 'trocar', foto: f })}>
           <RefreshCw className="h-3.5 w-3.5" />
@@ -155,7 +160,7 @@ function EditarFotosDialog({ serviceId, isLogistics, onClose }: { serviceId: str
           disabled={ocupado} onClick={() => setARemover(f)}>
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
-      </div>
+      </div>}
     </div>
   );
 
@@ -164,7 +169,7 @@ function EditarFotosDialog({ serviceId, isLogistics, onClose }: { serviceId: str
       <Dialog open onOpenChange={(o) => { if (!o && !ocupado) onClose(); }}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Editar fotos do atendimento</DialogTitle>
+            <DialogTitle>{podeAlterar ? 'Editar fotos do atendimento' : 'Adicionar fotos ao atendimento'}</DialogTitle>
             <DialogDescription>
               Trocar mantém o horário e a localização do registro. As fotos substituídas ou removidas ficam guardadas na auditoria.
             </DialogDescription>

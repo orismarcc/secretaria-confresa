@@ -78,6 +78,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { otimizarComprovanteDam } from '@/lib/jpegSemMetadados';
 import { useQueryClient } from '@tanstack/react-query';
+import { SeletorFotos } from '@/components/fotos/SeletorFotos';
+import { enviarFotosAtendimento } from '@/lib/fotosAtendimento';
+import { toast as avisar } from '@/hooks/use-toast';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -272,6 +275,7 @@ export default function ServicesPage() {
   const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
   const [serviceToFinalize, setServiceToFinalize] = useState<DbService | null>(null);
   const [finalizeDate, setFinalizeDate] = useState('');
+  const [fotosFinalizacao, setFotosFinalizacao] = useState<File[]>([]);
 
   // Cancellation dialog
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -584,6 +588,7 @@ export default function ServicesPage() {
     setDetailOpen(false);
     setServiceToFinalize(service);
     setFinalizeDate(format(new Date(), 'yyyy-MM-dd'));
+    setFotosFinalizacao([]);
     setFinalizeDialogOpen(true);
   };
 
@@ -597,6 +602,15 @@ export default function ServicesPage() {
       status: 'completed',
       completed_at: completedAt,
     });
+    // Fotos escolhidas na finalização (equipe interna) — enviadas depois;
+    // se falharem, a finalização continua valendo e dá para adicionar depois.
+    if (fotosFinalizacao.length) {
+      const id = serviceToFinalize.id;
+      enviarFotosAtendimento(id, fotosFinalizacao)
+        .then((n) => { avisar({ title: `${n} foto(s) adicionada(s) ao atendimento` }); queryClient.invalidateQueries({ queryKey: ['service_photos', id] }); })
+        .catch((e) => avisar({ title: 'Atendimento finalizado, mas as fotos não foram enviadas', description: `${e?.message || e}. Adicione depois em "Editar fotos".`, variant: 'destructive' }));
+    }
+    setFotosFinalizacao([]);
     setServiceToFinalize(null);
     setFinalizeDialogOpen(false);
   };
@@ -1497,6 +1511,12 @@ export default function ServicesPage() {
                   value={finalizeDate}
                   onChange={e => setFinalizeDate(e.target.value)}
                 />
+              </div>
+            )}
+            {isAdmin && (
+              <div className="space-y-1.5">
+                <Label>Fotos do atendimento</Label>
+                <SeletorFotos fotos={fotosFinalizacao} onChange={setFotosFinalizacao} />
               </div>
             )}
           </div>

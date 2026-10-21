@@ -141,7 +141,7 @@ export function ServiceDetailView({
   onComunicado,
 }: ServiceDetailViewProps) {
   const { photos, isLoading: photosLoading } = useCombinedServicePhotos(service.id);
-  const { isCoordenador, isFullAdmin } = useAuth();
+  const { isCoordenador, isFullAdmin, role } = useAuth();
   // DAM (documento e valor) é restrito a admin pleno — Coordenador não vê.
   const canSeeDam = !isCoordenador;
   const isCompleted = service.status === 'completed';
@@ -578,9 +578,10 @@ export function ServiceDetailView({
               )}
             </div>)}
 
-            {/* Edição das fotos — só administradores plenos (Secretário/Diretor/Supervisor) */}
-            {isFullAdmin && (
-              <EditarFotosAtendimento serviceId={service.id} isLogistics={isLogistics} />
+            {/* Fotos: toda a equipe interna adiciona; trocar/remover só administradores
+                plenos (Secretário/Diretor/Supervisor). */}
+            {role === 'admin' && (
+              <EditarFotosAtendimento serviceId={service.id} isLogistics={isLogistics} podeAlterar={isFullAdmin} />
             )}
           </div>
         </>
