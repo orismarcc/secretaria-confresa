@@ -343,6 +343,77 @@ function LotPicker({
   );
 }
 
+// ─── Outro tipo de entrega no mesmo cadastro ─────────────────────────────────
+// Só facilita o cadastro: cada tipo vira uma ENTREGA SEPARADA (mesmo produtor,
+// datas, observações e finalização), igual a cadastrar uma por vez.
+
+interface EntregaExtra { key: string; demand_type_id: string; quantity: string; lots: LotItem[] }
+
+function EntregaAdicional({
+  item, numero, tipos, onChange, onRemove,
+}: {
+  item: EntregaExtra;
+  numero: number;
+  tipos: any[];
+  onChange: (item: EntregaExtra) => void;
+  onRemove: () => void;
+}) {
+  const { data: lots = [], isLoading } = useDeliveryLots(item.demand_type_id || undefined);
+  return (
+    <div className="space-y-3 rounded-lg border border-dashed p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold">Entrega {numero}</p>
+        <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 text-xs text-destructive hover:text-destructive" onClick={onRemove}>
+          <Trash2 className="h-3.5 w-3.5" /> Remover
+        </Button>
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-sm font-medium">Tipo de Entrega *</label>
+        <Select
+          value={item.demand_type_id}
+          onValueChange={(v) => onChange({ ...item, demand_type_id: v, lots: [], quantity: '' })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Selecione o tipo" />
+          </SelectTrigger>
+          <SelectContent>
+            {tipos.map((d: any) => {
+              const color = getTypeColor(d.id, tipos);
+              return (
+                <SelectItem key={d.id} value={d.id}>
+                  <span className="flex items-center gap-2">
+                    <span className={cn('w-2 h-2 rounded-full shrink-0', color.dot)} />
+                    {d.name}
+                  </span>
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+      </div>
+      {item.demand_type_id && (lots as any[]).length > 0 && (
+        <LotPicker lots={lots as any[]} selectedLots={item.lots} onChange={(l) => onChange({ ...item, lots: l })} />
+      )}
+      {item.demand_type_id && !isLoading && (lots as any[]).length === 0 && (
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium flex items-center gap-1.5">
+            <Box className="h-4 w-4 text-muted-foreground" />
+            Quantidade
+          </label>
+          <Input
+            type="number"
+            min="0.001"
+            step="0.001"
+            placeholder="Informe a quantidade entregue"
+            value={item.quantity}
+            onChange={(e) => onChange({ ...item, quantity: e.target.value })}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Lot form dialog ───────────────────────────────────────────────────────────
 
 const UNITS = ['unidade', 'kg', 'g', 'ton', 'saco', 'caixa', 'litro', 'ml', 'dose'];
@@ -1216,6 +1287,9 @@ export default function DeliveriesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<DeliveryFormData>(EMPTY_FORM);
   const [selectedLots, setSelectedLots] = useState<LotItem[]>([]);
+  // Outros tipos no mesmo cadastro (só em "Nova Entrega") — cada um vira uma entrega.
+  const [extras, setExtras] = useState<EntregaExtra[]>([]);
+  const [salvando, setSalvando] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteName, setDeleteName] = useState('');
@@ -1320,12 +1394,14 @@ export default function DeliveriesPage() {
     setEditingId(null);
     setFormData(EMPTY_FORM);
     setSelectedLots([]);
+    setExtras([]);
     setFormOpen(true);
   };
 
   const openEdit = (d: any) => {
     setEditingId(d.id);
     setSelectedLots([]); // will be populated by useEffect
+    setExtras([]);
     setFormData({
       producer_id: d.producer_id || '',
       demand_type_id: d.demand_type_id || '',
@@ -1366,10 +1442,28 @@ export default function DeliveriesPage() {
       if (editingId && d.id === editingId) return; // ignora a própria entrega em edição
       (d.delivery_items ?? []).forEach((it: any) => { if (it.lot_id) producerLotIds.add(it.lot_id); });
     });
-    const conflitos = selectedLots.filter((l) => l.lot_id && producerLotIds.has(l.lot_id));
+    const extrasAtivas = editingId ? [] : extras;
+    if (extrasAtivas.some((x) => !x.demand_type_id)) {
+      toast({ title: 'Selecione o tipo de cada entrega', description: 'Ou remova a entrega adicional que ficou sem tipo.', variant: 'destructive' });
+      return;
+    }
+    // O mesmo lote não pode aparecer em duas entregas do mesmo cadastro.
+    const todosLotes = [...selectedLots, ...extrasAtivas.flatMap((x) => x.lots)].filter((l) => l.lot_id);
+    const repetidos = todosLotes.filter((l, i) => todosLotes.findIndex((o) => o.lot_id === l.lot_id) !== i);
+    const nomeLote = (id: string) =>
+      ((lotsForType as any[]).find((l) => l.id === id) ?? (allLotsSummary as any[]).find((l) => l.id === id))?.name || 'lote';
+    if (repetidos.length > 0) {
+      toast({
+        title: 'Lote repetido no cadastro',
+        description: `O lote ${nomeLote(repetidos[0].lot_id)} foi escolhido em mais de uma entrega. Use um lote por entrega.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    const conflitos = todosLotes.filter((l) => producerLotIds.has(l.lot_id));
     if (conflitos.length > 0) {
       const nomes = conflitos
-        .map((c) => (lotsForType as any[]).find((l) => l.id === c.lot_id)?.name || 'lote')
+        .map((c) => nomeLote(c.lot_id))
         .join(', ');
       toast({
         title: 'Produtor já cadastrado neste lote',
@@ -1404,6 +1498,10 @@ export default function DeliveriesPage() {
         : new Date().toISOString();
     }
 
+    // Evita cadastro duplicado por duplo clique.
+    if (salvando) return;
+    setSalvando(true);
+    let criadas = 0;
     try {
       let deliveryId: string;
       if (editingId) {
@@ -1419,10 +1517,37 @@ export default function DeliveriesPage() {
       if (validLots.length > 0 || editingId) {
         await saveDeliveryItems.mutateAsync({ deliveryId, items: validLots });
       }
+      criadas = 1;
+
+      // Outros tipos do mesmo cadastro: uma entrega para cada (mesmos dados gerais).
+      for (const x of extrasAtivas) {
+        const lotesX = x.lots.filter((l) => l.lot_id && l.quantity > 0);
+        const totalX = lotesX.reduce((acc, l) => acc + l.quantity, 0);
+        const r = await createDelivery.mutateAsync({
+          ...payload,
+          demand_type_id: x.demand_type_id,
+          quantity: totalX > 0 ? totalX : (x.quantity ? Number(x.quantity) : null),
+        } as any);
+        if (lotesX.length > 0) {
+          await saveDeliveryItems.mutateAsync({ deliveryId: (r as any).id, items: lotesX });
+        }
+        criadas += 1;
+      }
 
       setFormOpen(false);
     } catch {
       // errors are handled by the mutation's onError
+      if (criadas > 0 && extrasAtivas.length > 0) {
+        // Parte já foi salva: fecha para não cadastrar de novo ao tentar outra vez.
+        toast({
+          title: `${criadas} de ${extrasAtivas.length + 1} entregas cadastradas`,
+          description: 'Confira a lista e cadastre a que faltou.',
+          variant: 'destructive',
+        });
+        setFormOpen(false);
+      }
+    } finally {
+      setSalvando(false);
     }
   };
 
@@ -2115,6 +2240,36 @@ export default function DeliveriesPage() {
               </div>
             )}
 
+            {/* Outros tipos no mesmo cadastro — cada um vira uma entrega separada */}
+            {!editingId && extras.map((x, i) => (
+              <EntregaAdicional
+                key={x.key}
+                item={x}
+                numero={i + 2}
+                tipos={deliveryDemandTypes}
+                onChange={(novo) => setExtras((lista) => lista.map((e) => (e.key === x.key ? novo : e)))}
+                onRemove={() => setExtras((lista) => lista.filter((e) => e.key !== x.key))}
+              />
+            ))}
+            {!editingId && formData.demand_type_id && (
+              <div className="space-y-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-1.5 border-dashed"
+                  onClick={() => setExtras((lista) => [...lista, { key: crypto.randomUUID(), demand_type_id: '', quantity: '', lots: [] }])}
+                >
+                  <Plus className="h-4 w-4" /> Adicionar outro tipo / lote para este produtor
+                </Button>
+                {extras.length > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Cada tipo é salvo como uma entrega separada, com as datas, observações e finalização abaixo.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Date range */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -2200,9 +2355,9 @@ export default function DeliveriesPage() {
             <Button variant="outline" onClick={() => setFormOpen(false)}>Cancelar</Button>
             <Button
               onClick={handleSubmit}
-              disabled={!formData.producer_id || !formData.demand_type_id || createDelivery.isPending || updateDelivery.isPending}
+              disabled={!formData.producer_id || !formData.demand_type_id || salvando || createDelivery.isPending || updateDelivery.isPending}
             >
-              {editingId ? 'Salvar' : 'Cadastrar'}
+              {editingId ? 'Salvar' : extras.length > 0 ? `Cadastrar ${extras.length + 1} entregas` : 'Cadastrar'}
             </Button>
           </DialogFooter>
         </DialogContent>
