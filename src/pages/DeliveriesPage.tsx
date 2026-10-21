@@ -274,7 +274,7 @@ function LotPicker({
                 />
                 <div className="flex-1 min-w-0 space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium truncate">{lot.name}</p>
+                    <p className="min-w-0 text-sm font-medium break-words">{lot.name}</p>
                     {depleted ? (
                       <Badge variant="destructive" className="text-xs shrink-0 gap-1">
                         <AlertTriangle className="h-3 w-3" />Esgotado
@@ -694,7 +694,7 @@ function LotsTab({ demandTypes }: { demandTypes: any[] }) {
     <div className="space-y-6">
       {/* Summary cards by type */}
       {summaryByType.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {summaryByType.map((s, idx) => {
             const color = TYPE_COLORS[idx % TYPE_COLORS.length];
             const pctFin = s.total > 0 ? Math.round((s.finalized / s.total) * 100) : 0;
@@ -1078,7 +1078,7 @@ function DeliveryStats({
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)} className="border border-input bg-background rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
           <option value="all">Todos os anos</option>
           {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
@@ -1123,7 +1123,7 @@ function DeliveryStats({
       ) : (
         <>
           {/* Charts */}
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {barData.length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
@@ -1168,7 +1168,7 @@ function DeliveryStats({
 
           {/* By type summary */}
           {statsByType.length > 0 && (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {statsByType.map((typeData, idx) => {
                 const color = TYPE_COLORS[idx % TYPE_COLORS.length];
                 return (
@@ -1723,7 +1723,7 @@ export default function DeliveriesPage() {
             </div>
             <Badge
               variant="secondary"
-              className={cn('text-xs', isCompleted ? 'bg-success/10 text-success border-success/20' : color.badge)}
+              className={cn('text-xs max-w-full whitespace-normal', isCompleted ? 'bg-success/10 text-success border-success/20' : color.badge)}
             >
               {d.demand_types?.name || '—'}
             </Badge>
@@ -2017,7 +2017,7 @@ export default function DeliveriesPage() {
                             Exportar contatos (WhatsApp)
                           </Button>
                         </div>
-                        <div className="p-3 grid gap-3 sm:grid-cols-2">
+                        <div className="p-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                           {group.deliveries.map(renderDeliveryCard)}
                         </div>
                       </div>
@@ -2094,7 +2094,7 @@ export default function DeliveriesPage() {
                             Exportar contatos (WhatsApp)
                           </Button>
                         </div>
-                        <div className="p-3 grid gap-3 sm:grid-cols-2">
+                        <div className="p-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                           {group.deliveries.map(renderDeliveryCard)}
                         </div>
                       </div>
