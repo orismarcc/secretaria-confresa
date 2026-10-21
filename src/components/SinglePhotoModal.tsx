@@ -5,6 +5,18 @@ import {
 import { Button } from '@/components/ui/button';
 import { useCamera } from '@/hooks/useCamera';
 import { Camera, Check, X, RotateCcw, Upload, Loader2, AlertCircle, MapPin } from 'lucide-react';
+import { lerPosicaoPrecisa, dentroDaRegiao, type LeituraGps } from '@/lib/gpsPreciso';
+import { lerExifFoto, type ExifFoto } from '@/lib/exifFoto';
+
+/** De onde veio a foto e a localização ligada a ela. */
+export interface InfoFoto {
+  origem: 'camera' | 'galeria';
+  /** Leitura do GPS iniciada NO MOMENTO da foto (câmera) ou da escolha (galeria
+   *  sem localização própria). Resolve em até ~8 s; null se o GPS não respondeu. */
+  leitura: Promise<LeituraGps | null>;
+  /** Galeria: localização/hora gravadas na própria foto (quando houver). */
+  exif: ExifFoto | null;
+}
 
 interface SinglePhotoModalProps {
   open: boolean;
@@ -18,14 +30,16 @@ interface SinglePhotoModalProps {
   hint?: string;
   confirmLabel: string;
   confirmClassName?: string;
-  /** Recebe a foto (obrigatória). Não fala com o servidor. */
-  onConfirm: (photo: Blob) => void;
+  /** Recebe a foto (obrigatória) e a origem/localização dela. Não fala com o servidor. */
+  onConfirm: (photo: Blob, info: InfoFoto) => void;
 }
 
 /**
  * Registro com UMA foto obrigatória (câmera ou galeria). Usado nas etapas da
  * logística (odômetro no início e na finalização, carregamento e entrega).
- * A localização é captada automaticamente por quem chama, após confirmar.
+ * A localização é lida NA HORA DA FOTO (não ao confirmar): o operador pode
+ * tirar a foto e só tocar em registrar depois de sair do local. Foto da galeria
+ * usa a localização gravada nela (EXIF), quando houver.
  */
 export function SinglePhotoModal({
   open, onOpenChange, title, subtitle, photoLabel, hint, confirmLabel, confirmClassName, onConfirm,
@@ -35,6 +49,7 @@ export function SinglePhotoModal({
   const [cameraOpen, setCameraOpen] = useState(false);
   const [permDenied, setPermDenied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const infoRef = useRef<InfoFoto | null>(null);
 
   const {
     isSupported: cameraSupported, isCapturing, error: cameraError,
@@ -44,6 +59,7 @@ export function SinglePhotoModal({
   useEffect(() => {
     if (open) {
       setBlob(null); setPreview(null); setCameraOpen(false); setPermDenied(false);
+      infoRef.current = null;
     } else {
       stopCamera();
     }
@@ -65,24 +81,37 @@ export function SinglePhotoModal({
 
   const shoot = async () => {
     const b = await takePhoto();
-    if (b) setPhoto(b);
+    if (b) {
+      infoRef.current = { origem: 'camera', leitura: lerPosicaoPrecisa(), exif: null };
+      setPhoto(b);
+    }
     stopCamera(); setCameraOpen(false);
   };
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) { const b = await captureFromFile(file); if (b) setPhoto(b); }
+    if (file) {
+      // O EXIF é lido do arquivo ORIGINAL (a imagem é recomprimida logo abaixo).
+      const exif = await lerExifFoto(file);
+      const b = await captureFromFile(file);
+      if (b) {
+        const temLocal = exif?.latitude != null && exif.longitude != null && dentroDaRegiao(exif.latitude, exif.longitude);
+        infoRef.current = { origem: 'galeria', exif, leitura: temLocal ? Promise.resolve(null) : lerPosicaoPrecisa() };
+        setPhoto(b);
+      }
+    }
     e.target.value = '';
   };
 
   const retake = () => {
     if (preview) URL.revokeObjectURL(preview);
     setBlob(null); setPreview(null);
+    infoRef.current = null;
   };
 
   const confirm = () => {
     if (!blob) return;
-    onConfirm(blob);
+    onConfirm(blob, infoRef.current ?? { origem: 'camera', leitura: lerPosicaoPrecisa(), exif: null });
     onOpenChange(false);
   };
 

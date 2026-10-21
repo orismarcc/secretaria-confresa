@@ -13,6 +13,8 @@ interface EventRow {
   latitude: number | null;
   longitude: number | null;
   captured_at: string | null;
+  /** Observação do registro (ex.: foto da galeria). */
+  note?: string | null;
   url?: string;
 }
 
@@ -23,7 +25,7 @@ function useServiceEvents(serviceId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('service_photos')
-        .select('id, event_type, storage_path, latitude, longitude, captured_at')
+        .select('id, event_type, storage_path, latitude, longitude, captured_at, note')
         .eq('service_id', serviceId)
         .order('captured_at', { ascending: true });
       if (error) throw error;
@@ -97,30 +99,30 @@ export function LogisticsRoute({ serviceId, fallbackStart }: Props) {
       at: start?.captured_at ?? null,
       lat: start?.latitude ?? fallbackStart?.latitude ?? null,
       lng: start?.longitude ?? fallbackStart?.longitude ?? null,
-      url: startPhoto?.url, done: !!(start || fallbackStart?.latitude),
+      url: startPhoto?.url, done: !!(start || fallbackStart?.latitude), nota: start?.note,
       color: 'text-blue-600 bg-blue-500/10 border-blue-500/30',
     },
     {
       key: 'loading', icon: Truck, title: 'Carregamento', subtitle: 'Chegada ao local de carregamento',
       at: loading?.captured_at ?? null, lat: loading?.latitude ?? null, lng: loading?.longitude ?? null,
-      url: loading?.url, done: !!loading,
+      url: loading?.url, done: !!loading, nota: loading?.note,
       color: 'text-amber-700 bg-amber-500/10 border-amber-500/30',
     },
     legado ? {
       key: 'finish', icon: Flag, title: 'Entrega', subtitle: 'Propriedade do produtor',
       at: finish?.captured_at ?? null, lat: finish?.latitude ?? null, lng: finish?.longitude ?? null,
-      url: finish?.url, done: !!finish,
+      url: finish?.url, done: !!finish, nota: finish?.note,
       color: 'text-emerald-700 bg-emerald-500/10 border-emerald-500/30',
     } : {
       key: 'delivery', icon: PackageCheck, title: 'Entrega', subtitle: 'Propriedade do produtor',
       at: delivery?.captured_at ?? null, lat: delivery?.latitude ?? null, lng: delivery?.longitude ?? null,
-      url: delivery?.url, done: !!delivery,
+      url: delivery?.url, done: !!delivery, nota: delivery?.note,
       color: 'text-sky-700 bg-sky-500/10 border-sky-500/30',
     },
     ...(legado ? [] : [{
       key: 'finish', icon: Gauge, title: 'Finalização', subtitle: 'Foto do odômetro (km final)',
       at: finish?.captured_at ?? null, lat: finish?.latitude ?? null, lng: finish?.longitude ?? null,
-      url: finish?.url, done: !!finish,
+      url: finish?.url, done: !!finish, nota: finish?.note,
       color: 'text-emerald-700 bg-emerald-500/10 border-emerald-500/30',
     }]),
   ];
@@ -161,6 +163,11 @@ export function LogisticsRoute({ serviceId, fallbackStart }: Props) {
                           </p>
                         ) : (
                           <p className="text-[11px] text-muted-foreground">GPS não capturado</p>
+                        )}
+                        {st.nota && (
+                          <p className="mt-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] text-amber-800 dark:text-amber-300">
+                            {st.nota}
+                          </p>
                         )}
                       </>
                     ) : (

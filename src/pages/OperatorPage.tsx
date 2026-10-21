@@ -10,7 +10,8 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { OnlineIndicator } from '@/components/ConnectionStatus';
 import { FinalizePhotosModal } from '@/components/FinalizePhotosModal';
-import { SinglePhotoModal } from '@/components/SinglePhotoModal';
+import { SinglePhotoModal, type InfoFoto } from '@/components/SinglePhotoModal';
+import { localDaFoto } from '@/lib/localDaFoto';
 import { isLogisticsCategory } from '@/lib/logistica';
 import { OperatorCompletedList } from '@/components/OperatorCompletedList';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -665,10 +666,12 @@ export default function OperatorPage() {
     void startService(service, null);
   };
 
-  const startService = async (service: DbService, photo: Blob | null) => {
+  const startService = async (service: DbService, photo: Blob | null, info?: InfoFoto) => {
     if (startingId) return;
     setStartingId(service.id);
-    const leitura: LeituraGps | null = await lerPosicaoPrecisa();
+    // Com foto (logística): localização da hora da foto / da própria foto.
+    const local = info ? await localDaFoto(info) : { leitura: await lerPosicaoPrecisa(), nota: null };
+    const leitura: LeituraGps | null = local.leitura;
     const coords = leitura ? { latitude: leitura.latitude, longitude: leitura.longitude } : null;
 
     await enqueueOperatorAction({
@@ -679,6 +682,7 @@ export default function OperatorPage() {
       latitude: coords?.latitude ?? null,
       longitude: coords?.longitude ?? null,
       accuracy: leitura?.precisaoM ?? null,
+      nota: local.nota,
     });
 
     queryClient.setQueryData<DbService[]>(['services', 'pending'], (old = []) =>
@@ -748,15 +752,19 @@ export default function OperatorPage() {
   // Logística: foto obrigatória + GPS automático. 'load' registra o carregamento
   // e 'deliver' a entrega na propriedade (o atendimento segue em execução);
   // 'finish' finaliza (foto do odômetro). 'start' inicia (foto do odômetro).
-  const handlePhotoStepConfirm = async (photo: Blob) => {
+  // A localização é a da HORA DA FOTO (ou a gravada na foto da galeria) — não
+  // a do toque em registrar.
+  const handlePhotoStepConfirm = async (photo: Blob, info: InfoFoto) => {
     const { mode, service } = photoStep;
     if (!service) return;
     if (mode === 'start') {
-      await startService(service, photo);
+      await startService(service, photo, info);
       return;
     }
     setBusy({ id: service.id, label: 'Obtendo localização…' });
-    const leitura: LeituraGps | null = await lerPosicaoPrecisa();
+    let local: Awaited<ReturnType<typeof localDaFoto>>;
+    try { local = await localDaFoto(info); } catch { local = { leitura: null, nota: null }; }
+    const leitura: LeituraGps | null = local.leitura;
     const coords = leitura ? { latitude: leitura.latitude, longitude: leitura.longitude } : null;
 
     try {
@@ -768,6 +776,7 @@ export default function OperatorPage() {
         latitude: coords?.latitude ?? null,
         longitude: coords?.longitude ?? null,
         accuracy: leitura?.precisaoM ?? null,
+        nota: local.nota,
       });
     } finally {
       setBusy(null);

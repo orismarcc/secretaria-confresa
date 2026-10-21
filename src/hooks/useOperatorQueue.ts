@@ -36,6 +36,7 @@ async function pushAction(action: OperatorAction): Promise<void> {
         ...(action.accuracy != null ? { accuracy_m: action.accuracy } : {}),
         captured_at: action.capturedAt,
         event_type: 'start',
+        ...(action.nota ? { note: action.nota } : {}),
       } as any, { onConflict: 'id', ignoreDuplicates: true });
       if (pErr) throw pErr;
     } else if (action.latitude != null) {
@@ -47,6 +48,7 @@ async function pushAction(action: OperatorAction): Promise<void> {
         ...(action.accuracy != null ? { accuracy_m: action.accuracy } : {}),
         captured_at: action.capturedAt,
         event_type: 'start',
+        ...(action.nota ? { note: action.nota } : {}),
       } as any);
       if (pErr) throw pErr;
     }
@@ -79,6 +81,7 @@ async function pushAction(action: OperatorAction): Promise<void> {
       ...(action.accuracy != null ? { accuracy_m: action.accuracy } : {}),
       captured_at: action.capturedAt,
       event_type: eventType,
+      ...(action.nota ? { note: action.nota } : {}),
     } as any, { onConflict: 'id', ignoreDuplicates: true });
     if (pErr) throw pErr;
     const { error: sErr } = await supabase.from('services')
@@ -103,6 +106,7 @@ async function pushAction(action: OperatorAction): Promise<void> {
   if (finishPath || action.latitude != null) rows.push({
     service_id: action.serviceId, storage_path: finishPath,
     captured_at: action.capturedAt, event_type: 'finish', ...finishGps,
+    ...(action.nota ? { note: action.nota } : {}),
   });
   if (startPath) rows.push({
     service_id: action.serviceId, storage_path: startPath,

@@ -27,6 +27,8 @@ export interface OperatorAction {
    *  localização precisa — nova leitura feita ao finalizar). */
   setServiceCoords?: boolean;
   capturedAt: string;          // ISO — momento real da ação
+  /** Observação da foto para o escritório (ex.: "Foto da galeria…"). */
+  nota?: string | null;
 }
 
 export interface EnqueueInput {
@@ -39,6 +41,7 @@ export interface EnqueueInput {
   longitude?: number | null;
   accuracy?: number | null;
   setServiceCoords?: boolean;
+  nota?: string | null;
 }
 
 export async function enqueueOperatorAction(input: EnqueueInput): Promise<OperatorAction> {
@@ -68,6 +71,7 @@ export async function enqueueOperatorAction(input: EnqueueInput): Promise<Operat
     accuracy: input.accuracy ?? null,
     setServiceCoords: input.setServiceCoords ?? false,
     capturedAt: new Date().toISOString(),
+    nota: input.nota ?? null,
   };
   await set(id, action, actionStore);
   return action;
