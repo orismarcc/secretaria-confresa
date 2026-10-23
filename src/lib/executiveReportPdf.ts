@@ -80,7 +80,7 @@ export interface ExecutiveReportOptions {
   /** true = inclui o KPI "Arrecadado (DAMs pagas)". Restrito a admin pleno. */
   includeDamRevenue?: boolean;
   /** 'completed' (padrão) = atendimentos finalizados; 'active' = ativos/pendentes. */
-  scope?: 'completed' | 'active';
+  scope?: 'completed' | 'active' | 'cancelled';
   /** Nome da gleba filtrada (para o subtítulo). */
   glebaName?: string;
   /** Período filtrado (para o subtítulo), ex.: "01/09/2026 a 15/09/2026". */
@@ -431,13 +431,16 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
   };
   const servicesOnly = opts.servicesOnly ?? false;
   const isActive = opts.scope === 'active';
+  const isCancelled = opts.scope === 'cancelled';
   const includeServices = category === 'all' || category !== 'entregas';
-  const includeDeliveries = !servicesOnly && !isActive && (category === 'all' || category === 'entregas');
+  const includeDeliveries = !servicesOnly && !isActive && !isCancelled && (category === 'all' || category === 'entregas');
 
   // ── Filtragem — FINALIZADO (padrão) ou ATIVO/PENDENTE ─────────────────────
-  const matchScope = (s: any) => isActive
-    ? (s.status !== 'completed' && s.status !== 'cancelled')
-    : s.status === 'completed';
+  const matchScope = (s: any) => isCancelled
+    ? s.status === 'cancelled'
+    : isActive
+      ? (s.status !== 'completed' && s.status !== 'cancelled')
+      : s.status === 'completed';
   let compServices = includeServices
     ? (services as any[]).filter(
         (s) => matchScope(s) && dtById.get(s.demand_type_id)?.category !== 'entregas',
@@ -478,19 +481,20 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
   );
 
   const kpis: Kpi[] = [];
-  if (includeServices) kpis.push({ label: isActive ? 'Atendimentos ativos' : 'Atendimentos finalizados', value: fmtInt(compServices.length), color: GREEN });
+  if (includeServices) kpis.push({ label: isCancelled ? 'Atendimentos cancelados' : isActive ? 'Atendimentos ativos' : 'Atendimentos finalizados', value: fmtInt(compServices.length), color: GREEN });
   if (includeDeliveries) {
     kpis.push({ label: 'Entregas realizadas', value: fmtInt(compDeliveries.length), color: BLUE });
     kpis.push({ label: 'Itens entregues', value: fmtInt(itensEntregues), color: BLUE });
   }
-  kpis.push({ label: isActive ? 'Produtores a serem atendidos' : 'Produtores atendidos', value: fmtInt(produtoresSet.size), color: AMBER });
-  if (includeServices && areaTrabalhada > 0)
+  kpis.push({ label: isCancelled ? 'Produtores' : isActive ? 'Produtores a serem atendidos' : 'Produtores atendidos', value: fmtInt(produtoresSet.size), color: AMBER });
+  // Cancelados: não houve trabalho — sem área, horas, combustível ou DAM.
+  if (includeServices && !isCancelled && areaTrabalhada > 0)
     kpis.push({ label: 'Área trabalhada (ha)', value: fmtDec(areaTrabalhada), color: AMBER });
-  if (includeServices && horasTrabalhadas > 0)
+  if (includeServices && !isCancelled && horasTrabalhadas > 0)
     kpis.push({ label: isActive ? 'Horas previstas' : 'Horas trabalhadas', value: `${fmtDec(horasTrabalhadas)} h`, color: AMBER });
-  if (includeServices && combustivelConsumido > 0)
+  if (includeServices && !isCancelled && combustivelConsumido > 0)
     kpis.push({ label: isActive ? 'Combustível a ser consumido' : 'Combustível consumido', value: `${fmtDec(combustivelConsumido)} L`, color: BLUE });
-  if (includeServices && arrecadadoDam > 0 && opts.includeDamRevenue)
+  if (includeServices && !isCancelled && arrecadadoDam > 0 && opts.includeDamRevenue)
     kpis.push({ label: 'Arrecadado (DAMs pagas)', value: fmtBRL(arrecadadoDam), color: GREEN });
   if (opts.operator?.extraKpis?.length) {
     kpis.splice(1, 0, ...opts.operator.extraKpis.map((k) => ({ ...k, color: GREEN })));
@@ -518,7 +522,7 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
   };
 
   const chartSeries: BarSeries[] = [];
-  if (includeServices) chartSeries.push({ name: 'Atendimentos', color: GREEN, data: countByMonth(compServices) });
+  if (includeServices && !isCancelled) chartSeries.push({ name: 'Atendimentos', color: GREEN, data: countByMonth(compServices) });
   if (includeDeliveries) chartSeries.push({ name: 'Entregas', color: BLUE, data: countByMonth(compDeliveries) });
 
   // ── Subtítulo ─────────────────────────────────────────────────────────────
@@ -555,7 +559,7 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
     doc.setFontSize(7.5);
     doc.setTextColor(130);
     doc.text(
-      `${isActive ? 'Atendimentos ativos (pendentes)' : 'Trabalho realizado (finalizado)'} · Gerado em ${format(now, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`,
+      `${isCancelled ? 'Atendimentos cancelados' : isActive ? 'Atendimentos ativos (pendentes)' : 'Trabalho realizado (finalizado)'} · Gerado em ${format(now, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`,
       pageWidth / 2,
       26,
       { align: 'center' },
@@ -577,8 +581,10 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
       y += 2 + 42 + (chartSeries.length > 1 ? 13 : 8);
     }
 
-    // Atendimentos por tipo de serviço — relatório do operador (como na ficha dele)
-    if (opts.operator && includeServices && compServices.length > 0) {
+    // Atendimentos por tipo de serviço — relatório do operador (como na ficha
+    // dele) e sempre que o relatório tiver MAIS DE UM tipo (ex.: Grade, PC…).
+    const tiposNoRelatorio = new Set(compServices.map((sv) => sv.demand_type_id));
+    if ((opts.operator || tiposNoRelatorio.size > 1) && includeServices && compServices.length > 0) {
       const byType: Record<string, { name: string; n: number; horas: number; area: number }> = {};
       compServices.forEach((sv) => {
         const name = dtById.get(sv.demand_type_id)?.name || sv.demand_types?.name || 'Desconhecido';
@@ -588,12 +594,13 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
         byType[name].area += Number(sv.worked_area) || 0;
       });
       const rowsType = Object.values(byType).sort((a, b) => b.n - a.n);
+      y += 3;
       if (y > 235) { doc.addPage(); y = 16; }
       y = sectionTitle(doc, M, y, 'Atendimentos por tipo de serviço');
       autoTable(doc, {
         startY: y,
-        head: [['Tipo de serviço', 'Atendimentos', 'Horas', 'Área (ha)']],
-        body: rowsType.map((r) => [
+        head: [isCancelled ? ['Tipo de serviço', 'Atendimentos'] : ['Tipo de serviço', 'Atendimentos', 'Horas', 'Área (ha)']],
+        body: rowsType.map((r) => isCancelled ? [r.name, fmtInt(r.n)] : [
           r.name, fmtInt(r.n),
           r.horas > 0 ? `${fmtDec(r.horas)} h` : '-',
           r.area > 0 ? fmtDec(r.area) : '-',
@@ -654,7 +661,7 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
           const totalPessoas = pieSlices.reduce((s, x) => s + x.value, 0);
           const needed = 8 + Math.max(2 * rOuter + 8, pieSlices.length * 5.8) + 10;
           if (y + needed > 285) { doc.addPage(); y = 16; }
-          y = sectionTitle(doc, M, y, 'Pessoas atendidas por assentamento');
+          y = sectionTitle(doc, M, y, isCancelled ? 'Produtores por assentamento' : 'Pessoas atendidas por assentamento');
           const cx = M + 6 + rOuter;
           const cy = y + 6 + rOuter;
           const legendX = cx + rOuter + 16;
@@ -687,40 +694,67 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
       }
     }
 
-    // Detalhe por produtor — começa SEMPRE numa página nova (organização).
+    // Detalhe por produtor — começa SEMPRE numa página nova (organização),
+    // ORGANIZADO POR TIPO DE SERVIÇO (Grade, Pá carregadeira, PC…): um bloco
+    // por tipo, em ordem alfabética; dentro do bloco, por data.
     if (includeServices && compServices.length > 0) {
       doc.addPage();
       y = 16;
-      const dateField = isActive ? 'scheduled_date' : 'completed_at';
-      const dateHeader = isActive ? 'Agendado' : 'Finalizado';
-      y = sectionTitle(doc, M, y, `Atendimentos ${isActive ? 'ativos' : 'finalizados'} por produtor (${compServices.length})`);
-      const sorted = compServices
+      const dateField = isCancelled ? 'created_at' : isActive ? 'scheduled_date' : 'completed_at';
+      const dateHeader = isCancelled ? 'Cadastro' : isActive ? 'Agendado' : 'Finalizado';
+      const titulo = isCancelled ? 'cancelados' : isActive ? 'ativos' : 'finalizados';
+      y = sectionTitle(doc, M, y, `Atendimentos ${titulo} por produtor (${compServices.length})`);
+      const tipoNome = (s: any) => dtById.get(s.demand_type_id)?.name || s.demand_types?.name || 'N/A';
+      const grupos = new Map<string, any[]>();
+      compServices
         .slice()
-        .sort((a, b) => (parseDate(a[dateField])?.getTime() || 0) - (parseDate(b[dateField])?.getTime() || 0));
-      const assentNames = sorted.map((s) => settlementName(s.settlement_id, s.settlements));
-      const glebaNames = sorted.map(glebaOf);
+        .sort((a, b) => (parseDate(a[dateField])?.getTime() || 0) - (parseDate(b[dateField])?.getTime() || 0))
+        .forEach((s) => {
+          const k = tipoNome(s);
+          if (!grupos.has(k)) grupos.set(k, []);
+          grupos.get(k)!.push(s);
+        });
+      const ordemTipos = [...grupos.keys()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
       // No relatório do operador a coluna "Operador" seria sempre o mesmo nome.
       const showOperatorCol = !opts.operator;
-      const body = sorted.map((s, i) => [
-          prById.get(s.producer_id)?.name || s.producers?.name || 'N/A',
-          dtById.get(s.demand_type_id)?.name || s.demand_types?.name || 'N/A',
-          assentNames[i],
-          ...(showOperatorCol ? [(s as any).operador?.name || '-'] : []),
-          s.worked_hours ? `${fmtDec(Number(s.worked_hours))} h` : '-',
-          s.worked_area ? `${fmtDec(Number(s.worked_area))} ha` : '-',
-          fmtDate(s[dateField]),
-        ]);
-      autoTable(doc, {
-        startY: y,
-        head: [['Produtor', 'Demanda', glebaNames.some(Boolean) ? 'Assentamento / Gleba' : 'Assentamento', ...(showOperatorCol ? ['Operador'] : []), 'Horas', 'Área', dateHeader]],
-        body,
-        styles: { fontSize: 7.5, cellPadding: 1.8 },
-        headStyles: { fillColor: GREEN, textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
-        alternateRowStyles: { fillColor: [245, 250, 245] },
-        margin: { left: M, right: M },
-        ...settlementGlebaHooks(2, assentNames, glebaNames, 7.5),
-      });
-      y = (doc as any).lastAutoTable.finalY + 8;
+      for (const tipo of ordemTipos) {
+        const sorted = grupos.get(tipo)!;
+        if (y > 262) { doc.addPage(); y = 16; }
+        // Cabeçalho do bloco: nome do tipo + quantidade
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9.5);
+        doc.setTextColor(GREEN[0], GREEN[1], GREEN[2]);
+        doc.text(`${tipo.toUpperCase()} — ${fmtInt(sorted.length)} atendimento${sorted.length !== 1 ? 's' : ''}`, M, y + 4);
+        doc.setTextColor(0);
+        y += 6;
+        const assentNames = sorted.map((s) => settlementName(s.settlement_id, s.settlements));
+        const glebaNames = sorted.map(glebaOf);
+        const body = sorted.map((s, i) => [
+            prById.get(s.producer_id)?.name || s.producers?.name || 'N/A',
+            tipo,
+            assentNames[i],
+            ...(showOperatorCol ? [(s as any).operador?.name || '-'] : []),
+            ...(isCancelled
+              ? [(s as any).cancellation_reason || '-']
+              : [
+                  s.worked_hours ? `${fmtDec(Number(s.worked_hours))} h` : '-',
+                  s.worked_area ? `${fmtDec(Number(s.worked_area))} ha` : '-',
+                ]),
+            fmtDate(s[dateField]),
+          ]);
+        autoTable(doc, {
+          startY: y,
+          head: [['Produtor', 'Demanda', glebaNames.some(Boolean) ? 'Assentamento / Gleba' : 'Assentamento', ...(showOperatorCol ? ['Operador'] : []), ...(isCancelled ? ['Motivo'] : ['Horas', 'Área']), dateHeader]],
+          body,
+          styles: { fontSize: 7.5, cellPadding: 1.8 },
+          headStyles: { fillColor: GREEN, textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+          alternateRowStyles: { fillColor: [245, 250, 245] },
+          margin: { left: M, right: M },
+          ...settlementGlebaHooks(2, assentNames, glebaNames, 7.5),
+        });
+        y = (doc as any).lastAutoTable.finalY + 7;
+      }
+      y += 1;
     }
 
     // Detalhe: entregas realizadas

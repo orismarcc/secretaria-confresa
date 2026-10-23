@@ -1091,8 +1091,8 @@ export default function ServicesPage() {
       periodo,
       servicesOnly: true,
       includeDamRevenue: isFullAdmin,
-      // Segue a aba atual: Ativos → relatório de ativos; Finalizados → finalizados.
-      scope: statusFilter === 'archived' ? 'completed' : 'active',
+      // Segue a aba atual: Ativos, Finalizados ou Cancelados.
+      scope: statusFilter === 'archived' ? 'completed' : statusFilter === 'cancelled' ? 'cancelled' : 'active',
     });
   };
 
@@ -1227,9 +1227,9 @@ export default function ServicesPage() {
             <Users className="h-4 w-4" />
             <span className="hidden sm:inline">Reatribuir operador</span>
           </Button>
-          {/* Um único relatório em PDF — segue a aba (Ativos ou Finalizados).
+          {/* Um único relatório em PDF — segue a aba (Ativos, Finalizados ou Cancelados).
               Restrito a admin pleno (Coordenador não baixa). */}
-          {isFullAdmin && statusFilter !== 'cancelled' && (
+          {isFullAdmin && (
             <Button
               variant="outline"
               size="sm"
@@ -1237,7 +1237,9 @@ export default function ServicesPage() {
               className="gap-1.5 shrink-0"
               title={statusFilter === 'archived'
                 ? 'Relatório dos atendimentos finalizados (com o filtro atual)'
-                : 'Relatório dos atendimentos ativos (com o filtro atual)'}
+                : statusFilter === 'cancelled'
+                  ? 'Relatório dos atendimentos cancelados (com o filtro atual)'
+                  : 'Relatório dos atendimentos ativos (com o filtro atual)'}
             >
               <FileText className="h-4 w-4" />
               <span className="hidden sm:inline">Relatório (PDF)</span>
