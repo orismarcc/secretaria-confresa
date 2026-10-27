@@ -109,6 +109,15 @@ function dateInputToIso(dateStr: string): string {
   return `${dateStr}T12:00:00.000Z`;
 }
 
+// Cadastro RETROATIVO (regularização): quando a "Data de Cadastro" escolhida é
+// anterior a hoje, o atendimento passa a constar como cadastrado nessa data
+// (antes ficava sempre a data atual). Hoje ou futuro: mantém o momento real.
+// A auditoria continua registrando quem lançou e quando, normalmente.
+function cadastroRetroativo(dateStr: string | null | undefined): string | null {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
+  return dateStr < format(new Date(), 'yyyy-MM-dd') ? dateInputToIso(dateStr) : null;
+}
+
 // Helper: extract YYYY-MM-DD from a stored ISO/timestamp for a date input
 function isoToDateInput(raw: string | null | undefined): string {
   if (!raw) return '';
@@ -502,6 +511,7 @@ export default function ServicesPage() {
       location_id: extraProp ? null : (producer?.location_id || data.locationId),
       ...(extraProp ? { property_id: extraProp.id } : {}),
       scheduled_date: data.scheduledDate,
+      ...(cadastroRetroativo(data.scheduledDate) ? { created_at: cadastroRetroativo(data.scheduledDate) } : {}),
       ...(data.appointmentDate ? { appointment_date: data.appointmentDate } : {}),
       ...(completedAt ? { completed_at: completedAt } : {}),
       notes: data.notes,
@@ -575,6 +585,9 @@ export default function ServicesPage() {
       // Só toca na coluna se há propriedade adicional agora ou antes (volta à principal = null).
       ...((extraProp || (editingService as any).property_id) ? { property_id: extraProp ? extraProp.id : null } : {}),
       scheduled_date: data.scheduledDate,
+      // Data de cadastro alterada para uma data passada → o cadastro acompanha.
+      ...(data.scheduledDate !== editingService.scheduled_date?.substring(0, 10) && cadastroRetroativo(data.scheduledDate)
+        ? { created_at: cadastroRetroativo(data.scheduledDate) } : {}),
       ...(data.appointmentDate ? { appointment_date: data.appointmentDate } : {}),
       purpose: data.purpose || null,
       notes: data.notes || null,
