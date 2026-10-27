@@ -860,6 +860,7 @@ export function useCreateService() {
       dam_receipt_url?: string | null;
       limestone_paid?: boolean;
       limestone_order_url?: string | null;
+      loading_order_url?: string | null;
       distance_km?: number | null;
       fuel_consumption_per_km?: number | null;
       responsible_technician_id?: string | null;

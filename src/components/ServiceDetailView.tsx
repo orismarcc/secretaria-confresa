@@ -104,6 +104,7 @@ interface ServiceDetailViewProps {
     dam_receipt_url?: string | null;
     limestone_paid?: boolean | null;
     limestone_order_url?: string | null;
+    loading_order_url?: string | null;
     latitude?: number | null;
     longitude?: number | null;
     producers?: { name: string; cpf?: string; phone?: string | null } | null;
@@ -448,6 +449,22 @@ export function ServiceDetailView({
           >
             <Receipt className="h-3.5 w-3.5" />
             Ver pedido
+          </a>
+        </div>
+      )}
+
+      {/* Ordem de carregamento (logística do calcário) — o motorista também vê */}
+      {service.loading_order_url && (
+        <div className="rounded-lg bg-primary/5 border border-primary/30 p-3 space-y-1">
+          <p className="text-sm font-semibold text-foreground">Ordem de carregamento</p>
+          <a
+            href={service.loading_order_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium"
+          >
+            <Receipt className="h-3.5 w-3.5" />
+            Ver ordem de carregamento
           </a>
         </div>
       )}

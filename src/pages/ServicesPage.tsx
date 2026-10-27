@@ -149,6 +149,19 @@ async function uploadLimestoneOrder(file: File, serviceId: string): Promise<stri
   return data?.signedUrl ?? null;
 }
 
+// Ordem de carregamento (logística do calcário) — mesmo bucket privado, prefixo 'ordens/'.
+async function uploadLoadingOrder(file: File, serviceId: string): Promise<string | null> {
+  const ext = file.name.split('.').pop() ?? 'pdf';
+  const path = `ordens/${serviceId}/${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from('dam-receipts').upload(path, file, { upsert: true });
+  if (error) {
+    console.error('Loading order upload error:', error);
+    return null;
+  }
+  const { data } = await supabase.storage.from('dam-receipts').createSignedUrl(path, 60 * 60 * 24 * 3650);
+  return data?.signedUrl ?? null;
+}
+
 interface DbService {
   id: string;
   producer_id: string;
@@ -180,6 +193,7 @@ interface DbService {
   dam_receipt_url?: string | null;
   limestone_paid?: boolean | null;
   limestone_order_url?: string | null;
+  loading_order_url?: string | null;
   comunicado_emitido?: boolean | null;
   limestone_quantity?: number | null;
   input_quantity?: number | null;
@@ -467,6 +481,11 @@ export default function ServicesPage() {
     }
 
     // Upload do pedido do calcário, se anexado (só quando marcado como pago)
+    let loadingOrderUrl: string | null = null;
+    if (data.loadingOrderFile) {
+      loadingOrderUrl = await uploadLoadingOrder(data.loadingOrderFile, 'new-' + Date.now());
+      if (!loadingOrderUrl) avisar({ title: 'Ordem de carregamento não enviada', description: 'O atendimento será salvo; anexe a ordem de novo em Editar.', variant: 'destructive' });
+    }
     let limestoneOrderUrl: string | null = null;
     if (data.limestoneOrderFile && data.limestonePaid) {
       limestoneOrderUrl = await uploadLimestoneOrder(data.limestoneOrderFile, 'new-' + Date.now());
@@ -497,6 +516,7 @@ export default function ServicesPage() {
       ...(receiptUrl ? { dam_receipt_url: receiptUrl } : {}),
       limestone_paid: data.limestonePaid ?? false,
       ...(limestoneOrderUrl ? { limestone_order_url: limestoneOrderUrl } : {}),
+      ...(loadingOrderUrl ? { loading_order_url: loadingOrderUrl } : {}),
       ...(data.limestoneQuantity ? { limestone_quantity: data.limestoneQuantity } : {}),
       ...(data.inputQuantity ? { input_quantity: data.inputQuantity } : {}),
       fuel_liters: data.fuelLiters || null,
@@ -533,6 +553,13 @@ export default function ServicesPage() {
 
     // Upload do pedido do calcário, se anexado — preserva o existente
     let limestoneOrderUrl: string | null = editingService.limestone_order_url ?? null;
+    // Ordem de carregamento: só muda quando um novo arquivo é escolhido.
+    let loadingOrderUrl: string | null = editingService.loading_order_url ?? null;
+    if (data.loadingOrderFile) {
+      const uploaded = await uploadLoadingOrder(data.loadingOrderFile, editingService.id);
+      if (uploaded) loadingOrderUrl = uploaded;
+      else avisar({ title: 'Ordem de carregamento não enviada', description: 'As demais alterações serão salvas; tente anexar de novo.', variant: 'destructive' });
+    }
     if (data.limestoneOrderFile && data.limestonePaid) {
       const uploaded = await uploadLimestoneOrder(data.limestoneOrderFile, editingService.id);
       if (uploaded) limestoneOrderUrl = uploaded;
@@ -564,6 +591,7 @@ export default function ServicesPage() {
       dam_receipt_url: receiptUrl,
       limestone_paid: data.limestonePaid ?? false,
       limestone_order_url: limestoneOrderUrl,
+      ...(loadingOrderUrl ? { loading_order_url: loadingOrderUrl } : {}),
       limestone_quantity: data.limestoneQuantity || null,
       input_quantity: data.inputQuantity || null,
       fuel_liters: data.fuelLiters || null,
@@ -713,6 +741,7 @@ export default function ServicesPage() {
       damPaidAt: s.dam_paid_at || '',
       limestonePaid: s.limestone_paid ?? false,
       limestoneOrderUrl: s.limestone_order_url || '',
+      loadingOrderUrl: s.loading_order_url || '',
       responsibleTechnicianId: s.responsible_technician_id || '',
     };
   };

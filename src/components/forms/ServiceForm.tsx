@@ -122,6 +122,7 @@ interface ServiceFormProps {
     damPaidAt?: string;
     limestonePaid?: boolean;
     limestoneOrderUrl?: string;
+    loadingOrderUrl?: string;
     responsibleTechnicianId?: string;
   } | null;
   producers: Producer[];
@@ -329,6 +330,7 @@ export function ServiceForm({
   const [hasAppointment, setHasAppointment] = useState(false);
   const [damReceiptFile, setDamReceiptFile] = useState<File | null>(null);
   const [limestoneOrderFile, setLimestoneOrderFile] = useState<File | null>(null);
+  const [loadingOrderFile, setLoadingOrderFile] = useState<File | null>(null);
 
   const form = useForm<ServiceFormData>({
     resolver: zodResolver(serviceSchema),
@@ -544,7 +546,7 @@ export function ServiceForm({
     }
     // Sem propriedades adicionais, o atendimento é sempre na principal.
     if (!hasMultipleProperties) data = { ...data, propertyId: PRINCIPAL_PROPERTY };
-    onSubmit({ ...data, damReceiptFile: damReceiptFile || null, limestoneOrderFile: limestoneOrderFile || null } as any);
+    onSubmit({ ...data, damReceiptFile: damReceiptFile || null, limestoneOrderFile: limestoneOrderFile || null, loadingOrderFile: loadingOrderFile || null } as any);
     form.reset();
     setDamReceiptFile(null);
     setLimestoneOrderFile(null);
@@ -1207,6 +1209,36 @@ export function ServiceForm({
                       <p className="text-xs text-muted-foreground">PDF ou imagem (max. 10 MB)</p>
                     </div>
                   )}
+
+                  {/* Ordem de carregamento — o motorista vê e baixa no app */}
+                  <div className="space-y-1.5 border-t pt-3">
+                    <label className="text-sm font-medium">Ordem de carregamento (opcional)</label>
+                    <Input
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/webp,application/pdf"
+                      onChange={e => setLoadingOrderFile(e.target.files?.[0] ?? null)}
+                      className="text-sm cursor-pointer"
+                    />
+                    {loadingOrderFile && (
+                      <p className="text-xs text-muted-foreground">
+                        {loadingOrderFile.name} ({(loadingOrderFile.size / 1024).toFixed(0)} KB)
+                      </p>
+                    )}
+                    {!loadingOrderFile && service?.loadingOrderUrl && (
+                      <p className="text-xs">
+                        <a
+                          href={service.loadingOrderUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary underline"
+                        >
+                          Ver ordem de carregamento anexada
+                        </a>
+                        {' '}— escolher outro arquivo substitui.
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground">PDF ou imagem (max. 10 MB). O motorista vê e baixa no app.</p>
+                  </div>
                 </div>
               )}
 

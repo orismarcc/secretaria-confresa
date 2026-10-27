@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/StatusBadge';
-import { MapPin, Phone, Calendar, Clock, GripVertical, Navigation, User, Users, ChevronDown, MessageCircle, RefreshCw, CheckCircle2, Banknote, Truck, PackageCheck } from 'lucide-react';
+import { MapPin, Phone, Calendar, Clock, GripVertical, Navigation, User, Users, ChevronDown, MessageCircle, RefreshCw, CheckCircle2, Banknote, Truck, PackageCheck, FileDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { OnlineIndicator } from '@/components/ConnectionStatus';
@@ -77,6 +77,11 @@ interface DbService {
   dam_issued?: boolean | null;
   /** Logística de calcário: pedido do calcário pago. */
   limestone_paid?: boolean | null;
+  /** Documentos para o motorista ver/baixar: comprovante da DAM, pedido do
+   *  calcário e ordem de carregamento. */
+  dam_receipt_url?: string | null;
+  limestone_order_url?: string | null;
+  loading_order_url?: string | null;
   /** Logística: momento em que o carregamento foi registrado. */
   loaded_at?: string | null;
   /** Logística: momento em que a entrega na propriedade foi registrada. */
@@ -277,6 +282,32 @@ function OperatorCardBody({
                   {service.limestone_paid ? 'Calcário pago' : 'Calcário não pago'}
                 </span>
               )}
+            </div>
+          );
+        })()}
+        {/* Documentos anexados pelo escritório — o motorista abre e baixa */}
+        {(() => {
+          const docs = [
+            { url: service.dam_paid ? service.dam_receipt_url : null, label: 'DAM paga (comprovante)' },
+            { url: service.limestone_paid ? service.limestone_order_url : null, label: 'Calcário pago (pedido)' },
+            { url: service.loading_order_url, label: 'Ordem de carregamento' },
+          ].filter((d): d is { url: string; label: string } => !!d.url);
+          if (docs.length === 0) return null;
+          return (
+            <div className="flex flex-wrap gap-1.5">
+              {docs.map((d) => (
+                <a
+                  key={d.label}
+                  href={d.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+                >
+                  <FileDown className="h-3.5 w-3.5 shrink-0" />
+                  {d.label}
+                </a>
+              ))}
             </div>
           );
         })()}
