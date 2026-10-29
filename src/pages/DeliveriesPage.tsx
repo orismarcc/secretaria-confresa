@@ -626,6 +626,42 @@ function LotFormDialog({
 
 // ─── Lots management tab ───────────────────────────────────────────────────────
 
+const fmtNum = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+/** Unidade no plural quando faz sentido ("80 unidades", "1 unidade"); demais como cadastradas. */
+const unidadeTxt = (qtd: number, unit?: string | null) =>
+  unit === 'unidade' ? (Number(qtd) === 1 ? 'unidade' : 'unidades') : (unit || '');
+
+/** Barra única do estoque do lote: entregue (verde) · reservado (âmbar) · disponível (cinza). */
+function StockBar({ total, finalized, reserved, className }: { total: number; finalized: number; reserved: number; className?: string }) {
+  const pct = (v: number) => (total > 0 ? Math.min(100, Math.max(0, (v / total) * 100)) : 0);
+  const pFin = pct(finalized);
+  const pRes = Math.min(100 - pFin, pct(reserved));
+  return (
+    <div className={cn('flex h-2.5 w-full overflow-hidden rounded-full bg-muted', className)}>
+      <div className="h-full bg-emerald-500" style={{ width: `${pFin}%` }} />
+      <div className="h-full bg-amber-400" style={{ width: `${pRes}%` }} />
+    </div>
+  );
+}
+
+function StockLegend({ finalized, reserved, remaining, unit }: { finalized: number; reserved: number; remaining: number; unit?: string }) {
+  const u = (v: number) => (unit ? ` ${unidadeTxt(v, unit)}` : '');
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+        <span className="h-2 w-2 rounded-full bg-emerald-500" />Entregue <strong className="text-foreground tabular-nums">{fmtNum(finalized)}{u(finalized)}</strong>
+      </span>
+      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+        <span className="h-2 w-2 rounded-full bg-amber-400" />Reservado <strong className="text-foreground tabular-nums">{fmtNum(reserved)}{u(reserved)}</strong>
+      </span>
+      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+        <span className="h-2 w-2 rounded-full bg-muted-foreground/30" />Disponível{' '}
+        <strong className={cn('tabular-nums', remaining > 0 ? 'text-success' : 'text-destructive')}>{fmtNum(remaining)}{u(remaining)}</strong>
+      </span>
+    </div>
+  );
+}
+
 function LotsTab({ demandTypes }: { demandTypes: any[] }) {
   const { data: allLots = [], isLoading } = useDeliveryLots();
   const { data: technicians = [] } = useResponsibleTechnicians();
@@ -638,32 +674,49 @@ function LotsTab({ demandTypes }: { demandTypes: any[] }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [toDelete, setToDelete] = useState<any | null>(null);
   const [filterType, setFilterType] = useState('all');
+  // Situação: todos, com saldo (disponível > 0) ou esgotados.
+  const [situacao, setSituacao] = useState<'all' | 'saldo' | 'esgotado'>('all');
+  const [abertos, setAbertos] = useState<Set<string>>(new Set());
 
   const lots = (allLots as any[]);
 
   const displayed = useMemo(() =>
-    filterType === 'all' ? lots : lots.filter((l: any) => l.demand_type_id === filterType),
-    [lots, filterType],
+    lots.filter((l: any) => {
+      if (filterType !== 'all' && l.demand_type_id !== filterType) return false;
+      const rem = Number(l.remaining_quantity ?? 0);
+      if (situacao === 'saldo' && rem <= 0) return false;
+      if (situacao === 'esgotado' && rem > 0) return false;
+      return true;
+    }),
+    [lots, filterType, situacao],
   );
 
-  // Group by demand type for summary cards
-  const summaryByType = useMemo(() => {
-    const map: Record<string, { name: string; total: number; finalized: number; reserved: number; remaining: number; count: number }> = {};
-    lots.forEach((l: any) => {
-      if (!map[l.demand_type_id]) {
-        map[l.demand_type_id] = {
-          name: l.demand_type_name || '—',
-          total: 0, finalized: 0, reserved: 0, remaining: 0, count: 0,
-        };
-      }
-      map[l.demand_type_id].total     += Number(l.initial_quantity   || 0);
-      map[l.demand_type_id].finalized += Number(l.finalized_quantity || 0);
-      map[l.demand_type_id].reserved  += Number(l.reserved_quantity  || 0);
-      map[l.demand_type_id].remaining += Number(l.remaining_quantity || 0);
-      map[l.demand_type_id].count += 1;
+  // Lotes agrupados pelo tipo de entrega (seções), mais recentes primeiro.
+  const porTipo = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; lots: any[] }>();
+    displayed.forEach((l: any) => {
+      const g = map.get(l.demand_type_id) ?? { id: l.demand_type_id, name: l.demand_type_name || '—', lots: [] };
+      g.lots.push(l);
+      map.set(l.demand_type_id, g);
     });
-    return Object.entries(map).map(([id, v]) => ({ id, ...v }));
-  }, [lots]);
+    return Array.from(map.values())
+      .map((g) => ({
+        ...g,
+        lots: g.lots.sort((a, b) => String(b.lot_date || '').localeCompare(String(a.lot_date || ''))),
+        total: g.lots.reduce((s, l) => s + Number(l.initial_quantity || 0), 0),
+        finalized: g.lots.reduce((s, l) => s + Number(l.finalized_quantity || 0), 0),
+        reserved: g.lots.reduce((s, l) => s + Number(l.reserved_quantity || 0), 0),
+        remaining: g.lots.reduce((s, l) => s + Number(l.remaining_quantity || 0), 0),
+        units: Array.from(new Set(g.lots.map((l) => l.unit).filter(Boolean))) as string[],
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, [displayed]);
+
+  const contagem = useMemo(() => ({
+    total: lots.length,
+    saldo: lots.filter((l: any) => Number(l.remaining_quantity ?? 0) > 0).length,
+    esgotado: lots.filter((l: any) => Number(l.remaining_quantity ?? 0) <= 0).length,
+  }), [lots]);
 
   const handleSubmit = (form: LotFormState) => {
     const payload = {
@@ -686,204 +739,186 @@ function LotsTab({ demandTypes }: { demandTypes: any[] }) {
     setEditing(null);
   };
 
+  const alternar = (id: string) => setAbertos((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
   if (isLoading) {
     return <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>;
   }
 
   return (
-    <div className="space-y-6">
-      {/* Summary cards by type */}
-      {summaryByType.length > 0 && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {summaryByType.map((s, idx) => {
-            const color = TYPE_COLORS[idx % TYPE_COLORS.length];
-            const pctFin = s.total > 0 ? Math.round((s.finalized / s.total) * 100) : 0;
-            const pctRes = s.total > 0 ? Math.round((s.reserved  / s.total) * 100) : 0;
-            return (
-              <Card key={s.id} className={cn('border', color.border)}>
-                <CardContent className={cn('p-4', color.bg)}>
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div className="min-w-0">
-                      <p className={cn('font-semibold text-sm truncate', color.text)}>{s.name}</p>
-                      <p className="text-xs text-muted-foreground">{s.count} lote{s.count !== 1 ? 's' : ''}</p>
-                    </div>
-                    <div className={cn('p-2 rounded-lg', color.bg)}>
-                      <Warehouse className={cn('h-4 w-4', color.text)} />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Total</span>
-                      <span className="font-medium">{s.total.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-emerald-700 dark:text-emerald-400">Finalizado</span>
-                      <span className="font-medium text-emerald-600">{s.finalized.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-amber-600">Reservado</span>
-                      <span className="font-medium text-amber-600">{s.reserved.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</span>
-                    </div>
-                    <div className="flex justify-between text-xs font-semibold">
-                      <span>Disponível</span>
-                      <span className={s.remaining > 0 ? 'text-success' : 'text-destructive'}>
-                        {s.remaining.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
-                      </span>
-                    </div>
-                    <Progress value={pctFin} className="h-1 mt-1 [&>div]:bg-emerald-500" />
-                    <Progress value={pctRes} className="h-1 [&>div]:bg-amber-500" />
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+    <div className="space-y-5">
+      {/* Barra de ferramentas: tipo · situação · novo lote */}
+      <div className="rounded-xl border bg-card p-3 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="min-w-0 flex-1 sm:flex-none border border-input bg-background rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="all">Todos os tipos</option>
+            {demandTypes.map((d: any) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+          <Button
+            className="gap-1.5 sm:ml-auto"
+            onClick={() => { setEditing(null); setFormOpen(true); }}
+          >
+            <Plus className="h-4 w-4" /> Novo Lote
+          </Button>
         </div>
-      )}
-
-      {/* Filter + New Lot button */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          className="border border-input bg-background rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          <option value="all">Todos os tipos</option>
-          {demandTypes.map((d: any) => (
-            <option key={d.id} value={d.id}>{d.name}</option>
+        <div className="flex flex-wrap gap-1.5">
+          {([
+            ['all', `Todos (${contagem.total})`],
+            ['saldo', `Com saldo (${contagem.saldo})`],
+            ['esgotado', `Esgotados (${contagem.esgotado})`],
+          ] as const).map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setSituacao(v)}
+              className={cn(
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                situacao === v ? 'border-primary bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-muted',
+              )}
+            >
+              {label}
+            </button>
           ))}
-        </select>
-        <Button
-          className="gap-1.5 ml-auto"
-          onClick={() => { setEditing(null); setFormOpen(true); }}
-        >
-          <Plus className="h-4 w-4" /> Novo Lote
-        </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+          <span className="font-medium">Como ler a barra:</span>
+          <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />entregue</span>
+          <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400" />reservado (pendente)</span>
+          <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-muted-foreground/30" />disponível</span>
+        </div>
       </div>
 
-      {/* Lots list */}
-      {displayed.length === 0 ? (
+      {porTipo.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-3">
           <Warehouse className="h-12 w-12 opacity-30" />
-          <p className="text-sm">Nenhum lote cadastrado</p>
-          <p className="text-xs text-center max-w-xs">
-            Cadastre lotes de insumos para controlar o estoque e rastrear cada entrega.
-          </p>
+          <p className="text-sm">{lots.length === 0 ? 'Nenhum lote cadastrado' : 'Nenhum lote neste filtro'}</p>
+          {lots.length === 0 && (
+            <p className="text-xs text-center max-w-xs">
+              Cadastre lotes de insumos para controlar o estoque e rastrear cada entrega.
+            </p>
+          )}
         </div>
       ) : (
-        <div className="space-y-3">
-          {displayed.map((lot: any, idx: number) => {
-            const remaining  = Number(lot.remaining_quantity  ?? 0);
-            const finalized  = Number(lot.finalized_quantity  ?? 0);
-            const reserved   = Number(lot.reserved_quantity   ?? 0);
-            const total      = Number(lot.initial_quantity);
-            const pctFin     = total > 0 ? Math.round((finalized / total) * 100) : 0;
-            const pctRes     = total > 0 ? Math.round((reserved  / total) * 100) : 0;
-            const depleted   = remaining <= 0;
-            const color      = getTypeColor(lot.demand_type_id, demandTypes);
-            const technician = (technicians as any[]).find((t: any) => t.id === lot.responsible_technician_id);
-
-            return (
-              <div
-                key={lot.id}
-                className={cn('rounded-xl border p-4 bg-card', color.border)}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1 space-y-2">
-                    {/* Header */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm">{lot.name}</span>
-                      <Badge className={cn('text-xs', color.badge)} variant="secondary">
-                        {lot.demand_type_name || '—'}
-                      </Badge>
-                      {depleted ? (
-                        <Badge variant="destructive" className="text-xs gap-1">
-                          <AlertTriangle className="h-3 w-3" />Esgotado
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs text-success border-success/30 bg-success/5">
-                          Disponível
-                        </Badge>
-                      )}
-                    </div>
-
-                    {/* Quantities — 4 columns */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-                      <div className="rounded-lg bg-muted/50 p-2">
-                        <p className="text-xs text-muted-foreground">Total</p>
-                        <p className="font-bold text-sm tabular-nums">{total.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</p>
-                      </div>
-                      <div className="rounded-lg bg-emerald-500/10 p-2">
-                        <p className="text-xs text-emerald-700 dark:text-emerald-400">Finalizado</p>
-                        <p className="font-bold text-sm tabular-nums text-emerald-600">{finalized.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</p>
-                      </div>
-                      <div className="rounded-lg bg-amber-500/10 p-2">
-                        <p className="text-xs text-amber-600">Reservado</p>
-                        <p className="font-bold text-sm tabular-nums text-amber-600">{reserved.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}</p>
-                      </div>
-                      <div className={cn('rounded-lg p-2', depleted ? 'bg-destructive/10' : 'bg-success/10')}>
-                        <p className="text-xs text-muted-foreground">Disponível</p>
-                        <p className={cn('font-bold text-sm tabular-nums', depleted ? 'text-destructive' : 'text-success')}>
-                          {remaining.toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Progress bars — finalizado (green) + reservado (amber) */}
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-xs text-emerald-700 dark:text-emerald-400">
-                        <span>{lot.unit} · {pctFin}% finalizado</span>
-                        {pctRes > 0 && <span className="text-amber-600">{pctRes}% reservado</span>}
-                      </div>
-                      <Progress value={pctFin} className="h-2 [&>div]:bg-emerald-500" />
-                      {reserved > 0 && (
-                        <Progress value={pctRes} className="h-1.5 [&>div]:bg-amber-500" />
-                      )}
-                    </div>
-
-                    {/* Meta */}
-                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                      {technician && (
-                        <span className="flex items-center gap-1">
-                          <User className="h-3 w-3 shrink-0" />
-                          <strong>{technician.name}</strong>
-                        </span>
-                      )}
-                      {lot.supplier && <span>Fornecedor: <strong>{lot.supplier}</strong></span>}
-                      {lot.lot_date && (
-                        <span>
-                          Recebido:{' '}
-                          <strong>
-                            {format(new Date(lot.lot_date + 'T12:00:00'), 'dd/MM/yyyy')}
-                          </strong>
-                        </span>
-                      )}
-                    </div>
-                    {lot.notes && (
-                      <p className="text-xs text-muted-foreground border-t pt-1.5 line-clamp-2">{lot.notes}</p>
-                    )}
+        porTipo.map((g) => {
+          const color = getTypeColor(g.id, demandTypes);
+          const unidade = g.units.length === 1 ? g.units[0] : undefined;
+          return (
+            <section key={g.id} className="space-y-2.5">
+              {/* Cabeçalho da seção: tipo + resumo do estoque somado */}
+              <div className={cn('rounded-xl border p-3', color.border, color.bg)}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', color.dot)} />
+                    <h3 className={cn('text-sm font-semibold break-words', color.text)}>{g.name}</h3>
+                    <span className="text-xs text-muted-foreground shrink-0">· {g.lots.length} lote{g.lots.length !== 1 ? 's' : ''}</span>
                   </div>
-
-                  {/* Actions */}
-                  <div className="flex gap-1 shrink-0">
-                    <Button
-                      variant="ghost" size="icon"
-                      onClick={() => { setEditing(lot); setFormOpen(true); }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost" size="icon"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => { setToDelete(lot); setDeleteOpen(true); }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  {unidade && g.lots.length > 1 && (
+                    <span className="text-xs text-muted-foreground">
+                      Total <strong className="text-foreground tabular-nums">{fmtNum(g.total)} {unidadeTxt(g.total, unidade)}</strong>
+                    </span>
+                  )}
                 </div>
+                {unidade && g.lots.length > 1 && (
+                  <div className="mt-2 space-y-1.5">
+                    <StockBar total={g.total} finalized={g.finalized} reserved={g.reserved} />
+                    <StockLegend finalized={g.finalized} reserved={g.reserved} remaining={g.remaining} unit={unidade} />
+                  </div>
+                )}
               </div>
-            );
-          })}
-        </div>
+
+              {/* Lotes do tipo */}
+              <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+                {g.lots.map((lot: any) => {
+                  const remaining = Number(lot.remaining_quantity ?? 0);
+                  const finalized = Number(lot.finalized_quantity ?? 0);
+                  const reserved = Number(lot.reserved_quantity ?? 0);
+                  const total = Number(lot.initial_quantity);
+                  const pctFin = total > 0 ? Math.round((finalized / total) * 100) : 0;
+                  const depleted = remaining <= 0;
+                  const technician = (technicians as any[]).find((t: any) => t.id === lot.responsible_technician_id);
+                  const aberto = abertos.has(lot.id);
+                  const temDetalhes = !!(technician || lot.supplier || lot.lot_date || lot.notes || lot.usa_termo_padrao);
+                  return (
+                    <div key={lot.id} className="rounded-xl border bg-card p-3.5 space-y-2.5">
+                      {/* Nome + situação + ações */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold leading-snug break-words">{lot.name}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {fmtNum(total)} {unidadeTxt(total, lot.unit)}
+                            {lot.lot_date && <> · recebido em {format(new Date(lot.lot_date + 'T12:00:00'), 'dd/MM/yyyy')}</>}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-0.5">
+                          {depleted ? (
+                            <Badge variant="destructive" className="text-[11px] gap-1 mr-1">
+                              <AlertTriangle className="h-3 w-3" />Esgotado
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[11px] mr-1 text-success border-success/30 bg-success/5">
+                              Com saldo
+                            </Badge>
+                          )}
+                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Editar lote"
+                            onClick={() => { setEditing(lot); setFormOpen(true); }}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" title="Remover lote"
+                            onClick={() => { setToDelete(lot); setDeleteOpen(true); }}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Estoque: barra única + legenda */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-baseline justify-between text-xs">
+                          <span className="text-muted-foreground">Andamento</span>
+                          <span className="font-semibold tabular-nums">{pctFin}% entregue</span>
+                        </div>
+                        <StockBar total={total} finalized={finalized} reserved={reserved} />
+                        <StockLegend finalized={finalized} reserved={reserved} remaining={remaining} unit={lot.unit} />
+                      </div>
+
+                      {/* Detalhes (recolhidos para não poluir) */}
+                      {temDetalhes && (
+                        <div className="border-t pt-2">
+                          <button
+                            type="button"
+                            onClick={() => alternar(lot.id)}
+                            className="flex w-full items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground"
+                          >
+                            Detalhes do lote
+                            <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', aberto && 'rotate-180')} />
+                          </button>
+                          {aberto && (
+                            <dl className="mt-2 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-xs">
+                              {technician && (<><dt className="text-muted-foreground">Responsável</dt><dd className="font-medium break-words">{technician.name}</dd></>)}
+                              {lot.supplier && (<><dt className="text-muted-foreground">Fornecedor</dt><dd className="font-medium break-words">{lot.supplier}</dd></>)}
+                              {lot.lot_date && (<><dt className="text-muted-foreground">Recebido</dt><dd className="font-medium">{format(new Date(lot.lot_date + 'T12:00:00'), 'dd/MM/yyyy')}</dd></>)}
+                              {lot.usa_termo_padrao && (<><dt className="text-muted-foreground">Termo</dt><dd className="font-medium break-words">Modelo padrão{lot.termo_objeto ? ` — ${lot.termo_objeto}` : ''}</dd></>)}
+                              {lot.notes && (<><dt className="text-muted-foreground">Observações</dt><dd className="break-words">{lot.notes}</dd></>)}
+                            </dl>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })
       )}
 
       {/* Dialogs */}
@@ -938,34 +973,6 @@ const EMPTY_FORM: DeliveryFormData = {
   completed_at: format(new Date(), 'yyyy-MM-dd'),
 };
 
-// ─── Mini stat card for statistics tab ───────────────────────────────────────
-
-function MiniStatCard({
-  title,
-  value,
-  icon: Icon,
-  colorClass = 'bg-primary/10 text-primary',
-}: {
-  title: string;
-  value: number | string;
-  icon: React.ElementType;
-  colorClass?: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="p-4 flex items-center gap-3">
-        <div className={cn('p-2.5 rounded-lg shrink-0', colorClass)}>
-          <Icon className="h-5 w-5" />
-        </div>
-        <div>
-          <p className="text-2xl font-bold leading-none tabular-nums">{value}</p>
-          <p className="text-xs text-muted-foreground mt-1 leading-tight">{title}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 // ─── Custom chart tooltip ─────────────────────────────────────────────────────
 
 function ChartTooltip({ active, payload, label }: any) {
@@ -984,6 +991,31 @@ function ChartTooltip({ active, payload, label }: any) {
 
 // ─── Statistics tab ───────────────────────────────────────────────────────────
 
+/** Cartão de número em destaque (estatísticas). */
+function KpiCard({ title, value, hint, icon: Icon, tone }: {
+  title: string; value: number | string; hint?: string; icon: React.ElementType;
+  tone: 'green' | 'blue' | 'amber' | 'violet';
+}) {
+  const tones = {
+    green: 'from-emerald-500/15 to-emerald-500/5 border-emerald-500/25 text-emerald-700 dark:text-emerald-400',
+    blue: 'from-blue-500/15 to-blue-500/5 border-blue-500/25 text-blue-700 dark:text-blue-400',
+    amber: 'from-amber-500/15 to-amber-500/5 border-amber-500/25 text-amber-700 dark:text-amber-400',
+    violet: 'from-violet-500/15 to-violet-500/5 border-violet-500/25 text-violet-700 dark:text-violet-400',
+  } as const;
+  return (
+    <div className={cn('rounded-2xl border bg-gradient-to-br p-4', tones[tone])}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium leading-tight">{title}</p>
+        <span className="rounded-lg bg-background/70 p-1.5"><Icon className="h-4 w-4" /></span>
+      </div>
+      <p className="mt-2 text-3xl font-bold leading-none tabular-nums text-foreground">{value}</p>
+      {hint && <p className="mt-1.5 text-[11px] text-muted-foreground leading-tight">{hint}</p>}
+    </div>
+  );
+}
+
+const STATS_BAR_COLORS = ['#2f6b2a', '#2563eb', '#d97706', '#7c3aed', '#e11d48', '#0891b2', '#ea580c', '#4f46e5'];
+
 function DeliveryStats({
   deliveries,
   demandTypes,
@@ -998,9 +1030,9 @@ function DeliveryStats({
   const [filterSettlement, setFilterSettlement] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [filterProducer, setFilterProducer] = useState('');
+  const [verRegistros, setVerRegistros] = useState(false);
 
   const GREEN = 'hsl(113 38% 26%)';
-  const GREEN2 = 'hsl(142 55% 40%)';
 
   const completed = useMemo(
     () => deliveries.filter((d) => d.status === 'completed'),
@@ -1039,6 +1071,9 @@ function DeliveryStats({
       });
   }, [completed, filterYear, filterMonth, filterSettlement, filterType, filterProducer]);
 
+  const temFiltro = filterYear !== 'all' || filterMonth !== 'all' || filterSettlement !== 'all' || filterType !== 'all' || !!filterProducer;
+  const limpar = () => { setFilterYear('all'); setFilterMonth('all'); setFilterSettlement('all'); setFilterType('all'); setFilterProducer(''); };
+
   const totalCount = filtered.length;
   const totalQty = filtered.reduce((acc, d) => acc + (d.quantity || 0), 0);
   const uniqueProducers = new Set(filtered.map((d) => d.producer_id)).size;
@@ -1057,9 +1092,17 @@ function DeliveryStats({
     return Object.values(map).sort((a, b) => b.entregas - a.entregas);
   }, [filtered]);
 
-  const barData = useMemo(() => {
-    return statsByType.slice(0, 8).map((s) => ({ name: s.name, Entregas: s.entregas }));
-  }, [statsByType]);
+  const porAssentamento = useMemo(() => {
+    const map = new Map<string, { name: string; entregas: number; pessoas: Set<string> }>();
+    filtered.forEach((d) => {
+      const name = d.settlements?.name || d.producers?.settlements?.name || 'Sem assentamento';
+      const g = map.get(name) ?? { name, entregas: 0, pessoas: new Set<string>() };
+      g.entregas += 1;
+      if (d.producer_id) g.pessoas.add(d.producer_id);
+      map.set(name, g);
+    });
+    return Array.from(map.values()).sort((a, b) => b.entregas - a.entregas);
+  }, [filtered]);
 
   const monthlyData = useMemo(() => {
     const now = new Date();
@@ -1067,52 +1110,70 @@ function DeliveryStats({
       const monthDate = subMonths(now, 11 - i);
       const key = format(startOfMonth(monthDate), 'yyyy-MM');
       const label = format(monthDate, 'MMM/yy', { locale: ptBR });
-      const count = completed.filter((d) => {
+      const count = filtered.filter((d) => {
         const raw = d.completed_at || d.created_at;
         return raw && raw.startsWith(key);
       }).length;
       return { month: label.charAt(0).toUpperCase() + label.slice(1), entregas: count };
     });
-  }, [completed]);
+  }, [filtered]);
+
+  const melhorMes = monthlyData.reduce((m, x) => (x.entregas > m.entregas ? x : m), { month: '', entregas: 0 });
+  const ultima = filtered[0];
+  const ultimaData = ultima ? formatStatDate(ultima.completed_at || ultima.created_at) : null;
+
+  const selectCls = 'w-full border border-input bg-background rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
 
   return (
-    <div className="space-y-4">
-      {/* Filters */}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
-        <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)} className="border border-input bg-background rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-          <option value="all">Todos os anos</option>
-          {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
-        </select>
-        <select value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)} className="border border-input bg-background rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-          <option value="all">Todos os meses</option>
-          {Array.from({ length: 12 }, (_, i) => (
-            <option key={i + 1} value={i + 1}>
-              {format(new Date(2000, i, 1), 'MMMM', { locale: ptBR })}
-            </option>
-          ))}
-        </select>
-        <select value={filterSettlement} onChange={(e) => setFilterSettlement(e.target.value)} className="border border-input bg-background rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-          <option value="all">Todos os assentamentos</option>
-          {(settlements as any[]).map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
-        <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="border border-input bg-background rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-          <option value="all">Todos os tipos</option>
-          {(demandTypes as any[]).map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
-        <Input
-          placeholder="Filtrar por produtor..."
-          value={filterProducer}
-          onChange={(e) => setFilterProducer(e.target.value)}
-          className="h-9"
-        />
+    <div className="space-y-5">
+      {/* Filtros */}
+      <div className="rounded-xl border bg-card p-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-bold uppercase tracking-wide text-primary">Filtros</p>
+          {temFiltro && (
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={limpar}>Limpar filtros</Button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+          <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)} className={selectCls}>
+            <option value="all">Todos os anos</option>
+            {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <select value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)} className={selectCls}>
+            <option value="all">Todos os meses</option>
+            {Array.from({ length: 12 }, (_, i) => (
+              <option key={i + 1} value={i + 1}>
+                {format(new Date(2000, i, 1), 'MMMM', { locale: ptBR })}
+              </option>
+            ))}
+          </select>
+          <select value={filterSettlement} onChange={(e) => setFilterSettlement(e.target.value)} className={selectCls}>
+            <option value="all">Todos os assentamentos</option>
+            {(settlements as any[]).map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className={selectCls}>
+            <option value="all">Todos os tipos</option>
+            {(demandTypes as any[]).map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+          <Input
+            placeholder="Filtrar por produtor..."
+            value={filterProducer}
+            onChange={(e) => setFilterProducer(e.target.value)}
+            className="col-span-2 h-9 lg:col-span-1"
+          />
+        </div>
       </div>
 
-      {/* Summary cards */}
+      {/* Números principais */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MiniStatCard title="Entregas realizadas" value={totalCount} icon={Package} colorClass="bg-primary/10 text-primary" />
-        <MiniStatCard title="Total de itens" value={totalQty.toLocaleString('pt-BR')} icon={Hash} colorClass="bg-blue-500/10 text-blue-600" />
-        <MiniStatCard title="Produtores atendidos" value={uniqueProducers} icon={User} colorClass="bg-success/10 text-success" />
-        <MiniStatCard title="Assentamentos" value={uniqueSettlements} icon={MapPin} colorClass="bg-amber-500/10 text-amber-600" />
+        <KpiCard tone="green" title="Entregas realizadas" value={totalCount} icon={Package}
+          hint={ultimaData ? `Última em ${ultimaData}` : undefined} />
+        <KpiCard tone="blue" title="Itens entregues" value={totalQty.toLocaleString('pt-BR')} icon={Hash}
+          hint={totalCount > 0 ? `Média de ${(totalQty / totalCount).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} por entrega` : undefined} />
+        <KpiCard tone="amber" title="Produtores atendidos" value={uniqueProducers} icon={User}
+          hint={uniqueProducers > 0 ? `${(totalCount / uniqueProducers).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} entrega(s) por produtor` : undefined} />
+        <KpiCard tone="violet" title="Assentamentos" value={uniqueSettlements} icon={MapPin}
+          hint={porAssentamento[0] ? `Mais atendido: ${porAssentamento[0].name}` : undefined} />
       </div>
 
       {filtered.length === 0 ? (
@@ -1122,139 +1183,184 @@ function DeliveryStats({
         </div>
       ) : (
         <>
-          {/* Charts */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {barData.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Por tipo de entrega</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={barData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-20} textAnchor="end" height={46} />
-                      <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={28} />
-                      <Tooltip content={<ChartTooltip />} />
-                      <Bar dataKey="Entregas" fill={GREEN} radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
+          {/* Destaques */}
+          <div className="flex flex-wrap gap-2">
+            {statsByType[0] && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs">
+                🏆 Tipo mais entregue: <strong>{statsByType[0].name}</strong> ({statsByType[0].entregas})
+              </span>
             )}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Evolução mensal (12 meses)</CardTitle>
+            {melhorMes.entregas > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs">
+                📅 Mês com mais entregas: <strong>{melhorMes.month}</strong> ({melhorMes.entregas})
+              </span>
+            )}
+            {porAssentamento[0] && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs">
+                📍 Assentamento com mais entregas: <strong>{porAssentamento[0].name}</strong> ({porAssentamento[0].entregas})
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {/* Evolução mensal */}
+            <Card className="rounded-2xl">
+              <CardHeader className="pb-1">
+                <CardTitle className="text-sm font-semibold">Entregas por mês</CardTitle>
+                <p className="text-xs text-muted-foreground">Últimos 12 meses (com os filtros)</p>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={200}>
-                  <AreaChart data={monthlyData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                <ResponsiveContainer width="100%" height={210}>
+                  <AreaChart data={monthlyData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                     <defs>
                       <linearGradient id="delivGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor={GREEN} stopOpacity={0.35} />
                         <stop offset="95%" stopColor={GREEN} stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                     <XAxis dataKey="month" tick={{ fontSize: 10 }} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={28} />
                     <Tooltip content={<ChartTooltip />} />
-                    <Area type="monotone" dataKey="entregas" name="Entregas" stroke={GREEN} fill="url(#delivGrad)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="entregas" name="Entregas" stroke={GREEN} fill="url(#delivGrad)" strokeWidth={2.5} dot={{ r: 2.5 }} />
                   </AreaChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
+
+            {/* Por tipo — barras horizontais coloridas */}
+            <Card className="rounded-2xl">
+              <CardHeader className="pb-1">
+                <CardTitle className="text-sm font-semibold">Por tipo de entrega</CardTitle>
+                <p className="text-xs text-muted-foreground">Quantidade de entregas de cada tipo</p>
+              </CardHeader>
+              <CardContent className="space-y-2.5 pt-2">
+                {statsByType.map((t, i) => {
+                  const pct = statsByType[0].entregas > 0 ? (t.entregas / statsByType[0].entregas) * 100 : 0;
+                  return (
+                    <div key={t.name} className="space-y-1">
+                      <div className="flex items-baseline justify-between gap-2 text-xs">
+                        <span className="min-w-0 break-words font-medium">{t.name}</span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">
+                          <strong className="text-foreground">{t.entregas}</strong> entrega{t.entregas !== 1 ? 's' : ''}
+                          {t.quantidade > 0 && <> · {t.quantidade.toLocaleString('pt-BR')} itens</>}
+                        </span>
+                      </div>
+                      <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: STATS_BAR_COLORS[i % STATS_BAR_COLORS.length] }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
           </div>
 
-          {/* By type summary */}
-          {statsByType.length > 0 && (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {statsByType.map((typeData, idx) => {
-                const color = TYPE_COLORS[idx % TYPE_COLORS.length];
+          {/* Assentamentos — ranking */}
+          <Card className="rounded-2xl">
+            <CardHeader className="pb-1">
+              <CardTitle className="text-sm font-semibold">Assentamentos atendidos</CardTitle>
+              <p className="text-xs text-muted-foreground">Entregas e pessoas atendidas em cada assentamento</p>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 gap-x-6 gap-y-2.5 pt-2 md:grid-cols-2">
+              {porAssentamento.slice(0, 12).map((a, i) => {
+                const pct = porAssentamento[0].entregas > 0 ? (a.entregas / porAssentamento[0].entregas) * 100 : 0;
                 return (
-                  <Card key={typeData.name} className={cn('border', color.border)}>
-                    <CardContent className={cn('p-4', color.bg)}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className={cn('font-medium text-sm truncate', color.text)}>{typeData.name}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">Tipo de entrega</p>
-                        </div>
-                        <Badge className={cn('text-xs shrink-0', color.badge)} variant="secondary">
-                          {typeData.entregas}
-                        </Badge>
+                  <div key={a.name} className="flex items-center gap-2.5">
+                    <span className={cn(
+                      'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold',
+                      i === 0 ? 'bg-amber-400 text-amber-950' : i === 1 ? 'bg-slate-300 text-slate-800' : i === 2 ? 'bg-orange-300 text-orange-900' : 'bg-muted text-muted-foreground',
+                    )}>{i + 1}</span>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex items-baseline justify-between gap-2 text-xs">
+                        <span className="min-w-0 break-words font-medium">{a.name}</span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">
+                          <strong className="text-foreground">{a.entregas}</strong> · {a.pessoas.size} pessoa{a.pessoas.size !== 1 ? 's' : ''}
+                        </span>
                       </div>
-                      {typeData.quantidade > 0 && (
-                        <p className="text-xs text-muted-foreground mt-2 pt-2 border-t">
-                          Total: <span className="font-semibold text-foreground">
-                            {typeData.quantidade.toLocaleString('pt-BR')} unidades
-                          </span>
-                        </p>
-                      )}
-                    </CardContent>
-                  </Card>
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  </div>
                 );
               })}
-            </div>
-          )}
-
-          {/* Records table */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Package className="h-4 w-4 text-primary" />
-                Registros Individuais
-                <Badge variant="secondary" className="ml-1">{filtered.length}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/50">
-                      <th className="text-left p-3 font-medium text-muted-foreground text-xs">Produtor</th>
-                      <th className="text-left p-3 font-medium text-muted-foreground text-xs hidden sm:table-cell">CPF</th>
-                      <th className="text-left p-3 font-medium text-muted-foreground text-xs hidden md:table-cell">Assentamento</th>
-                      <th className="text-left p-3 font-medium text-muted-foreground text-xs">Tipo</th>
-                      <th className="text-right p-3 font-medium text-muted-foreground text-xs">Qtd.</th>
-                      <th className="text-right p-3 font-medium text-muted-foreground text-xs whitespace-nowrap">Realizado em</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((d: any) => {
-                      const settlementName = d.settlements?.name || d.producers?.settlements?.name || '—';
-                      const rawDate = d.completed_at || d.created_at;
-                      const dateLabel = rawDate
-                        ? (() => {
-                            try { return format(new Date(rawDate.replace(' ', 'T')), 'dd/MM/yyyy', { locale: ptBR }); }
-                            catch { return '—'; }
-                          })()
-                        : '—';
-                      const typeIdx = demandTypes.findIndex((dt: any) => dt.id === d.demand_type_id);
-                      const color = TYPE_COLORS[typeIdx >= 0 ? typeIdx % TYPE_COLORS.length : 0];
-                      return (
-                        <tr key={d.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                          <td className="p-3 font-medium">{d.producers?.name || '—'}</td>
-                          <td className="p-3 text-muted-foreground hidden sm:table-cell text-xs tabular-nums">{d.producers?.cpf || '—'}</td>
-                          <td className="p-3 text-muted-foreground hidden md:table-cell">{settlementName}</td>
-                          <td className="p-3">
-                            <Badge className={cn('text-xs whitespace-nowrap', color.badge)} variant="secondary">
-                              {d.demand_types?.name || '—'}
-                            </Badge>
-                          </td>
-                          <td className="p-3 text-right tabular-nums">{d.quantity ?? '—'}</td>
-                          <td className="p-3 text-right text-muted-foreground text-xs whitespace-nowrap">{dateLabel}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              {porAssentamento.length > 12 && (
+                <p className="text-xs text-muted-foreground md:col-span-2">
+                  E mais {porAssentamento.length - 12} assentamento(s).
+                </p>
+              )}
             </CardContent>
+          </Card>
+
+          {/* Registros individuais — recolhidos por padrão */}
+          <Card className="rounded-2xl">
+            <button
+              type="button"
+              onClick={() => setVerRegistros((v) => !v)}
+              className="flex w-full items-center justify-between gap-2 p-4 text-left"
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                <Package className="h-4 w-4 text-primary" />
+                Registros individuais
+                <Badge variant="secondary">{filtered.length}</Badge>
+              </span>
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                {verRegistros ? 'Ocultar' : 'Mostrar'}
+                <ChevronDown className={cn('h-4 w-4 transition-transform', verRegistros && 'rotate-180')} />
+              </span>
+            </button>
+            {verRegistros && (
+              <CardContent className="p-0 border-t">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="text-left p-3 font-medium text-muted-foreground text-xs">Produtor</th>
+                        <th className="text-left p-3 font-medium text-muted-foreground text-xs hidden sm:table-cell">CPF</th>
+                        <th className="text-left p-3 font-medium text-muted-foreground text-xs hidden md:table-cell">Assentamento</th>
+                        <th className="text-left p-3 font-medium text-muted-foreground text-xs">Tipo</th>
+                        <th className="text-right p-3 font-medium text-muted-foreground text-xs">Qtd.</th>
+                        <th className="text-right p-3 font-medium text-muted-foreground text-xs whitespace-nowrap">Realizado em</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((d: any) => {
+                        const settlementName = d.settlements?.name || d.producers?.settlements?.name || '—';
+                        const dateLabel = formatStatDate(d.completed_at || d.created_at) ?? '—';
+                        const typeIdx = demandTypes.findIndex((dt: any) => dt.id === d.demand_type_id);
+                        const color = TYPE_COLORS[typeIdx >= 0 ? typeIdx % TYPE_COLORS.length : 0];
+                        return (
+                          <tr key={d.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                            <td className="p-3 font-medium">{d.producers?.name || '—'}</td>
+                            <td className="p-3 text-muted-foreground hidden sm:table-cell text-xs tabular-nums">{d.producers?.cpf || '—'}</td>
+                            <td className="p-3 text-muted-foreground hidden md:table-cell">{settlementName}</td>
+                            <td className="p-3">
+                              <Badge className={cn('text-xs whitespace-nowrap', color.badge)} variant="secondary">
+                                {d.demand_types?.name || '—'}
+                              </Badge>
+                            </td>
+                            <td className="p-3 text-right tabular-nums">{d.quantity ?? '—'}</td>
+                            <td className="p-3 text-right text-muted-foreground text-xs whitespace-nowrap">{dateLabel}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            )}
           </Card>
         </>
       )}
     </div>
   );
+}
+
+function formatStatDate(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  try { return format(new Date(String(raw).replace(' ', 'T')), 'dd/MM/yyyy', { locale: ptBR }); }
+  catch { return null; }
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -1300,6 +1406,8 @@ export default function DeliveriesPage() {
   // Lotes expandidos na aba de pendentes (agrupamento por lote)
   const [expandedLots, setExpandedLots] = useState<Set<string>>(new Set());
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
+  // Realizadas: agrupar por lote (padrão — mostra quando cada lote foi fechado) ou por tipo.
+  const [agruparRealizadas, setAgruparRealizadas] = useState<'lote' | 'tipo'>('lote');
 
   // Lots for selected demand type (in form)
   const { data: lotsForType = [], isLoading: lotsLoading } = useDeliveryLots(formData.demand_type_id || undefined);
@@ -1610,6 +1718,32 @@ export default function DeliveriesPage() {
       .sort((a, b) => b.deliveries.length - a.deliveries.length || a.name.localeCompare(b.name, 'pt-BR'));
   }, [filtered, tab]);
 
+  // Realizadas por LOTE: primeira e última entrega de cada lote; os lotes com
+  // entrega mais recente vêm primeiro (dá para ver quando cada um foi fechado).
+  const completedByLot = useMemo(() => {
+    if (tab !== 'completed') return [] as { id: string; name: string; deliveries: any[]; primeira: number; ultima: number }[];
+    const groups = new Map<string, { name: string; deliveries: any[] }>();
+    (filtered as any[]).forEach((d) => {
+      const items = (d.delivery_items ?? []) as any[];
+      const keys = items.length === 0
+        ? [['__none__', 'Sem lote específico']]
+        : Array.from(new Map(items.map((it) => [it.lot_id || '__none__', it.delivery_lots?.name || 'Sem lote específico'])).entries());
+      keys.forEach(([key, name]) => {
+        const g = groups.get(key) ?? { name, deliveries: [] };
+        g.deliveries.push(d);
+        groups.set(key, g);
+      });
+    });
+    const ts = (d: any) => parseISO(String(d.completed_at || d.created_at || '').replace(' ', 'T')).getTime() || 0;
+    return Array.from(groups.entries())
+      .map(([id, g]) => {
+        const deliveries = g.deliveries.slice().sort((a, b) => ts(b) - ts(a));
+        const tempos = deliveries.map(ts).filter((t) => t > 0);
+        return { id, ...g, deliveries, primeira: tempos.length ? Math.min(...tempos) : 0, ultima: tempos.length ? Math.max(...tempos) : 0 };
+      })
+      .sort((a, b) => b.ultima - a.ultima);
+  }, [filtered, tab]);
+
   // Agrupa as entregas (filtradas) por lote. Uma entrega em vários lotes aparece
   // em cada grupo; sem itens de lote → "Sem lote específico".
   const deliveriesByLot = useMemo(() => {
@@ -1695,6 +1829,25 @@ export default function DeliveriesPage() {
     }
   };
 
+  const seletorAgrupamento = (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="text-muted-foreground">Agrupar por:</span>
+      {([['lote', 'Lote (data de fechamento)'], ['tipo', 'Tipo de entrega']] as const).map(([v, label]) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => setAgruparRealizadas(v)}
+          className={cn(
+            'rounded-full border px-3 py-1 font-medium transition-colors',
+            agruparRealizadas === v ? 'border-primary bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-muted',
+          )}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
   const renderDeliveryCard = (d: any) => {
     const startDate = formatDate(d.delivery_date_start);
     const endDate = formatDate(d.delivery_date_end);
@@ -1704,6 +1857,14 @@ export default function DeliveriesPage() {
     const isCompleted = d.status === 'completed';
     const settlementLabel = d.settlements?.name || d.producers?.settlements?.name || null;
     const color = getTypeColor(d.demand_type_id, deliveryDemandTypes);
+    // Realizadas: dias entre o cadastro e a realização.
+    const prazoDias = (() => {
+      if (!isCompleted || !d.completed_at || !d.created_at) return null;
+      const ini = parseISO(d.created_at.slice(0, 10)).getTime();
+      const fim = parseISO(d.completed_at.slice(0, 10)).getTime();
+      const dias = Math.round((fim - ini) / 86400000);
+      return Number.isFinite(dias) && dias >= 0 ? dias : null;
+    })();
 
     return (
       <div
@@ -1828,10 +1989,35 @@ export default function DeliveriesPage() {
               <span>{d.producers.phone}</span>
             </button>
           )}
-          {d.quantity != null && (
+          {/* Lote(s) e quantidade com a unidade do lote */}
+          {((d.delivery_items ?? []) as any[]).length > 0 ? (
+            ((d.delivery_items ?? []) as any[]).map((it: any, i: number) => (
+              <div key={`${it.lot_id}-${i}`} className="flex items-start gap-1.5 text-muted-foreground">
+                <Layers className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <span className="min-w-0 break-words">
+                  <span className="text-foreground font-medium">{fmtQty(it.quantity)} {unidadeTxt(Number(it.quantity), it.delivery_lots?.unit)}</span>
+                  {it.delivery_lots?.name && <> · {it.delivery_lots.name}</>}
+                </span>
+              </div>
+            ))
+          ) : d.quantity != null && (
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <Hash className="h-3.5 w-3.5 shrink-0" />
               <span>Quantidade: <span className="text-foreground font-medium">{d.quantity}</span></span>
+            </div>
+          )}
+          {(d.producers?.locations?.name || d.producers?.location_name) && (
+            <div className="flex items-start gap-1.5 text-muted-foreground">
+              <MapPin className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span className="min-w-0 break-words">Localidade: {d.producers?.locations?.name || d.producers?.location_name}</span>
+            </div>
+          )}
+          {isCompleted && prazoDias != null && (
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <Clock className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                {prazoDias === 0 ? 'Entregue no mesmo dia do cadastro' : `Entregue ${prazoDias} dia${prazoDias !== 1 ? 's' : ''} após o cadastro`}
+              </span>
             </div>
           )}
           {(startDate || endDate) && (
@@ -1944,9 +2130,113 @@ export default function DeliveriesPage() {
                 {tab === 'pending' ? 'Nenhuma entrega pendente' : 'Nenhuma entrega realizada'}
               </p>
             </div>
+          ) : tab === 'completed' && agruparRealizadas === 'lote' ? (
+            /* Realizadas agrupadas por LOTE — mais recente primeiro, com primeira/última entrega */
+            <div className="space-y-3">
+              {seletorAgrupamento}
+              {completedByLot.map((group) => {
+                const isOpen = expandedLots.has('c:' + group.id);
+                const pessoas = new Set(group.deliveries.map((d) => d.producer_id)).size;
+                const summary = group.id !== '__none__' ? lotSummaryById.get(group.id) : null;
+                const unit = summary?.unit || '';
+                const total = group.deliveries.reduce((s, d) => s + ((d.delivery_items ?? []) as any[])
+                  .filter((it) => (it.lot_id || '__none__') === group.id)
+                  .reduce((a: number, it: any) => a + (Number(it.quantity) || 0), 0), 0) || group.deliveries.reduce((s, d) => s + deliveryTotalQty(d), 0);
+                const encerrado = !!summary && Number(summary.remaining_quantity ?? 0) <= 0 && Number(summary.reserved_quantity ?? 0) <= 0;
+                const semTermo = group.deliveries.filter((d) => !termosPorEntrega.has(d.id)).length;
+                const fmtDia = (t: number) => (t > 0 ? format(new Date(t), 'dd/MM/yyyy') : '—');
+                const tipos = Array.from(new Set(group.deliveries.map((d) => d.demand_types?.name).filter(Boolean)));
+                return (
+                  <div key={group.id} className="rounded-xl border bg-card overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => toggleLot('c:' + group.id)}
+                      className="w-full flex items-start justify-between gap-3 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
+                    >
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          <Layers className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="font-semibold text-sm leading-snug break-words">{group.name}</span>
+                            <Badge variant="secondary" className="shrink-0 bg-success/10 text-success border-success/20">
+                              {group.deliveries.length} realizada{group.deliveries.length !== 1 ? 's' : ''}
+                            </Badge>
+                            {encerrado && (
+                              <Badge variant="outline" className="shrink-0 gap-1 border-slate-400/50 bg-slate-500/10 text-slate-700 dark:text-slate-300">
+                                <CheckCircle className="h-3 w-3" /> Lote encerrado
+                              </Badge>
+                            )}
+                            {semTermo > 0 && (
+                              <Badge variant="outline" className="shrink-0 gap-1 border-amber-400/60 bg-amber-500/10 text-amber-800 dark:text-amber-300">
+                                <Paperclip className="h-3 w-3" /> {semTermo} sem termo
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        {tipos.length > 0 && (
+                          <p className="pl-6 text-xs text-muted-foreground break-words">{tipos.join(' · ')}</p>
+                        )}
+                        {/* Quando o lote foi entregue: primeira → última entrega */}
+                        <div className="ml-6 inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md bg-muted/60 px-2 py-1 text-xs">
+                          <CalendarCheck className="h-3.5 w-3.5 text-primary shrink-0" />
+                          {group.primeira === group.ultima ? (
+                            <span>Entregue em <strong>{fmtDia(group.ultima)}</strong></span>
+                          ) : (
+                            <span>
+                              <strong>{fmtDia(group.primeira)}</strong> → <strong>{fmtDia(group.ultima)}</strong>
+                              <span className="text-muted-foreground"> {encerrado ? '(fechamento)' : '(última entrega)'}</span>
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-6 text-xs">
+                          <span className="inline-flex items-center gap-1 text-muted-foreground">
+                            <User className="h-3 w-3" />
+                            <span className="font-medium text-foreground">{pessoas}</span> {pessoas === 1 ? 'pessoa' : 'pessoas'}
+                          </span>
+                          {total > 0 && (
+                            <span className="inline-flex items-center gap-1 text-emerald-700">
+                              <Package className="h-3 w-3" />
+                              <span className="font-semibold">{fmtQty(total)}{unit ? ` ${unidadeTxt(total, unit)}` : ''}</span> entregues
+                            </span>
+                          )}
+                          {summary && !encerrado && (
+                            <span className="inline-flex items-center gap-1 text-muted-foreground">
+                              <Warehouse className="h-3 w-3" />
+                              Restam <span className="font-medium text-foreground">{fmtQty(summary.remaining_quantity)}{unit ? ` ${unidadeTxt(Number(summary.remaining_quantity), unit)}` : ''}</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronDown
+                        className={cn('h-4 w-4 text-muted-foreground shrink-0 mt-0.5 transition-transform', isOpen && 'rotate-180')}
+                      />
+                    </button>
+                    {isOpen && (
+                      <div className="border-t bg-muted/20">
+                        <div className="flex justify-end px-3 pt-3">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5"
+                            onClick={() => exportLotContacts(group.name, group.deliveries)}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            Exportar contatos (WhatsApp)
+                          </Button>
+                        </div>
+                        <div className="p-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          {group.deliveries.map(renderDeliveryCard)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           ) : tab === 'completed' ? (
             /* Realizadas agrupadas por título (tipo) — cards de resumo clicáveis */
             <div className="space-y-3">
+              {seletorAgrupamento}
               {completedByType.map((group) => {
                 const isOpen = expandedTypes.has(group.id);
                 const pessoas = new Set(group.deliveries.map((d) => d.producer_id)).size;
@@ -1965,9 +2255,9 @@ export default function DeliveriesPage() {
                       className="w-full flex items-start justify-between gap-3 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 min-w-0">
                           <span className={cn('w-2.5 h-2.5 rounded-full shrink-0', color.dot)} />
-                          <span className="font-semibold text-sm truncate">{group.name}</span>
+                          <span className="font-semibold text-sm leading-snug break-words">{group.name}</span>
                           <Badge variant="secondary" className="shrink-0 bg-success/10 text-success border-success/20">
                             {group.deliveries.length} realizada{group.deliveries.length !== 1 ? 's' : ''}
                           </Badge>
@@ -2044,26 +2334,29 @@ export default function DeliveriesPage() {
                       className="w-full flex items-start justify-between gap-3 px-4 py-3 hover:bg-muted/40 transition-colors text-left"
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <Layers className="h-4 w-4 text-primary shrink-0" />
-                          <span className="font-semibold text-sm truncate">{group.name}</span>
-                          <Badge variant="secondary" className="shrink-0">
-                            {group.deliveries.length} pendente{group.deliveries.length !== 1 ? 's' : ''}
-                          </Badge>
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          <Layers className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                          {/* Nome inteiro (quebra linha no celular em vez de cortar) */}
+                          <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="font-semibold text-sm leading-snug break-words">{group.name}</span>
+                            <Badge variant="secondary" className="shrink-0">
+                              {group.deliveries.length} pendente{group.deliveries.length !== 1 ? 's' : ''}
+                            </Badge>
+                          </div>
                         </div>
                         {summary && (
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 pl-6 text-xs">
                             <span className="inline-flex items-center gap-1 text-muted-foreground">
                               <Warehouse className="h-3 w-3" />
-                              Inicial: <span className="font-medium text-foreground">{fmtQty(summary.initial_quantity)} {unit}</span>
+                              Inicial: <span className="font-medium text-foreground">{fmtQty(summary.initial_quantity)} {unidadeTxt(Number(summary.initial_quantity), unit)}</span>
                             </span>
                             <span className="inline-flex items-center gap-1 text-amber-700">
                               <Box className="h-3 w-3" />
-                              Reservado: <span className="font-semibold">{fmtQty(summary.reserved_quantity)} {unit}</span>
+                              Reservado: <span className="font-semibold">{fmtQty(summary.reserved_quantity)} {unidadeTxt(Number(summary.reserved_quantity), unit)}</span>
                             </span>
                             <span className="inline-flex items-center gap-1 text-emerald-700">
                               <TrendingUp className="h-3 w-3" />
-                              Restante: <span className="font-semibold">{fmtQty(summary.remaining_quantity)} {unit}</span>
+                              Restante: <span className="font-semibold">{fmtQty(summary.remaining_quantity)} {unidadeTxt(Number(summary.remaining_quantity), unit)}</span>
                             </span>
                           </div>
                         )}
