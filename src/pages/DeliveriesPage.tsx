@@ -2264,31 +2264,11 @@ export default function DeliveriesPage() {
                 </Button>
                 {extras.length > 0 && (
                   <p className="text-[11px] text-muted-foreground">
-                    Cada tipo é salvo como uma entrega separada, com as datas, observações e finalização abaixo.
+                    Cada tipo é salvo como uma entrega separada, com as observações e a finalização abaixo.
                   </p>
                 )}
               </div>
             )}
-
-            {/* Date range */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Data Início</label>
-                <Input
-                  type="date"
-                  value={formData.delivery_date_start}
-                  onChange={(e) => setFormData((f) => ({ ...f, delivery_date_start: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Data Fim</label>
-                <Input
-                  type="date"
-                  value={formData.delivery_date_end}
-                  onChange={(e) => setFormData((f) => ({ ...f, delivery_date_end: e.target.value }))}
-                />
-              </div>
-            </div>
 
             {/* Notes */}
             <div className="space-y-1.5">
