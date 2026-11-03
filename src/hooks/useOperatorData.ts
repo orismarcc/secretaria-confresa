@@ -242,6 +242,34 @@ export function useUpdateOperator() {
   });
 }
 
+/** Admin pleno define uma senha provisória para outro usuário (esqueceu a senha). */
+export function useResetUserPassword() {
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+      const response = await fetch(FUNCTION_URL, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId, password }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Falha ao redefinir a senha');
+      return data;
+    },
+    onSuccess: () => {
+      toast({ title: 'Senha redefinida!', description: 'Passe a senha provisória à pessoa e peça para trocá-la em Configurações.' });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao redefinir a senha', description: friendlyDbError(error), variant: 'destructive' });
+    },
+  });
+}
+
 export function useToggleOperatorStatus() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

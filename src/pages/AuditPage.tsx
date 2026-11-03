@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, History, PlusCircle, PencilLine, Trash2, User } from 'lucide-react';
+import { ChevronLeft, ChevronRight, History, PlusCircle, PencilLine, Trash2, User, KeyRound } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -23,12 +23,14 @@ const TABLE_LABEL: Record<string, string> = {
   deliveries: 'Entrega',
   patrimony: 'Patrimônio',
   producers: 'Produtor',
+  'auth.users': 'Usuário',
 };
 
 const ACTION_CFG: Record<string, { label: string; icon: any; cls: string }> = {
   INSERT: { label: 'Criou',   icon: PlusCircle, cls: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
   UPDATE: { label: 'Alterou', icon: PencilLine, cls: 'text-blue-700 bg-blue-50 border-blue-200' },
   DELETE: { label: 'Excluiu', icon: Trash2,     cls: 'text-red-700 bg-red-50 border-red-200' },
+  PASSWORD_RESET: { label: 'Redefiniu a senha', icon: KeyRound, cls: 'text-amber-800 bg-amber-50 border-amber-200' },
 };
 
 const FIELD_LABEL: Record<string, string> = {
@@ -97,6 +99,9 @@ export default function AuditPage() {
 
   const recordIdentity = (r: AuditRow): string => {
     const d = (r.new_data || r.old_data || {}) as Record<string, any>;
+    if (r.table_name === 'auth.users') {
+      return (r.record_id && profiles?.get(r.record_id)) || 'usuário';
+    }
     if (r.table_name === 'producers' || r.table_name === 'patrimony') {
       return d.name || (r.record_id ? r.record_id.slice(0, 8) + '…' : '—');
     }
@@ -201,6 +206,9 @@ export default function AuditPage() {
                 )}
                 {r.action === 'INSERT' && (
                   <p className="mt-2 text-xs text-muted-foreground">Registro criado.</p>
+                )}
+                {r.action === 'PASSWORD_RESET' && (
+                  <p className="mt-2 text-xs text-muted-foreground">Senha provisória definida por um administrador (a senha não fica registrada).</p>
                 )}
                 {r.action === 'DELETE' && (
                   <p className="mt-2 text-xs text-muted-foreground">Registro excluído.</p>

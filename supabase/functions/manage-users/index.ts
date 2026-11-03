@@ -88,6 +88,8 @@ const updateUserSchema = z.object({
     .regex(/^[\p{L}\s'-]+$/u)
     .optional(),
   is_active: z.boolean().optional(),
+  // Redefinir a senha de outro usuário (só admin pleno; quem esqueceu a senha).
+  password: z.string().min(8, "Senha deve ter no mínimo 8 caracteres").max(72, "Senha muito longa").optional(),
 });
 
 const deleteUserSchema = z.object({
@@ -279,7 +281,29 @@ Deno.serve(async (req) => {
         );
       }
 
-      const { userId, name, is_active } = parsed.data;
+      const { userId, name, is_active, password } = parsed.data;
+
+      // Redefinição de senha: só admin pleno (Secretário/Diretor/Supervisor) —
+      // Coordenador e Assistente de Campo não podem. Fica na auditoria (sem a senha).
+      if (password !== undefined) {
+        const { data: perfil } = await supabaseAdmin
+          .from("profiles").select("job_title").eq("id", user.id).maybeSingle();
+        const cargo = perfil?.job_title ?? "";
+        if (cargo === "Coordenador" || cargo === "Assistente de Campo") {
+          return errorResponse(cors, 403, "Apenas Secretário, Diretor ou Supervisor podem redefinir senhas.");
+        }
+        const { error: pwdError } = await supabaseAdmin.auth.admin.updateUserById(userId, { password });
+        if (pwdError) {
+          return errorResponse(cors, 400, "Não foi possível redefinir a senha.");
+        }
+        await supabaseAdmin.from("audit_log").insert({
+          table_name: "auth.users",
+          record_id: userId,
+          action: "PASSWORD_RESET",
+          actor_id: user.id,
+          new_data: { senha_redefinida: true },
+        });
+      }
 
       if (name !== undefined) {
         const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {

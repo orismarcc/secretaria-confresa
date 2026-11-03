@@ -55,8 +55,9 @@ import {
 import {
   Plus, Pencil, Trash2, UserCog, BarChart3, CheckCircle,
   ClipboardList, HardHat, User, Briefcase, FileText, Loader2,
-  Eye, Landmark, RefreshCw, FileDown,
+  Eye, Landmark, RefreshCw, FileDown, KeyRound,
 } from 'lucide-react';
+import { RedefinirSenhaDialog } from '@/components/RedefinirSenhaDialog';
 import { generateExecutiveReport } from '@/lib/executiveReportPdf';
 import { DetalhesTecnicoSheet } from '@/components/tecnicos/DetalhesTecnicoSheet';
 import {
@@ -303,6 +304,8 @@ export default function OperatorsPage() {
 
   // ── Admins state ───────────────────────────────────────────────────────────
   const [editingAdmin, setEditingAdmin] = useState<AppUser | null>(null);
+  // Redefinir senha (esqueceu a senha) — só admin pleno.
+  const [senhaDe, setSenhaDe] = useState<{ id: string; name: string } | null>(null);
   const cpfOf = (id: string) => profilesMap?.get(id)?.cpf || '';
   const avatarOf = (id: string) => profilesMap?.get(id)?.avatarUrl || null;
   const setOperatorDemandTypes = useSetOperatorDemandTypes();
@@ -595,6 +598,12 @@ export default function OperatorsPage() {
           <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditingOperator(row); }}>
             <Pencil className="h-4 w-4" />
           </Button>
+          {isFullAdmin && (
+            <Button variant="ghost" size="icon" title="Redefinir senha"
+              onClick={(e) => { e.stopPropagation(); setSenhaDe({ id: row.id, name: row.name }); }}>
+              <KeyRound className="h-4 w-4 text-amber-600" />
+            </Button>
+          )}
           {canDelete && (
             <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDeletingOperator(row); }}>
               <Trash2 className="h-4 w-4 text-destructive" />
@@ -722,9 +731,17 @@ export default function OperatorsPage() {
       key: 'actions',
       header: 'Ações',
       render: (row: AppUser) => (
-        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditingAdmin(row); }} title="Editar CPF">
-          <Pencil className="h-4 w-4" />
-        </Button>
+        <div className="flex gap-1">
+          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setEditingAdmin(row); }} title="Editar CPF">
+            <Pencil className="h-4 w-4" />
+          </Button>
+          {isFullAdmin && (
+            <Button variant="ghost" size="icon" title="Redefinir senha"
+              onClick={(e) => { e.stopPropagation(); setSenhaDe({ id: row.id, name: row.name }); }}>
+              <KeyRound className="h-4 w-4 text-amber-600" />
+            </Button>
+          )}
+        </div>
       ),
     },
   ];
@@ -1102,6 +1119,7 @@ export default function OperatorsPage() {
         onConfirm={handleTechDelete}
         variant="destructive"
       />
+      <RedefinirSenhaDialog pessoa={senhaDe} onClose={() => setSenhaDe(null)} />
     </AppLayout>
   );
 }

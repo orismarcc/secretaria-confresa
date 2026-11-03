@@ -7,7 +7,7 @@ export interface AuditRow {
   id: string;
   table_name: string;
   record_id: string | null;
-  action: 'INSERT' | 'UPDATE' | 'DELETE';
+  action: 'INSERT' | 'UPDATE' | 'DELETE' | 'PASSWORD_RESET';
   actor_id: string | null;
   changed_fields: string[] | null;
   old_data: Record<string, unknown> | null;
