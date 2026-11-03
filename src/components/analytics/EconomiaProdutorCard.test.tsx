@@ -19,9 +19,9 @@ describe('Economia do produtor (Análises)', () => {
         ]}
       />,
     );
-    // particular: 4 h × 250 + 5 h × 400 = 3.000; produtor: 120 L × 7,50 + 2 × 71,15 = 1.042,30
+    // particular: 4 h × 250 + 5 h × 400 = 3.000; Secretaria: 4 h × 165,22 + 5 h × 267,15 = 1.996,63
     expect(screen.getByText('O produtor rural economizou')).toBeInTheDocument();
-    expect(screen.getAllByText(/R\$\s?1\.958/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/R\$\s?1\.003/).length).toBeGreaterThan(0);
     expect(screen.getByText('Grade')).toBeInTheDocument();
     expect(screen.getByText('PC')).toBeInTheDocument();
   });
