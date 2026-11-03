@@ -3,15 +3,14 @@
 // (só o combustível + 1 UPFM por atendimento).
 //
 // Base: atendimentos FINALIZADOS de Grade e PC com horas trabalhadas.
-// Custo pela Secretaria, por atendimento:
-//   combustível = litros lançados × preço do diesel (quando não há litros,
-//   usa o valor da DAM sem a UPFM) + UPFM.
+// Custo pela Secretaria = horas × valor da hora pela Secretaria (combustível +
+// UPFM), informado pela Secretaria em 03/11/2026: Grade R$ 165,22/h e
+// PC R$ 267,15/h.
 
 export interface PremissasEconomia {
-  /** Preço do diesel (R$/L). */
-  diesel: number;
-  /** Taxa de 1 UPFM (R$) por atendimento. */
-  upfm: number;
+  /** Hora pela Secretaria (R$/h) — o que o produtor paga. */
+  gradeSecretaria: number;
+  pcSecretaria: number;
   /** Hora de trator com grade no mercado (R$/h): faixa mínima e máxima. */
   gradeMin: number;
   gradeMax: number;
@@ -20,8 +19,8 @@ export interface PremissasEconomia {
 }
 
 export const PREMISSAS_PADRAO: PremissasEconomia = {
-  diesel: 7.5,
-  upfm: 71.15,
+  gradeSecretaria: 165.22,
+  pcSecretaria: 267.15,
   gradeMin: 200,
   gradeMax: 300,
   pc: 400,
@@ -71,15 +70,6 @@ function somar(t: TotaisEconomia, horas: number, min: number, max: number, produ
   t.produtor += produtor;
 }
 
-/** Custo para o produtor de UM atendimento pela Secretaria. */
-export function custoProdutor(s: { fuel_liters?: number | null; dam_value?: number | null }, p: PremissasEconomia): number {
-  const litros = Number(s.fuel_liters) || 0;
-  const combustivel = litros > 0
-    ? litros * p.diesel
-    : Math.max((Number(s.dam_value) || 0) - p.upfm, 0);
-  return combustivel + p.upfm;
-}
-
 export function calcularEconomia(
   services: any[],
   nomeDoTipo: (demandTypeId: string) => string | null | undefined,
@@ -96,7 +86,7 @@ export function calcularEconomia(
     if (!cat || horas <= 0) continue;
     const min = horas * (cat === 'grade' ? p.gradeMin : p.pc);
     const max = horas * (cat === 'grade' ? p.gradeMax : p.pc);
-    const prod = custoProdutor(s, p);
+    const prod = horas * (cat === 'grade' ? p.gradeSecretaria : p.pcSecretaria);
     const chave = String(s.completed_at).replace(' ', 'T').slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(chave)) continue;
     const mes = meses.get(chave) ?? { chave, ...vazio() };

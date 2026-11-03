@@ -11,7 +11,7 @@ import {
 import { FileDown, Loader2, ClipboardList } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useServices, useDemandTypes } from '@/hooks/useSupabaseData';
-import { generateAVI, MONTHS_PT, AviService } from '@/utils/aviGenerator';
+import { generateAVI, MONTHS_PT, AviService, descricaoAvi } from '@/utils/aviGenerator';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -49,34 +49,14 @@ export function AVIPrestacaoContas() {
 
     // Build AviService list
     const aviServices: AviService[] = completedServices.map((s: any) => {
-      const producerName: string = (s.producers?.name || 'PRODUTOR').toUpperCase();
-      const settlementName: string = (s.settlements?.name || '').toUpperCase();
-      const purpose: string = (s.purpose || '').toUpperCase().trim();
       const demandType = demandTypes.find((d: any) => d.id === s.demand_type_id);
-      const demandName: string = (demandType?.name || s.demand_types?.name || '').toUpperCase();
-      const demandCategory: string = (demandType as any)?.category || '';
-
-      // Mapa de categoria → prefixo correto para o documento AVI
-      const CATEGORY_LABEL: Record<string, string> = {
-        patrulha_mecanizada: 'PATRULHA MECANIZADA',
-        calcario: 'CALCÁRIO',
-        logistica_insumos: 'LOGÍSTICA DE INSUMOS',
-        assistencia_tecnica: 'ASSISTÊNCIA TÉCNICA',
-        entregas: 'ENTREGA',
-      };
-      const descriptionPrefix = CATEGORY_LABEL[demandCategory] || 'ASSISTÊNCIA TÉCNICA';
-
-      // Formato: {PREFIX} PARA {finalidade} A {produtor} EM {assentamento}
-      // Usa o nome do tipo de demanda quando a finalidade não está preenchida
-      const purposePart = purpose || demandName;
-      const description = [
-        descriptionPrefix,
-        purposePart ? `PARA ${purposePart}` : '',
-        `A ${producerName}`,
-        settlementName ? `EM ${settlementName}` : '',
-      ]
-        .filter(Boolean)
-        .join(' ');
+      const description = descricaoAvi({
+        categoria: (demandType as any)?.category || '',
+        tipo: demandType?.name || s.demand_types?.name || '',
+        finalidade: s.purpose || '',
+        produtor: s.producers?.name || 'PRODUTOR',
+        assentamento: s.settlements?.name || '',
+      });
 
       // Format the completion date
       let dateStr = '';

@@ -43,7 +43,7 @@ export function EconomiaProdutorCard({ services, demandTypes, exercicioLabel }: 
 }) {
   const [p, setP] = useState<PremissasEconomia>(PREMISSAS_PADRAO);
   const [txt, setTxt] = useState<Record<keyof PremissasEconomia, string>>({
-    diesel: '7,50', upfm: '71,15', gradeMin: '200', gradeMax: '300', pc: '400',
+    gradeSecretaria: '165,22', pcSecretaria: '267,15', gradeMin: '200', gradeMax: '300', pc: '400',
   });
   const editar = (k: keyof PremissasEconomia, v: string) => {
     setTxt((t) => ({ ...t, [k]: v }));
@@ -128,7 +128,7 @@ export function EconomiaProdutorCard({ services, demandTypes, exercicioLabel }: 
               <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-4">
                 <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Pago pelo produtor</p>
                 <p className="mt-1 text-2xl font-bold tabular-nums">{brl(r.total.produtor)}</p>
-                <p className="mt-1 text-[11px] text-muted-foreground">Só combustível + taxa de 1 UPFM por atendimento</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">Hora pela Secretaria: Grade {brl2(p.gradeSecretaria)} · PC {brl2(p.pcSecretaria)}</p>
               </div>
               <div className="rounded-xl border border-blue-500/25 bg-blue-500/5 p-4">
                 <p className="text-xs font-medium text-blue-700 dark:text-blue-400">Economia</p>
@@ -140,7 +140,7 @@ export function EconomiaProdutorCard({ services, demandTypes, exercicioLabel }: 
             {/* Média: o que UM produtor gasta em cada caso */}
             <div className="space-y-2">
               <div>
-                <p className="text-sm font-semibold">Em média, quanto gasta um produtor</p>
+                <p className="text-sm font-semibold">Em média, quanto gasta um produtor (e quanto custa a hora)</p>
                 <p className="text-xs text-muted-foreground">
                   Por atendimento e por produtor no período (um produtor pode ter mais de um atendimento)
                 </p>
@@ -159,19 +159,21 @@ export function EconomiaProdutorCard({ services, demandTypes, exercicioLabel }: 
                     {[...categorias.map((c) => ({ nome: c.nome, t: c as any })), { nome: 'Grade + PC', t: r.total as any }].flatMap(({ nome, t }) => {
                       const nAt = t.atendimentos || 1;
                       const nPr = t.produtores?.size || 1;
+                      const nH = t.horas || 1;
                       return [
+                        { chave: `${nome}-h`, rotulo: `${nome} · por hora`, sub: nome === 'Grade + PC' ? 'média ponderada pelas horas' : 'valor da hora', m: t.mercado / nH, p: t.produtor / nH, hora: true },
                         { chave: `${nome}-a`, rotulo: `${nome} · por atendimento`, sub: `${num(t.horas / nAt)} h em média`, m: t.mercado / nAt, p: t.produtor / nAt },
                         { chave: `${nome}-p`, rotulo: `${nome} · por produtor`, sub: `${t.produtores?.size ?? 0} produtores`, m: t.mercado / nPr, p: t.produtor / nPr },
                       ];
                     }).map((l) => (
-                      <tr key={l.chave} className={cn('border-b last:border-0', l.chave.startsWith('Grade + PC') && 'bg-emerald-500/5 font-medium')}>
+                      <tr key={l.chave} className={cn('border-b last:border-0', l.chave.startsWith('Grade + PC') && 'bg-emerald-500/5 font-medium', (l as any).hora && 'bg-amber-500/5 font-semibold')}>
                         <td className="p-2.5">
                           <p>{l.rotulo}</p>
                           <p className="text-[11px] font-normal text-muted-foreground">{l.sub}</p>
                         </td>
-                        <td className="p-2.5 text-right tabular-nums text-red-700 dark:text-red-400">{brl(l.m)}</td>
-                        <td className="p-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{brl(l.p)}</td>
-                        <td className="p-2.5 text-right tabular-nums font-semibold text-blue-700 dark:text-blue-400">{brl(l.m - l.p)}</td>
+                        <td className="p-2.5 text-right tabular-nums text-red-700 dark:text-red-400">{(l as any).hora ? `${brl2(l.m)}/h` : brl(l.m)}</td>
+                        <td className="p-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{(l as any).hora ? `${brl2(l.p)}/h` : brl(l.p)}</td>
+                        <td className="p-2.5 text-right tabular-nums font-semibold text-blue-700 dark:text-blue-400">{(l as any).hora ? `${brl2(l.m - l.p)}/h` : brl(l.m - l.p)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -234,7 +236,7 @@ export function EconomiaProdutorCard({ services, demandTypes, exercicioLabel }: 
                         </div>
                         <div className="rounded-lg bg-emerald-500/5 p-2">
                           <p className="text-muted-foreground">Hora pela Secretaria</p>
-                          <p className="font-bold">{brl2(c.porHoraProdutor)}/h <span className="font-normal text-muted-foreground">(média)</span></p>
+                          <p className="font-bold">{brl2(c.porHoraProdutor)}/h</p>
                         </div>
                       </div>
                       <p className="mt-2 text-xs">
@@ -260,8 +262,8 @@ export function EconomiaProdutorCard({ services, demandTypes, exercicioLabel }: 
           <CollapsibleContent className="space-y-3 pt-3">
             <p className="text-xs text-muted-foreground">
               Particular = horas trabalhadas × preço da hora no mercado (Grade pela média da faixa).
-              Pela Secretaria = litros de combustível lançados × preço do diesel + 1 UPFM por atendimento
-              (sem litros lançados, usa o valor da DAM). Considera atendimentos de Grade e PC finalizados com horas.
+              Pela Secretaria = horas trabalhadas × valor da hora pela Secretaria (combustível + UPFM).
+              Considera atendimentos de Grade e PC finalizados com horas.
               Os valores abaixo podem ser ajustados para simular; não são salvos.
             </p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -269,8 +271,8 @@ export function EconomiaProdutorCard({ services, demandTypes, exercicioLabel }: 
                 ['gradeMin', 'Grade — hora mín. (R$)'],
                 ['gradeMax', 'Grade — hora máx. (R$)'],
                 ['pc', 'PC — hora (R$)'],
-                ['diesel', 'Diesel (R$/L)'],
-                ['upfm', 'UPFM (R$)'],
+                ['gradeSecretaria', 'Grade — hora Secretaria (R$)'],
+                ['pcSecretaria', 'PC — hora Secretaria (R$)'],
               ] as const).map(([k, label]) => (
                 <div key={k} className="space-y-1">
                   <Label className="text-[11px] text-muted-foreground">{label}</Label>
