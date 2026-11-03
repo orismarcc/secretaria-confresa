@@ -45,6 +45,8 @@ export interface TotaisEconomia {
   mercado: number;
   /** Pago pelo produtor (combustível + UPFM). */
   produtor: number;
+  /** Produtores distintos atendidos (para a média por produtor). */
+  produtores: Set<string>;
 }
 
 export interface MesEconomia extends TotaisEconomia {
@@ -57,9 +59,10 @@ export interface ResultadoEconomia {
   porMes: MesEconomia[];
 }
 
-const vazio = (): TotaisEconomia => ({ atendimentos: 0, horas: 0, mercadoMin: 0, mercadoMax: 0, mercado: 0, produtor: 0 });
+const vazio = (): TotaisEconomia => ({ atendimentos: 0, horas: 0, mercadoMin: 0, mercadoMax: 0, mercado: 0, produtor: 0, produtores: new Set() });
 
-function somar(t: TotaisEconomia, horas: number, min: number, max: number, produtor: number) {
+function somar(t: TotaisEconomia, horas: number, min: number, max: number, produtor: number, produtorId?: string | null) {
+  if (produtorId) t.produtores.add(produtorId);
   t.atendimentos += 1;
   t.horas += horas;
   t.mercadoMin += min;
@@ -97,10 +100,10 @@ export function calcularEconomia(
     const chave = String(s.completed_at).replace(' ', 'T').slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(chave)) continue;
     const mes = meses.get(chave) ?? { chave, ...vazio() };
-    somar(mes, horas, min, max, prod);
+    somar(mes, horas, min, max, prod, s.producer_id);
     meses.set(chave, mes);
-    somar(total, horas, min, max, prod);
-    somar(porCategoria[cat], horas, min, max, prod);
+    somar(total, horas, min, max, prod, s.producer_id);
+    somar(porCategoria[cat], horas, min, max, prod, s.producer_id);
   }
 
   return {

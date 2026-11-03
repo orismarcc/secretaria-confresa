@@ -137,6 +137,48 @@ export function EconomiaProdutorCard({ services, demandTypes, exercicioLabel }: 
               </div>
             </div>
 
+            {/* Média: o que UM produtor gasta em cada caso */}
+            <div className="space-y-2">
+              <div>
+                <p className="text-sm font-semibold">Em média, quanto gasta um produtor</p>
+                <p className="text-xs text-muted-foreground">
+                  Por atendimento e por produtor no período (um produtor pode ter mais de um atendimento)
+                </p>
+              </div>
+              <div className="overflow-x-auto rounded-xl border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50 text-xs text-muted-foreground">
+                      <th className="p-2.5 text-left font-medium">Serviço</th>
+                      <th className="p-2.5 text-right font-medium">Particular</th>
+                      <th className="p-2.5 text-right font-medium">Pela Secretaria</th>
+                      <th className="p-2.5 text-right font-medium">Economiza</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...categorias.map((c) => ({ nome: c.nome, t: c as any })), { nome: 'Grade + PC', t: r.total as any }].flatMap(({ nome, t }) => {
+                      const nAt = t.atendimentos || 1;
+                      const nPr = t.produtores?.size || 1;
+                      return [
+                        { chave: `${nome}-a`, rotulo: `${nome} · por atendimento`, sub: `${num(t.horas / nAt)} h em média`, m: t.mercado / nAt, p: t.produtor / nAt },
+                        { chave: `${nome}-p`, rotulo: `${nome} · por produtor`, sub: `${t.produtores?.size ?? 0} produtores`, m: t.mercado / nPr, p: t.produtor / nPr },
+                      ];
+                    }).map((l) => (
+                      <tr key={l.chave} className={cn('border-b last:border-0', l.chave.startsWith('Grade + PC') && 'bg-emerald-500/5 font-medium')}>
+                        <td className="p-2.5">
+                          <p>{l.rotulo}</p>
+                          <p className="text-[11px] font-normal text-muted-foreground">{l.sub}</p>
+                        </td>
+                        <td className="p-2.5 text-right tabular-nums text-red-700 dark:text-red-400">{brl(l.m)}</td>
+                        <td className="p-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{brl(l.p)}</td>
+                        <td className="p-2.5 text-right tabular-nums font-semibold text-blue-700 dark:text-blue-400">{brl(l.m - l.p)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             {/* Comparativo mensal em linha */}
             <div className="space-y-2">
               <div>
