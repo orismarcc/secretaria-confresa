@@ -22,6 +22,54 @@ export interface AviService {
 }
 
 // ------------------------------------------------------------------
+// Descrição da atividade no AVI (texto pedido pela Secretaria, 03/11/2026):
+//   * Patrulha mecanizada: "ASSISTÊNCIA TÉCNICA PARA {finalidade} …"
+//   * PC: "ASSISTÊNCIA TÉCNICA PARA IMPLANTAÇÃO DE {finalidade} …"
+//   * Logística de calcário: "ASSISTÊNCIA TÉCNICA PARA CORREÇÃO DE SOLO PARA {finalidade} …"
+//   * demais categorias: como antes ("{CATEGORIA} PARA {finalidade} …")
+// Sempre termina com "A {produtor} EM {assentamento}".
+// ------------------------------------------------------------------
+const CATEGORY_LABEL: Record<string, string> = {
+  patrulha_mecanizada: 'ASSISTÊNCIA TÉCNICA',
+  calcario: 'CALCÁRIO',
+  logistica_insumos: 'LOGÍSTICA DE INSUMOS',
+  assistencia_tecnica: 'ASSISTÊNCIA TÉCNICA',
+  entregas: 'ENTREGA',
+};
+
+export function descricaoAvi(d: {
+  categoria: string;
+  tipo: string;
+  finalidade: string;
+  produtor: string;
+  assentamento: string;
+}): string {
+  const up = (v: string) => (v || '').toUpperCase().trim();
+  const categoria = d.categoria || '';
+  const tipo = up(d.tipo);
+  const finalidade = up(d.finalidade);
+  let atividade: string;
+  if (categoria === 'patrulha_mecanizada' && tipo === 'PC') {
+    atividade = finalidade ? `ASSISTÊNCIA TÉCNICA PARA IMPLANTAÇÃO DE ${finalidade}` : 'ASSISTÊNCIA TÉCNICA';
+  } else if (categoria === 'calcario') {
+    // Finalidade que já fala em correção (ex.: "CORREÇÃO DE SOLO PARA …") não é repetida.
+    atividade = !finalidade
+      ? 'ASSISTÊNCIA TÉCNICA PARA CORREÇÃO DE SOLO'
+      : finalidade.startsWith('CORREÇÃO')
+        ? `ASSISTÊNCIA TÉCNICA PARA ${finalidade}`
+        : `ASSISTÊNCIA TÉCNICA PARA CORREÇÃO DE SOLO PARA ${finalidade}`;
+  } else {
+    const prefixo = CATEGORY_LABEL[categoria] || 'ASSISTÊNCIA TÉCNICA';
+    // Sem finalidade, usa o nome do tipo de demanda (como antes).
+    const parte = finalidade || tipo;
+    atividade = parte ? `${prefixo} PARA ${parte}` : prefixo;
+  }
+  return [atividade, `A ${up(d.produtor) || 'PRODUTOR'}`, up(d.assentamento) ? `EM ${up(d.assentamento)}` : '']
+    .filter(Boolean)
+    .join(' ');
+}
+
+// ------------------------------------------------------------------
 // Month names in Portuguese (all-caps)
 // ------------------------------------------------------------------
 export const MONTHS_PT: Record<number, string> = {
