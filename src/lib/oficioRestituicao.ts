@@ -144,28 +144,59 @@ export async function buildOficioRestituicaoPdf(d: OficioRestituicaoData): Promi
   const resp = await fetch(MODELO);
   if (!resp.ok) throw new Error('Modelo do ofício não encontrado.');
   const zip = new PizZip(await resp.arrayBuffer());
-  const headerImg = zip.file('word/media/image4.png');
+  const png = (n: string) => { const f = zip.file(n); return f ? 'data:image/png;base64,' + u8ToBase64(f.asUint8Array()) : null; };
+  const logoB64 = png('word/media/image4.png');
+  const iconeB64 = png('word/media/image3.png');
   const footerImg = zip.file('word/media/image1.jpg');
-  const headerB64 = headerImg ? 'data:image/png;base64,' + u8ToBase64(headerImg.asUint8Array()) : null;
   const footerB64 = footerImg ? 'data:image/jpeg;base64,' + u8ToBase64(footerImg.asUint8Array()) : null;
 
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
-  const headerH = W * (866775 / 7629525);
-  const footerH = W * (893326 / 7556500);
+
+  // Cabeçalho: redesenha o grupo de formas do modelo (faixa amarela, faixas
+  // cinza e verde à direita, brasão e ícone) nas posições e proporções reais —
+  // em vez de esticar a imagem do brasão na largura da página.
+  const EMU = 12700; // EMU por ponto
+  const hx0 = -38084 / EMU, hW = 7629525 / EMU, hH = 866770 / EMU;
+  const sx = hW / 7466965, sy = hH / 792475;
+  const gx = (v: number) => hx0 + v * sx;
+  const gy = (v: number) => v * sy;
+  const poligono = (cor: [number, number, number], ox: number, oy: number, pts: [number, number][]) => {
+    doc.setFillColor(...cor);
+    const abs = pts.map(([px, py]) => [gx(ox + px), gy(oy + py)] as [number, number]);
+    const deltas = abs.slice(1).map(([px, py], i) => [px - abs[i][0], py - abs[i][1]]);
+    doc.lines(deltas, abs[0][0], abs[0][1], [1, 1], 'F', true);
+  };
+  const headerH = hH;
+  // Rodapé: imagem do modelo na proporção original (sem achatar).
+  const footerH = W * (142 / 769);
   const timbrado = () => {
-    if (headerB64) { try { doc.addImage(headerB64, 'PNG', 0, 14, W, headerH, undefined, 'FAST'); } catch { /* ignora */ } }
-    if (footerB64) { try { doc.addImage(footerB64, 'JPEG', 0, H - footerH - 6, W, footerH, undefined, 'FAST'); } catch { /* ignora */ } }
+    poligono([0xD0, 0xD0, 0xD0], 4076063, 172719, [[3260597, 436878], [567053, 436878], [0, 0], [2693670, 0]]);
+    poligono([0xFF, 0xCC, 0x29], 0, 38, [[7466963, 287615], [0, 287615], [0, 0], [7466963, 0]]);
+    poligono([0x12, 0xAA, 0x04], 4646928, 0, [[2820035, 609853], [0, 609853], [395731, 0], [2820035, 0]]);
+    if (logoB64) { try { doc.addImage(logoB64, 'PNG', gx(1142782), gy(292099), 2097835 * sx, 499997 * sy, undefined, 'FAST'); } catch { /* ignora */ } }
+    if (iconeB64) { try { doc.addImage(iconeB64, 'PNG', gx(3355338), gy(284478), 534034 * sx, 505458 * sy, undefined, 'FAST'); } catch { /* ignora */ } }
+    if (footerB64) { try { doc.addImage(footerB64, 'JPEG', 0, H - footerH, W, footerH, undefined, 'FAST'); } catch { /* ignora */ } }
   };
   timbrado();
 
   const mL = 56, mR = 42, cW = W - mL - mR;
-  const bottomLimit = H - footerH - 18;
-  const topo = 14 + headerH + 20;
+  const bottomLimit = H - footerH - 8;
+  const topo = headerH + 26;
   let y = topo;
   const setFont = (bold: boolean) => doc.setFont('helvetica', bold ? 'bold' : 'normal');
   const ensure = (h: number) => { if (y + h > bottomLimit) { doc.addPage(); timbrado(); y = topo; } };
+
+  // Justifica uma linha distribuindo o espaço que sobra entre as palavras.
+  const linhaJustificada = (ln: string, x: number, yy: number, largura: number) => {
+    const palavras = ln.trim().split(/\s+/);
+    if (palavras.length < 2) { doc.text(ln, x, yy); return; }
+    const total = palavras.reduce((t, w) => t + doc.getTextWidth(w), 0);
+    const espaco = (largura - total) / (palavras.length - 1);
+    let cx = x;
+    palavras.forEach((w) => { doc.text(w, cx, yy); cx += doc.getTextWidth(w) + espaco; });
+  };
 
   const para = (text: string, o: { bold?: boolean; justify?: boolean; center?: boolean; gap?: number; lh?: number } = {}) => {
     const size = 10.5;
@@ -177,7 +208,7 @@ export async function buildOficioRestituicaoPdf(d: OficioRestituicaoData): Promi
     lines.forEach((ln, i) => {
       ensure(lh);
       if (o.center) doc.text(ln, mL + cW / 2, y, { align: 'center' });
-      else if (o.justify && i < lines.length - 1) doc.text(ln, mL, y, { align: 'justify', maxWidth: cW });
+      else if (o.justify && i < lines.length - 1) linhaJustificada(ln, mL, y, cW);
       else doc.text(ln, mL, y);
       y += lh;
     });
@@ -207,14 +238,28 @@ export async function buildOficioRestituicaoPdf(d: OficioRestituicaoData): Promi
     doc.setFontSize(10.5); setFont(true);
     const lw = doc.getTextWidth(rot);
     setFont(false);
-    const linhas = doc.splitTextToSize(`SOLICITAÇÃO DE RESTITUIÇÃO DE VALOR PAGO REFERENTE À DAM – SERVIÇO DE ${c.servico_titulo}`, cW - lw) as string[];
-    ensure(15); setFont(true); doc.text(rot, mL, y); setFont(false);
-    linhas.forEach((ln, i) => { if (i) ensure(15); doc.text(ln, mL + (i ? 0 : lw), y); y += 10.5 * 1.38; });
+    // 1ª linha começa depois do rótulo; as demais usam a largura toda.
+    const palavras = `SOLICITAÇÃO DE RESTITUIÇÃO DE VALOR PAGO REFERENTE À DAM – SERVIÇO DE ${c.servico_titulo}`.split(/\s+/);
+    const linhas: string[] = [];
+    let atual = '';
+    for (const w of palavras) {
+      const lim = linhas.length === 0 ? cW - lw : cW;
+      const tent = atual ? `${atual} ${w}` : w;
+      if (atual && doc.getTextWidth(tent) > lim) { linhas.push(atual); atual = w; } else atual = tent;
+    }
+    if (atual) linhas.push(atual);
+    ensure(15 * linhas.length); setFont(true); doc.text(rot, mL, y); setFont(false);
+    linhas.forEach((ln, i) => {
+      const x = mL + (i ? 0 : lw);
+      if (i < linhas.length - 1) linhaJustificada(ln, x, y, i ? cW : cW - lw);
+      else doc.text(ln, x, y);
+      y += 10.5 * 1.32;
+    });
     y += 6;
   }
-  para(`A Secretaria Municipal de Agricultura solicita a análise e a adoção das providências necessárias para a restituição do valor pago pelo produtor rural abaixo identificado, referente ao Documento de Arrecadação Municipal (DAM) emitido para a realização de serviço de ${c.servico}.`, { justify: true, lh: 1.38, gap: 8 });
-  para(c.justificativa, { justify: true, lh: 1.38, gap: 8 });
-  para('Diante da impossibilidade de atendimento, solicita-se a análise do pedido e, constatada a regularidade do recolhimento e a inexistência de impedimentos administrativos, a restituição do valor pago, mediante transferência bancária para conta de titularidade do produtor identificado abaixo, observados os procedimentos legais e administrativos aplicáveis.', { justify: true, lh: 1.38, gap: 14 });
+  para(`A Secretaria Municipal de Agricultura solicita a análise e a adoção das providências necessárias para a restituição do valor pago pelo produtor rural abaixo identificado, referente ao Documento de Arrecadação Municipal (DAM) emitido para a realização de serviço de ${c.servico}.`, { justify: true, lh: 1.32, gap: 8 });
+  para(c.justificativa, { justify: true, lh: 1.32, gap: 8 });
+  para('Diante da impossibilidade de atendimento, solicita-se a análise do pedido e, constatada a regularidade do recolhimento e a inexistência de impedimentos administrativos, a restituição do valor pago, mediante transferência bancária para conta de titularidade do produtor identificado abaixo, observados os procedimentos legais e administrativos aplicáveis.', { justify: true, lh: 1.32, gap: 14 });
 
   para('1. IDENTIFICAÇÃO DO PRODUTOR', { bold: true, gap: 4 });
   labeled('Nome completo:', c.nome);
@@ -232,16 +277,16 @@ export async function buildOficioRestituicaoPdf(d: OficioRestituicaoData): Promi
   labeled('Valor:', `R$ ${c.valor} (${c.valor_ext})`);
   y += 6;
   para('3. DECLARAÇÃO DO PRODUTOR', { bold: true, gap: 4 });
-  para(`Declaro que as informações pessoais e bancárias acima são verdadeiras, que sou o responsável pelo pagamento da DAM informada e que solicito a restituição do valor correspondente em razão da impossibilidade de execução do serviço de ${c.servico} contratado.`, { justify: true, lh: 1.38, gap: 6 });
+  para(`Declaro que as informações pessoais e bancárias acima são verdadeiras, que sou o responsável pelo pagamento da DAM informada e que solicito a restituição do valor correspondente em razão da impossibilidade de execução do serviço de ${c.servico} contratado.`, { justify: true, lh: 1.32, gap: 6 });
   // O último parágrafo acompanha as assinaturas (assinatura nunca fica sozinha na página).
   const autorizo = 'Autorizo a utilização dos dados bancários informados exclusivamente para fins de processamento da restituição, conforme os procedimentos administrativos aplicáveis.';
   doc.setFontSize(10.5); setFont(false);
-  ensure((doc.splitTextToSize(autorizo, cW) as string[]).length * 10.5 * 1.38 + 26 + 100);
-  para(autorizo, { justify: true, lh: 1.38, gap: 26 });
+  ensure((doc.splitTextToSize(autorizo, cW) as string[]).length * 10.5 * 1.32 + 18 + 92);
+  para(autorizo, { justify: true, lh: 1.32, gap: 18 });
 
   ensure(110);
   para('_______________________________', { center: true, gap: 1 });
-  para('PRODUTOR', { bold: true, center: true, gap: 24 });
+  para('PRODUTOR', { bold: true, center: true, gap: 20 });
   para('_______________________________', { center: true, gap: 1 });
   para(c.assinante_nome, { bold: true, center: true, gap: 0 });
   para(c.assinante_cargo, { bold: true, center: true, gap: 0 });
