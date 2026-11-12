@@ -25,3 +25,32 @@ export function isDamOverdue(
   const diffDays = Math.floor((Date.now() - issued.getTime()) / 86_400_000);
   return diffDays > DAM_OVERDUE_DAYS;
 }
+
+/**
+ * Valor de uma DAM que conta na arrecadação (e no total de DAMs do produtor).
+ * - Só DAM paga conta.
+ * - Restituição CONFIRMADA: o valor restituído é descontado.
+ * - Cancelado com restituição PENDENTE: continua contando (o dinheiro ainda
+ *   não foi devolvido) até a confirmação.
+ * - Cancelado sem pedido de restituição: não conta (regra que já existia).
+ */
+export function valorDamArrecadado(s: {
+  dam_paid?: boolean | null;
+  dam_value?: number | string | null;
+  status?: string | null;
+  restituicao_status?: string | null;
+  restituicao_valor?: number | string | null;
+}): number {
+  if (!s?.dam_paid) return 0;
+  const valor = Number(s.dam_value) || 0;
+  if (s.restituicao_status === 'confirmada') {
+    return Math.max(0, valor - (Number(s.restituicao_valor) || 0));
+  }
+  if (s.status === 'cancelled' && s.restituicao_status !== 'pendente') return 0;
+  return valor;
+}
+
+/** Valor restituído (confirmado) de um atendimento. */
+export function valorRestituido(s: { restituicao_status?: string | null; restituicao_valor?: number | string | null }): number {
+  return s?.restituicao_status === 'confirmada' ? Number(s.restituicao_valor) || 0 : 0;
+}

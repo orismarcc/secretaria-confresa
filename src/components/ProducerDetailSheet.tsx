@@ -25,6 +25,7 @@ import { ptBR } from 'date-fns/locale';
 import { useServicesByProducer, useDeliveriesByProducer } from '@/hooks/useSupabaseData';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ProducerPropertiesSection } from '@/components/ProducerPropertiesSection';
+import { valorDamArrecadado, valorRestituido } from '@/lib/damUtils';
 
 function isDamOverdue(s: any): boolean {
   if (!s.dam_issued || s.dam_paid || s.status === 'cancelled') return false;
@@ -71,7 +72,7 @@ export function ProducerDetailSheet({
   onDelete,
 }: ProducerDetailSheetProps) {
   const navigate = useNavigate();
-  const { canDelete } = useAuth(); // admin completo (coordenador não unifica)
+  const { canDelete, isCoordenador } = useAuth(); // admin completo (coordenador não unifica)
   const [unificarOpen, setUnificarOpen] = useState(false);
 
   const { data: services = [], isLoading: servicesLoading } = useServicesByProducer(
@@ -133,6 +134,12 @@ export function ProducerDetailSheet({
   const damIssued = (services as any[]).filter(s => s.dam_issued).length;
   const damPaid = (services as any[]).filter(s => s.dam_issued && s.dam_paid).length;
   const damPending = (services as any[]).filter(s => s.dam_issued && !s.dam_paid).length;
+  // Total pago em DAMs pelo produtor, descontadas as restituições confirmadas
+  // (cancelado com restituição pendente ainda conta até a confirmação).
+  const damTotalValor = (services as any[]).reduce((sum, s) => sum + valorDamArrecadado(s), 0);
+  const damRestituido = (services as any[]).reduce((sum, s) => sum + (s.dam_paid ? valorRestituido(s) : 0), 0);
+  const restituicoesPendentes = (services as any[]).filter(s => s.restituicao_status === 'pendente').length;
+  const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   // ── Navigate to detail ───────────────────────────────────────────────────────
   const handleViewService = (serviceId: string) => {
@@ -385,6 +392,12 @@ export function ProducerDetailSheet({
                       {damPending > 0 && (
                         <p className="text-[10px] font-medium text-warning leading-tight">{damPending} pend.</p>
                       )}
+                      {!isCoordenador && damTotalValor > 0 && (
+                        <p className="text-[10px] font-semibold text-foreground leading-tight mt-0.5">{fmtBRL(damTotalValor)}</p>
+                      )}
+                      {!isCoordenador && damRestituido > 0 && (
+                        <p className="text-[10px] text-muted-foreground leading-tight">−{fmtBRL(damRestituido)} restit.</p>
+                      )}
                     </>
                   ) : (
                     <>
@@ -392,6 +405,21 @@ export function ProducerDetailSheet({
                       <p className="text-[10px] text-muted-foreground mt-0.5">DAMs</p>
                     </>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Restituição de DAM pendente (atendimento cancelado) */}
+            {!isCoordenador && restituicoesPendentes > 0 && (
+              <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Restituição de DAM pendente</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {restituicoesPendentes === 1
+                      ? '1 atendimento cancelado aguarda a confirmação da restituição.'
+                      : `${restituicoesPendentes} atendimentos cancelados aguardam a confirmação da restituição.`}
+                  </p>
                 </div>
               </div>
             )}
@@ -493,6 +521,16 @@ export function ProducerDetailSheet({
                               Comunicado emitido
                             </span>
                           ) : null}
+                          {!isCoordenador && s.restituicao_status === 'pendente' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-500/10 rounded px-1.5 py-0.5 mt-1 ml-1">
+                              Restituição pendente
+                            </span>
+                          )}
+                          {!isCoordenador && s.restituicao_status === 'confirmada' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 mt-1 ml-1">
+                              DAM restituída
+                            </span>
+                          )}
                         </div>
                         <div className="flex flex-col items-end gap-1.5 shrink-0">
                           <StatusBadge status={s.status as 'pending' | 'in_progress' | 'completed'} />

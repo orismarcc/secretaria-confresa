@@ -16,6 +16,7 @@ import { ComunicadoDamDialog, type ComunicadoSource } from '@/components/Comunic
 import { textIncludes, phoneMatches } from '@/lib/text';
 import { getUserColorClass } from '@/lib/userColors';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { CancelamentoRestituicaoDialog, type CancelamentoAlvo } from '@/components/CancelamentoRestituicaoDialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
@@ -182,6 +183,12 @@ interface DbService {
   appointment_date?: string | null;
   completed_at?: string | null;
   cancellation_reason?: string | null;
+  restituicao_status?: string | null;
+  restituicao_valor?: number | null;
+  restituicao_motivo?: string | null;
+  restituicao_oficio?: string | null;
+  restituicao_solicitada_em?: string | null;
+  restituicao_confirmada_em?: string | null;
   purpose?: string | null;
   notes?: string | null;
   completion_notes?: string | null;
@@ -223,7 +230,7 @@ export default function ServicesPage() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { role, canDelete, isFullAdmin } = useAuth();
+  const { role, canDelete, isFullAdmin, isCoordenador, user } = useAuth();
   const isAdmin = role === 'admin';
 
   const { data: services = [], isLoading: servicesLoading } = useServices();
@@ -300,10 +307,11 @@ export default function ServicesPage() {
   const [finalizeDate, setFinalizeDate] = useState('');
   const [fotosFinalizacao, setFotosFinalizacao] = useState<File[]>([]);
 
-  // Cancellation dialog
-  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
-  const [serviceToCancel, setServiceToCancel] = useState<DbService | null>(null);
-  const [cancelReason, setCancelReason] = useState('');
+  // Cancelamento (com ofício de restituição da DAM opcional) e ofício avulso
+  const [cancelAlvo, setCancelAlvo] = useState<CancelamentoAlvo | null>(null);
+  const [cancelModo, setCancelModo] = useState<'cancelar' | 'oficio'>('cancelar');
+  // Confirmar / desfazer a restituição
+  const [restituicaoAcao, setRestituicaoAcao] = useState<{ service: DbService; acao: 'confirmar' | 'desfazer' } | null>(null);
 
   // Comunicado de DAM
   const [comunicadoOpen, setComunicadoOpen] = useState(false);
@@ -312,6 +320,16 @@ export default function ServicesPage() {
   const [detailService, setDetailService] = useState<DbService | null>(null);
   const [reassignOpen, setReassignOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
+
+  // Mantém os detalhes abertos em dia quando o atendimento muda (ex.: confirmar
+  // a restituição com a ficha aberta).
+  useEffect(() => {
+    setDetailService((prev) => {
+      if (!prev) return prev;
+      const atual = (services as DbService[]).find(s => s.id === prev.id);
+      return atual ?? prev;
+    });
+  }, [services]);
 
   // Auto-open detail sheet when ?detail=ID is in the URL (e.g. navigated from producer history).
   // M-07: também ajusta a tab para que a tabela por trás mostre o grupo correto do serviço.
@@ -656,22 +674,49 @@ export default function ServicesPage() {
     setFinalizeDialogOpen(false);
   };
 
-  const openCancelDialog = (service: DbService) => {
-    setDetailOpen(false);
-    setServiceToCancel(service);
-    setCancelReason('');
-    setCancelDialogOpen(true);
+  // Dados do atendimento para o cancelamento / ofício de restituição.
+  const alvoDoCancelamento = (service: DbService): CancelamentoAlvo => {
+    const producer = producers.find(p => p.id === service.producer_id);
+    const dt = demandTypes.find(d => d.id === service.demand_type_id) as any;
+    const settlement = settlements.find(st => st.id === service.settlement_id);
+    const location = locations.find(l => l.id === service.location_id);
+    const gleba = (service.producers as any)?.glebas?.name || (producer as any)?.glebas?.name || null;
+    return {
+      id: service.id,
+      status: service.status,
+      dam_paid: service.dam_paid,
+      dam_value: (service as any).dam_value,
+      produtor: {
+        nome: producer?.name || service.producers?.name || '',
+        cpf: producer?.cpf || '',
+        telefone: producer?.phone || service.producers?.phone || '',
+      },
+      tipo: { nome: dt?.name || service.demand_types?.name || '', categoria: dt?.category ?? null },
+      comunidade: [settlement?.name || service.settlements?.name, gleba || location?.name].filter(Boolean).join(' - '),
+    };
   };
 
-  const handleCancel = () => {
-    if (!serviceToCancel) return;
-    updateService.mutate({
-      id: serviceToCancel.id,
-      status: 'cancelled',
-      cancellation_reason: cancelReason.trim() || null,
-    });
-    setServiceToCancel(null);
-    setCancelDialogOpen(false);
+  const openCancelDialog = (service: DbService) => {
+    setDetailOpen(false);
+    setCancelModo('cancelar');
+    setCancelAlvo(alvoDoCancelamento(service));
+  };
+
+  const openOficioRestituicao = (service: DbService) => {
+    setDetailOpen(false);
+    setCancelModo('oficio');
+    setCancelAlvo(alvoDoCancelamento(service));
+  };
+
+  const handleRestituicao = async () => {
+    if (!restituicaoAcao) return;
+    const { service, acao } = restituicaoAcao;
+    setRestituicaoAcao(null);
+    try {
+      await updateService.mutateAsync(acao === 'confirmar'
+        ? { id: service.id, restituicao_status: 'confirmada', restituicao_confirmada_em: new Date().toISOString(), restituicao_confirmada_por: user?.id ?? null }
+        : { id: service.id, restituicao_status: 'pendente' });
+    } catch { /* aviso já exibido */ }
   };
 
   const openComunicado = (service: DbService) => {
@@ -828,6 +873,16 @@ export default function ServicesPage() {
                 Comunicado emitido
               </span>
             ) : null}
+            {!isCoordenador && s.restituicao_status === 'pendente' && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-500/10 rounded px-1.5 py-0.5 w-fit">
+                Restituição pendente
+              </span>
+            )}
+            {!isCoordenador && s.restituicao_status === 'confirmada' && (
+              <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted rounded px-1.5 py-0.5 w-fit">
+                DAM restituída
+              </span>
+            )}
             {/* Logística de calcário: pedido do calcário pago (além da DAM) */}
             {(demandTypes.find(d => d.id === s.demand_type_id) as any)?.category === 'calcario' && s.status !== 'cancelled' && (
               s.limestone_paid ? (
@@ -1529,6 +1584,9 @@ export default function ServicesPage() {
               onFinalize={detailService.status !== 'completed' ? () => openFinalizeDialog(detailService) : undefined}
               onCancel={() => openCancelDialog(detailService)}
               onComunicado={() => openComunicado(detailService)}
+              onOficioRestituicao={() => openOficioRestituicao(detailService)}
+              onConfirmarRestituicao={() => setRestituicaoAcao({ service: detailService, acao: 'confirmar' })}
+              onDesfazerRestituicao={isFullAdmin ? () => setRestituicaoAcao({ service: detailService, acao: 'desfazer' }) : undefined}
             />
           )}
         </SheetContent>
@@ -1580,43 +1638,25 @@ export default function ServicesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Cancel Dialog — motivo obrigatório */}
-      <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Cancelar Atendimento</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <p className="text-sm text-muted-foreground">
-              Informe o motivo do cancelamento. Ele ficará registrado no histórico do produtor.
-            </p>
-            <div className="space-y-1.5">
-              <Label htmlFor="cancel-reason">Motivo *</Label>
-              <Textarea
-                id="cancel-reason"
-                value={cancelReason}
-                onChange={e => setCancelReason(e.target.value)}
-                placeholder="Ex: produtor desistiu, duplicidade, erro de cadastro..."
-                rows={3}
-                className="resize-none"
-              />
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
-              Voltar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleCancel}
-              disabled={!cancelReason.trim() || updateService.isPending}
-            >
-              <XCircle className="h-4 w-4 mr-2" />
-              Confirmar Cancelamento
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Cancelamento — motivo obrigatório; ofício de restituição da DAM opcional */}
+      <CancelamentoRestituicaoDialog
+        alvo={cancelAlvo}
+        modo={cancelModo}
+        podeGerarOficio={!isCoordenador}
+        onClose={() => setCancelAlvo(null)}
+      />
+
+      {/* Confirmar / desfazer a restituição da DAM */}
+      <ConfirmDialog
+        open={!!restituicaoAcao}
+        onOpenChange={(o) => { if (!o) setRestituicaoAcao(null); }}
+        title={restituicaoAcao?.acao === 'desfazer' ? 'Desfazer confirmação da restituição' : 'Confirmar restituição da DAM'}
+        description={restituicaoAcao?.acao === 'desfazer'
+          ? 'A restituição volta a ficar pendente e o valor volta a contar no total de DAMs do produtor.'
+          : `Confirma que o valor de ${(Number(restituicaoAcao?.service.restituicao_valor) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} foi restituído ao produtor? O valor será descontado do total de DAMs dele e da arrecadação.`}
+        onConfirm={handleRestituicao}
+        confirmLabel={restituicaoAcao?.acao === 'desfazer' ? 'Desfazer' : 'Confirmar restituição'}
+      />
 
       {/* Comunicado de DAM */}
       <ComunicadoDamDialog

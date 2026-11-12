@@ -85,6 +85,11 @@ interface ServiceDetailViewProps {
     completed_at?: string | null;
     started_at?: string | null;
     cancellation_reason?: string | null;
+    restituicao_status?: string | null;
+    restituicao_valor?: number | null;
+    restituicao_oficio?: string | null;
+    restituicao_solicitada_em?: string | null;
+    restituicao_confirmada_em?: string | null;
     notes?: string | null;
     purpose?: string | null;
     completion_notes?: string | null;
@@ -126,7 +131,18 @@ interface ServiceDetailViewProps {
   onFinalize?: () => void;
   onCancel?: () => void;
   onComunicado?: () => void;
+  /** Gerar o ofício de restituição da DAM (atendimento cancelado). */
+  onOficioRestituicao?: () => void;
+  onConfirmarRestituicao?: () => void;
+  onDesfazerRestituicao?: () => void;
 }
+
+const fmtValor = (v: number | string | null | undefined) =>
+  (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const fmtData = (d: string) => {
+  const dt = new Date(d.replace(' ', 'T'));
+  return isNaN(dt.getTime()) ? '' : format(dt, 'dd/MM/yyyy', { locale: ptBR });
+};
 
 export function ServiceDetailView({
   service,
@@ -140,6 +156,9 @@ export function ServiceDetailView({
   onFinalize,
   onCancel,
   onComunicado,
+  onOficioRestituicao,
+  onConfirmarRestituicao,
+  onDesfazerRestituicao,
 }: ServiceDetailViewProps) {
   const { photos, isLoading: photosLoading } = useCombinedServicePhotos(service.id);
   const { isCoordenador, isFullAdmin, role } = useAuth();
@@ -227,6 +246,50 @@ export function ServiceDetailView({
             </p>
           ) : (
             <p className="text-sm text-muted-foreground mt-1">Sem motivo informado.</p>
+          )}
+
+          {/* Restituição da DAM (ofício à Sec. de Finanças) */}
+          {canSeeDam && service.restituicao_status === 'pendente' && (
+            <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-2.5 space-y-2">
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Restituição da DAM pendente</p>
+              <p className="text-xs text-muted-foreground">
+                {fmtValor(service.restituicao_valor)}
+                {service.restituicao_oficio ? ` · Ofício Nº ${service.restituicao_oficio}` : ''}
+                {service.restituicao_solicitada_em ? ` · solicitada em ${fmtData(service.restituicao_solicitada_em)}` : ''}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {onConfirmarRestituicao && (
+                  <Button size="sm" onClick={onConfirmarRestituicao} className="bg-success hover:bg-success/90">
+                    <CheckCircle className="h-4 w-4 mr-1.5" /> Confirmar restituição
+                  </Button>
+                )}
+                {onOficioRestituicao && (
+                  <Button size="sm" variant="outline" onClick={onOficioRestituicao}>
+                    <FileText className="h-4 w-4 mr-1.5" /> Gerar ofício novamente
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+          {canSeeDam && service.restituicao_status === 'confirmada' && (
+            <div className="mt-3 rounded-md border border-success/30 bg-success/10 p-2.5">
+              <p className="text-sm font-semibold text-success">DAM restituída</p>
+              <p className="text-xs text-muted-foreground">
+                {fmtValor(service.restituicao_valor)} devolvido(s)
+                {service.restituicao_confirmada_em ? ` · confirmada em ${fmtData(service.restituicao_confirmada_em)}` : ''}
+                {' '}— descontado do total de DAMs do produtor.
+              </p>
+              {onDesfazerRestituicao && (
+                <button type="button" onClick={onDesfazerRestituicao} className="text-xs underline text-muted-foreground mt-1">
+                  Desfazer confirmação
+                </button>
+              )}
+            </div>
+          )}
+          {canSeeDam && !service.restituicao_status && onOficioRestituicao && (
+            <Button size="sm" variant="outline" onClick={onOficioRestituicao} className="mt-3 w-full">
+              <FileText className="h-4 w-4 mr-1.5" /> Gerar ofício de restituição da DAM
+            </Button>
           )}
         </div>
       )}

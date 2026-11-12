@@ -12,6 +12,7 @@
  * topo, zebra clara).
  */
 import jsPDF from 'jspdf';
+import { valorRestituido } from '@/lib/damUtils';
 import autoTable from 'jspdf-autotable';
 import { format, subMonths, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -476,7 +477,8 @@ export function generateExecutiveReport(opts: ExecutiveReportOptions) {
   const horasTrabalhadas = compServices.reduce((s, x) => s + (Number(x.worked_hours) || 0), 0);
   const combustivelConsumido = compServices.reduce((s, x) => s + (Number(x.fuel_liters) || 0), 0);
   const arrecadadoDam = compServices.reduce(
-    (s, x) => s + (x.dam_paid ? (Number(x.dam_value) || 0) : 0),
+    // DAMs pagas, descontadas as restituições confirmadas.
+    (s, x) => s + (x.dam_paid ? Math.max(0, (Number(x.dam_value) || 0) - valorRestituido(x)) : 0),
     0,
   );
 

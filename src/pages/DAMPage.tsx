@@ -34,7 +34,7 @@ import {
   Paperclip,
 } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
-import { isDamOverdue } from '@/lib/damUtils';
+import { isDamOverdue, valorDamArrecadado, valorRestituido } from '@/lib/damUtils';
 import { supabase } from '@/integrations/supabase/client';
 import { otimizarComprovanteDam } from '@/lib/jpegSemMetadados';
 import { ptBR } from 'date-fns/locale';
@@ -117,11 +117,17 @@ export default function DAMPage() {
     const pending = damServices.filter(s => getDamStatus(s) === 'pending').length;
     const comunicado = damServices.filter(s => getDamStatus(s) === 'comunicado').length;
     const paidList = damServices.filter(s => getDamStatus(s) === 'paid');
-    // Arrecadado = soma do valor apenas das DAMs pagas
-    const arrecadado = paidList.reduce((sum, s) => sum + (Number(s.dam_value) || 0), 0);
+    // Arrecadado = soma das DAMs pagas, descontadas as restituições confirmadas.
+    // Cancelado com restituição PENDENTE ainda conta (o valor não foi devolvido).
+    const todos = services as any[];
+    const arrecadado = todos.reduce((sum, s) => sum + valorDamArrecadado(s), 0);
+    const aguardandoRestituicao = todos
+      .filter(s => s.status === 'cancelled' && s.restituicao_status === 'pendente')
+      .reduce((sum, s) => sum + valorDamArrecadado(s), 0);
+    const restituido = todos.reduce((sum, s) => sum + (s.dam_paid ? valorRestituido(s) : 0), 0);
     const paidComValor = paidList.filter(s => Number(s.dam_value) > 0).length;
-    return { total: damServices.length, overdue, pending, comunicado, paid: paidList.length, arrecadado, paidComValor };
-  }, [damServices]);
+    return { total: damServices.length, overdue, pending, comunicado, paid: paidList.length, arrecadado, paidComValor, aguardandoRestituicao, restituido };
+  }, [damServices, services]);
 
   const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -274,6 +280,16 @@ export default function DAMPage() {
             <p className="text-xs text-muted-foreground mt-0.5">
               {stats.paidComValor} de {stats.paid} DAM(s) paga(s) com valor registrado
             </p>
+            {stats.aguardandoRestituicao > 0 && (
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                Inclui {fmtBRL(stats.aguardandoRestituicao)} de atendimento(s) cancelado(s) aguardando restituição
+              </p>
+            )}
+            {stats.restituido > 0 && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {fmtBRL(stats.restituido)} já restituído(s) e descontado(s)
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>

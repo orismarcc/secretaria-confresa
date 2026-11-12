@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
+import { valorDamArrecadado } from '@/lib/damUtils';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
@@ -195,7 +196,8 @@ export default function AnalyticsPage() {
   // ── Arrecadação de DAMs (soma apenas das pagas com valor) ────────────────────
   const damArrecadado = useMemo(() => {
     const paid = scopedServices.filter((s) => s.dam_paid && s.status !== 'cancelled');
-    const total = paid.reduce((sum, s) => sum + (Number(s.dam_value) || 0), 0);
+    // Descontadas as restituições confirmadas; cancelado com restituição pendente ainda conta.
+    const total = scopedServices.reduce((sum, s) => sum + valorDamArrecadado(s), 0);
     const comValor = paid.filter((s) => Number(s.dam_value) > 0).length;
     return { total, count: paid.length, comValor };
   }, [scopedServices]);
