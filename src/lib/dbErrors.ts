@@ -18,6 +18,14 @@ export function friendlyDbError(error: unknown): string {
     return 'Falha de conexão. Verifique sua internet e tente novamente.';
   }
 
+  // Ofícios: número repetido no ano / ano diferente da data
+  if (/oficios_ano_numero_key/i.test(msg)) {
+    return 'Já existe um ofício com este número neste ano. Use o próximo número livre.';
+  }
+  if (/oficio_arquivos_versao_key/i.test(msg)) {
+    return 'O arquivo foi atualizado por outra pessoa ao mesmo tempo. Recarregue e tente de novo.';
+  }
+
   // CPF/CNPJ duplicado
   if (code === '23505' || /duplicate key|producers_cpf_key/i.test(msg)) {
     return 'Já existe um cadastro com este CPF/CNPJ. Use a busca para localizá-lo.';

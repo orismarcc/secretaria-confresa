@@ -23,6 +23,9 @@ const TABLE_LABEL: Record<string, string> = {
   deliveries: 'Entrega',
   patrimony: 'Patrimônio',
   producers: 'Produtor',
+  oficios: 'Ofício',
+  oficio_arquivos: 'Arquivo de ofício',
+  oficio_modelos: 'Modelo de ofício',
   'auth.users': 'Usuário',
 };
 
@@ -41,6 +44,9 @@ const FIELD_LABEL: Record<string, string> = {
   machinery_id: 'Maquinário', demand_type_id: 'Tipo de demanda', settlement_id: 'Assentamento',
   dam_issued: 'DAM emitida', dam_paid: 'DAM paga', dam_issued_at: 'DAM emitida em', dam_paid_at: 'DAM paga em',
   limestone_quantity: 'Qtd. calcário', input_quantity: 'Qtd. insumo', quantity: 'Quantidade',
+  numero: 'Número', data_oficio: 'Data do ofício', destinatario: 'Destinatário', assunto: 'Assunto',
+  categoria: 'Categoria', situacao: 'Situação', arquivo_versao: 'Versão do arquivo', arquivo_nome: 'Arquivo',
+  restituicao_status: 'Restituição', restituicao_valor: 'Valor da restituição',
   name: 'Nome', phone: 'Telefone', value: 'Valor', condition: 'Estado de conservação',
   written_off: 'Baixa', location: 'Localização', responsible_name: 'Responsável',
   patrimony_number: 'Nº patrimônio', category: 'Categoria', caf: 'CAF', location_name: 'Localidade',

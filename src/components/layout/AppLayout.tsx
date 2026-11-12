@@ -23,6 +23,7 @@ import {
   Hammer,
   Car,
   Sprout,
+  FileStack,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -39,6 +40,7 @@ const adminNavItems = [
   { path: '/services', label: 'Atendimentos', icon: ClipboardList },
   { path: '/producers', label: 'Produtores', icon: Users },
   { path: '/dam', label: 'DAMs', icon: Receipt },
+  { path: '/oficios', label: 'Ofícios', icon: FileStack },
   { path: '/operators', label: 'Colaboradores', icon: UserCog },
   { path: '/demand-types', label: 'Serviços', icon: FileText },
   { path: '/settlements', label: 'Assentamentos', icon: Landmark },
