@@ -2,7 +2,12 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import PizZip from 'pizzip';
+import { PDFDocument } from 'pdf-lib';
 import {
+  buildOficioRestituicaoPdf,
+  tipoDoArquivo,
+  dimensoesImagem,
+  comprovanteEhPdf,
   buildOficioRestituicaoDocx,
   descricaoServicoOficio,
   justificativaRestituicao,
@@ -28,6 +33,16 @@ const base: OficioRestituicaoData = {
   pix: '',
   valor: 1211.15,
 };
+
+const lerBlob = (blob: Blob) => new Promise<ArrayBuffer>((ok, erro) => {
+  const r = new FileReader();
+  r.onload = () => ok(r.result as ArrayBuffer);
+  r.onerror = () => erro(r.error);
+  r.readAsArrayBuffer(blob);
+});
+const modeloZip = new PizZip(modelo);
+const png = new Uint8Array(modeloZip.file('word/media/image4.png')!.asUint8Array()); // 342×82
+const jpg = new Uint8Array(modeloZip.file('word/media/image1.jpg')!.asUint8Array()); // 769×142
 
 async function textoDoDocx(d: OficioRestituicaoData): Promise<string> {
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, arrayBuffer: async () => modelo.buffer.slice(modelo.byteOffset, modelo.byteOffset + modelo.byteLength) })));
@@ -84,4 +99,46 @@ describe('ofício de restituição da DAM', () => {
     expect(t).toContain('não apresenta condições adequadas');
     expect(t).not.toContain('condições climáticas atuais');
   });
+
+  it('identifica o comprovante pelos bytes e lê o tamanho da imagem', () => {
+    expect(tipoDoArquivo(png)).toBe('png');
+    expect(tipoDoArquivo(jpg)).toBe('jpeg');
+    expect(tipoDoArquivo(new TextEncoder().encode('%PDF-1.4 xxxxxxxx'))).toBe('pdf');
+    expect(tipoDoArquivo(new TextEncoder().encode('qualquer coisa'))).toBeNull();
+    expect(dimensoesImagem(png, 'png')).toEqual({ w: 342, h: 82 });
+    expect(dimensoesImagem(jpg, 'jpeg')).toEqual({ w: 769, h: 142 });
+    expect(comprovanteEhPdf('https://x.supabase.co/a/b/123.pdf?token=1')).toBe(true);
+    expect(comprovanteEhPdf('https://x.supabase.co/a/b/123.jpg?token=1')).toBe(false);
+  });
+
+  it('DOC: comprovante em imagem entra numa página logo após o ofício', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, arrayBuffer: async () => modelo.buffer.slice(modelo.byteOffset, modelo.byteOffset + modelo.byteLength) })));
+    const r = await buildOficioRestituicaoDocx(base, { bytes: jpg, tipo: 'jpeg' });
+    expect(r.comprovanteIncluido).toBe(true);
+    const zip = new PizZip(await lerBlob(r.blob));
+    expect(zip.file('word/media/comprovante-dam.jpg')).toBeTruthy();
+    expect(zip.file('word/_rels/document.xml.rels')!.asText()).toContain('media/comprovante-dam.jpg');
+    const xml = zip.file('word/document.xml')!.asText();
+    const ofim = xml.indexOf('CASSIO RODRIGUES DA COSTA');
+    const comp = xml.indexOf('COMPROVANTE DE PAGAMENTO DA DAM');
+    expect(comp).toBeGreaterThan(ofim);           // depois da assinatura
+    expect(comp).toBeLessThan(xml.lastIndexOf('<w:sectPr'));
+    // comprovante PDF não entra no DOC
+    const r2 = await buildOficioRestituicaoDocx(base, { bytes: new TextEncoder().encode('%PDF-1.4 x'), tipo: 'pdf' });
+    expect(r2.comprovanteIncluido).toBe(false);
+  });
+
+  it('PDF: comprovante em PDF tem as páginas juntadas após o ofício', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, arrayBuffer: async () => modelo.buffer.slice(modelo.byteOffset, modelo.byteOffset + modelo.byteLength) })));
+    const anexo = await PDFDocument.create();
+    anexo.addPage(); anexo.addPage();
+    const so = await buildOficioRestituicaoPdf(base);
+    const nOficio = (await PDFDocument.load(await lerBlob(so.blob))).getPageCount();
+    const r = await buildOficioRestituicaoPdf(base, { bytes: await anexo.save(), tipo: 'pdf' });
+    expect(r.comprovanteIncluido).toBe(true);
+    expect((await PDFDocument.load(await lerBlob(r.blob))).getPageCount()).toBe(nOficio + 2);
+    const ri = await buildOficioRestituicaoPdf(base, { bytes: png, tipo: 'png' });
+    expect(ri.comprovanteIncluido).toBe(true);
+    expect((await PDFDocument.load(await lerBlob(ri.blob))).getPageCount()).toBe(nOficio + 1);
+  }, 20000);
 });

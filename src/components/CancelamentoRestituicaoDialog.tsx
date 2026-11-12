@@ -24,6 +24,9 @@ import {
   descricaoServicoOficio,
   justificativaRestituicao,
   numeroOficioCompleto,
+  baixarComprovante,
+  comprovanteEhPdf,
+  type Comprovante,
   type MotivoRestituicao,
 } from '@/lib/oficioRestituicao';
 
@@ -35,6 +38,8 @@ export interface CancelamentoAlvo {
   produtor: { nome: string; cpf: string; telefone: string };
   tipo: { nome: string; categoria?: string | null };
   comunidade: string;
+  /** Comprovante de pagamento da DAM anexado (vai logo após o ofício). */
+  comprovanteUrl?: string | null;
 }
 
 interface Props {
@@ -150,10 +155,16 @@ export function CancelamentoRestituicaoDialog({ alvo, modo, podeGerarOficio, onC
         valor: valorNum,
         assinante: ASSINANTES_COMUNICADO.find((a) => a.id === assinanteId) ?? ASSINANTES_COMUNICADO[0],
       };
+      // Comprovante anexado à DAM: vai logo após o ofício. Se não der para
+      // baixar/ler, o ofício sai assim mesmo e avisamos.
+      let comprovante: Comprovante | null = null;
+      if (alvo.comprovanteUrl) {
+        try { comprovante = await baixarComprovante(alvo.comprovanteUrl); } catch { comprovante = null; }
+      }
       // 1) Monta o arquivo (se falhar, nada é alterado no banco).
-      const { blob, filename } = formato === 'pdf'
-        ? await buildOficioRestituicaoPdf(dados)
-        : await buildOficioRestituicaoDocx(dados);
+      const { blob, filename, comprovanteIncluido } = formato === 'pdf'
+        ? await buildOficioRestituicaoPdf(dados, comprovante)
+        : await buildOficioRestituicaoDocx(dados, comprovante);
 
       // 2) Grava ANTES do download (no iOS o download suspende a página).
       etapa = 'banco';
@@ -171,8 +182,18 @@ export function CancelamentoRestituicaoDialog({ alvo, modo, podeGerarOficio, onC
       triggerDownload(blob, filename);
       toast({
         title: `Ofício Nº ${numeroCompleto} gerado`,
-        description: `Restituição de ${fmtBRL(valorNum)} pendente — confirme nos detalhes do atendimento quando o valor for devolvido.`,
+        description: `Restituição de ${fmtBRL(valorNum)} pendente — confirme nos detalhes do atendimento quando o valor for devolvido.`
+          + (comprovanteIncluido ? ' Comprovante de pagamento incluído após o ofício.' : ''),
       });
+      if (alvo.comprovanteUrl && !comprovanteIncluido) {
+        toast({
+          title: 'Comprovante não foi incluído',
+          description: comprovante?.tipo === 'pdf' && formato === 'docx'
+            ? 'O comprovante é PDF e só pode ser juntado ao ofício em PDF. Gere em PDF para sair junto.'
+            : 'Não foi possível ler o comprovante anexado. Junte-o manualmente ao ofício.',
+          variant: 'destructive',
+        });
+      }
       onClose();
     } catch (e: any) {
       // Erro ao gravar já é avisado pelo useUpdateService; aqui cobre o documento.
@@ -321,6 +342,15 @@ export function CancelamentoRestituicaoDialog({ alvo, modo, podeGerarOficio, onC
                   ))}
                 </select>
               </div>
+
+              {alvo.comprovanteUrl ? (
+                <p className="text-xs rounded-md bg-success/10 text-success px-3 py-2">
+                  O comprovante de pagamento anexado à DAM será incluído logo após o ofício.
+                  {comprovanteEhPdf(alvo.comprovanteUrl) && <span className="block text-muted-foreground">Como o comprovante é PDF, ele só sai junto no <strong>PDF</strong>.</span>}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Sem comprovante de pagamento anexado à DAM.</p>
+              )}
 
               <div className="flex items-center justify-between rounded-lg bg-primary/5 border border-primary/20 px-3 py-2">
                 <span className="text-sm font-medium">Restituição</span>

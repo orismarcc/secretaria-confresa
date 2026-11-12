@@ -19,6 +19,109 @@ export const MOTIVOS_RESTITUICAO: { id: MotivoRestituicao; rotulo: string; detal
 
 const MODELO = '/templates/oficio-restituicao.docx';
 
+// ─── Comprovante de pagamento da DAM (anexado logo após o ofício) ─────────────
+
+export type TipoComprovante = 'pdf' | 'jpeg' | 'png';
+export interface Comprovante { bytes: Uint8Array; tipo: TipoComprovante }
+
+/** Identifica o arquivo pelos primeiros bytes (não confia na extensão). */
+export function tipoDoArquivo(b: Uint8Array): TipoComprovante | 'webp' | null {
+  if (b.length < 12) return null;
+  if (b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46) return 'pdf'; // %PDF
+  if (b[0] === 0xff && b[1] === 0xd8) return 'jpeg';
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'png';
+  if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'webp';
+  return null;
+}
+
+/** Largura × altura (px) de um JPEG ou PNG, lidas do cabeçalho. */
+export function dimensoesImagem(b: Uint8Array, tipo: 'jpeg' | 'png'): { w: number; h: number } | null {
+  const u16 = (i: number) => (b[i] << 8) | b[i + 1];
+  if (tipo === 'png') {
+    const w = ((b[16] << 24) | (b[17] << 16) | (b[18] << 8) | b[19]) >>> 0;
+    const h = ((b[20] << 24) | (b[21] << 16) | (b[22] << 8) | b[23]) >>> 0;
+    return w && h ? { w, h } : null;
+  }
+  let i = 2;
+  while (i + 9 < b.length) {
+    if (b[i] !== 0xff) { i++; continue; }
+    const m = b[i + 1];
+    if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) {
+      const h = u16(i + 5), w = u16(i + 7);
+      return w && h ? { w, h } : null;
+    }
+    if (m === 0xd8 || m === 0x01 || (m >= 0xd0 && m <= 0xd7)) { i += 2; continue; }
+    i += 2 + u16(i + 2);
+  }
+  return null;
+}
+
+/** WebP → PNG pelo navegador (Word e jsPDF lidam melhor com PNG). */
+async function webpParaPng(bytes: Uint8Array): Promise<Uint8Array | null> {
+  try {
+    const bmp = await createImageBitmap(new Blob([bytes], { type: 'image/webp' }));
+    const canvas = document.createElement('canvas');
+    canvas.width = bmp.width; canvas.height = bmp.height;
+    canvas.getContext('2d')?.drawImage(bmp, 0, 0);
+    const blob: Blob | null = await new Promise((ok) => canvas.toBlob(ok, 'image/png'));
+    return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Baixa o comprovante anexado à DAM. Devolve null se não der para usar. */
+export async function baixarComprovante(url: string): Promise<Comprovante | null> {
+  const resp = await fetch(url);
+  if (!resp.ok) return null;
+  let bytes = new Uint8Array(await resp.arrayBuffer());
+  let tipo = tipoDoArquivo(bytes);
+  if (tipo === 'webp') {
+    const png = await webpParaPng(bytes);
+    if (!png) return null;
+    bytes = png; tipo = 'png';
+  }
+  return tipo ? { bytes, tipo } : null;
+}
+
+/** O comprovante (pela URL) parece PDF? — PDF só pode ser juntado ao ofício em PDF. */
+export function comprovanteEhPdf(url: string | null | undefined): boolean {
+  return /\.pdf(\?|#|$)/i.test(url || '');
+}
+
+/** Acrescenta a imagem do comprovante numa página nova, ao fim do .docx. */
+function anexarImagemNoDocx(zip: PizZip, comp: Comprovante): boolean {
+  if (comp.tipo === 'pdf') return false;
+  const dim = dimensoesImagem(comp.bytes, comp.tipo);
+  const xml = zip.file('word/document.xml')?.asText();
+  const rels = zip.file('word/_rels/document.xml.rels')?.asText();
+  if (!dim || !xml || !rels) return false;
+  const fim = xml.lastIndexOf('<w:sectPr');
+  if (fim < 0) return false;
+  const ext = comp.tipo === 'png' ? 'png' : 'jpg';
+  const alvo = `media/comprovante-dam.${ext}`;
+  zip.file(`word/${alvo}`, comp.bytes);
+  const rid = 'rIdComprovanteDam';
+  zip.file('word/_rels/document.xml.rels', rels.replace('</Relationships>',
+    `<Relationship Id="${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="${alvo}"/></Relationships>`));
+  // Área útil da página do modelo (EMU), com folga para o cabeçalho.
+  const maxW = 6400000, maxH = 7600000;
+  const esc = Math.min(maxW / dim.w, maxH / dim.h);
+  const cx = Math.round(dim.w * esc), cy = Math.round(dim.h * esc);
+  const pagina =
+    '<w:p><w:r><w:br w:type="page"/></w:r></w:p>' +
+    '<w:p><w:pPr><w:spacing w:after="120"/><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Tahoma" w:hAnsi="Tahoma" w:cs="Tahoma"/><w:b/></w:rPr><w:t>COMPROVANTE DE PAGAMENTO DA DAM</w:t></w:r></w:p>' +
+    '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:drawing>' +
+    `<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="9001" name="Comprovante da DAM"/>` +
+    '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>' +
+    '<pic:nvPicPr><pic:cNvPr id="9001" name="comprovante-dam"/><pic:cNvPicPr/></pic:nvPicPr>' +
+    `<pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+    `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>` +
+    '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
+  zip.file('word/document.xml', xml.slice(0, fim) + pagina + xml.slice(fim));
+  return true;
+}
+
 /** Texto do serviço no ofício (minúsculas, como no corpo). O usuário pode ajustar. */
 export function descricaoServicoOficio(nomeTipo: string | null | undefined, categoria?: string | null): string {
   const nome = (nomeTipo || '').trim();
@@ -110,7 +213,7 @@ function campos(d: OficioRestituicaoData) {
 }
 
 /** Monta o ofício .docx em memória (não baixa). */
-export async function buildOficioRestituicaoDocx(d: OficioRestituicaoData): Promise<{ blob: Blob; filename: string }> {
+export async function buildOficioRestituicaoDocx(d: OficioRestituicaoData, comprovante?: Comprovante | null): Promise<{ blob: Blob; filename: string; comprovanteIncluido: boolean }> {
   const resp = await fetch(MODELO);
   if (!resp.ok) throw new Error('Modelo do ofício não encontrado.');
   const zip = new PizZip(await resp.arrayBuffer());
@@ -122,12 +225,15 @@ export async function buildOficioRestituicaoDocx(d: OficioRestituicaoData): Prom
   }
   const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
   doc.render(c);
+  // Comprovante (imagem) logo após o ofício — depois do preenchimento, para
+  // não passar pelo motor de campos.
+  const comprovanteIncluido = comprovante ? anexarImagemNoDocx(doc.getZip(), comprovante) : false;
   const blob = doc.getZip().generate({
     type: 'blob',
     mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     compression: 'DEFLATE',
   });
-  return { blob, filename: `Oficio-Restituicao-DAM-${nomeArquivo(d.nome)}.docx` };
+  return { blob, filename: `Oficio-Restituicao-DAM-${nomeArquivo(d.nome)}.docx`, comprovanteIncluido };
 }
 
 function u8ToBase64(u8: Uint8Array): string {
@@ -139,7 +245,7 @@ function u8ToBase64(u8: Uint8Array): string {
 }
 
 /** Monta o ofício em PDF (mesmo texto e timbrado do modelo). */
-export async function buildOficioRestituicaoPdf(d: OficioRestituicaoData): Promise<{ blob: Blob; filename: string }> {
+export async function buildOficioRestituicaoPdf(d: OficioRestituicaoData, comprovante?: Comprovante | null): Promise<{ blob: Blob; filename: string; comprovanteIncluido: boolean }> {
   const c = campos(d);
   const resp = await fetch(MODELO);
   if (!resp.ok) throw new Error('Modelo do ofício não encontrado.');
@@ -291,5 +397,36 @@ export async function buildOficioRestituicaoPdf(d: OficioRestituicaoData): Promi
   para(c.assinante_nome, { bold: true, center: true, gap: 0 });
   para(c.assinante_cargo, { bold: true, center: true, gap: 0 });
 
-  return { blob: doc.output('blob'), filename: `Oficio-Restituicao-DAM-${nomeArquivo(d.nome)}.pdf` };
+  const filename = `Oficio-Restituicao-DAM-${nomeArquivo(d.nome)}.pdf`;
+
+  // Comprovante logo após o ofício.
+  if (comprovante && comprovante.tipo !== 'pdf') {
+    const dim = dimensoesImagem(comprovante.bytes, comprovante.tipo);
+    if (dim) {
+      doc.addPage();
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(25);
+      doc.text('COMPROVANTE DE PAGAMENTO DA DAM', W / 2, 40, { align: 'center' });
+      const maxW = W - 80, maxH = H - 100;
+      const esc = Math.min(maxW / dim.w, maxH / dim.h);
+      const w = dim.w * esc, h = dim.h * esc;
+      try {
+        doc.addImage(comprovante.bytes, comprovante.tipo === 'png' ? 'PNG' : 'JPEG', (W - w) / 2, 56, w, h, undefined, 'FAST');
+        return { blob: doc.output('blob'), filename, comprovanteIncluido: true };
+      } catch {
+        doc.deletePage(doc.getNumberOfPages());
+      }
+    }
+  }
+  if (comprovante?.tipo === 'pdf') {
+    try {
+      const { PDFDocument } = await import('pdf-lib');
+      const base = await PDFDocument.load(doc.output('arraybuffer'));
+      const anexo = await PDFDocument.load(comprovante.bytes, { ignoreEncryption: true });
+      const paginas = await base.copyPages(anexo, anexo.getPageIndices());
+      paginas.forEach((pg) => base.addPage(pg));
+      const bytes = await base.save();
+      return { blob: new Blob([bytes], { type: 'application/pdf' }), filename, comprovanteIncluido: true };
+    } catch { /* comprovante ilegível: sai só o ofício */ }
+  }
+  return { blob: doc.output('blob'), filename, comprovanteIncluido: false };
 }

@@ -693,6 +693,7 @@ export default function ServicesPage() {
       },
       tipo: { nome: dt?.name || service.demand_types?.name || '', categoria: dt?.category ?? null },
       comunidade: [settlement?.name || service.settlements?.name, gleba || location?.name].filter(Boolean).join(' - '),
+      comprovanteUrl: service.dam_receipt_url ?? null,
     };
   };
 
