@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
-const mutateAsync = vi.fn(async () => ({}));
+const mutateAsync = vi.fn(async (_p: Record<string, unknown>) => ({}));
 vi.mock('@/hooks/useSupabaseData', () => ({ useUpdateService: () => ({ mutateAsync, isPending: false }) }));
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
-const triggerDownload = vi.fn();
+const triggerDownload = vi.fn((..._a: unknown[]) => undefined);
 vi.mock('@/lib/comunicado', async (orig) => ({ ...(await orig<typeof import('@/lib/comunicado')>()), triggerDownload: (...a: unknown[]) => triggerDownload(...a) }));
-const buildDocx = vi.fn(async () => ({ blob: new Blob(['x']), filename: 'oficio.docx' }));
+const buildDocx = vi.fn(async (_d: Record<string, unknown>) => ({ blob: new Blob(['x']), filename: 'oficio.docx' }));
 vi.mock('@/lib/oficioRestituicao', async (orig) => ({
   ...(await orig<typeof import('@/lib/oficioRestituicao')>()),
-  buildOficioRestituicaoDocx: (...a: unknown[]) => buildDocx(...a),
+  buildOficioRestituicaoDocx: (d: Record<string, unknown>) => buildDocx(d),
 }));
 
 import { CancelamentoRestituicaoDialog, type CancelamentoAlvo } from './CancelamentoRestituicaoDialog';
