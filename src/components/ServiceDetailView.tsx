@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import { Link } from 'react-router-dom';
 import { ptBR } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -88,6 +89,7 @@ interface ServiceDetailViewProps {
     restituicao_status?: string | null;
     restituicao_valor?: number | null;
     restituicao_oficio?: string | null;
+    restituicao_oficio_id?: string | null;
     restituicao_solicitada_em?: string | null;
     restituicao_confirmada_em?: string | null;
     notes?: string | null;
@@ -254,9 +256,14 @@ export function ServiceDetailView({
               <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Restituição da DAM pendente</p>
               <p className="text-xs text-muted-foreground">
                 {fmtValor(service.restituicao_valor)}
-                {service.restituicao_oficio ? ` · Ofício Nº ${service.restituicao_oficio}` : ''}
+                {service.restituicao_oficio && !service.restituicao_oficio_id ? ` · Ofício Nº ${service.restituicao_oficio}` : ''}
                 {service.restituicao_solicitada_em ? ` · solicitada em ${fmtData(service.restituicao_solicitada_em)}` : ''}
               </p>
+              {service.restituicao_oficio_id && (
+                <Link to={`/oficios?aba=oficios&oficio=${service.restituicao_oficio_id}`} className="inline-flex items-center gap-1 text-xs font-medium text-primary underline">
+                  <ExternalLink className="h-3.5 w-3.5" /> Ofício Nº {service.restituicao_oficio} em Ofícios (anexar o PDF assinado)
+                </Link>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {onConfirmarRestituicao && (
                   <Button size="sm" onClick={onConfirmarRestituicao} className="bg-success hover:bg-success/90">

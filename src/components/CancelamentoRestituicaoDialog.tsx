@@ -5,6 +5,7 @@
 // feita depois, nos detalhes do atendimento. Os dados bancários entram só no
 // documento (não são gravados).
 import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -16,6 +17,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { FileDown, FileText, Loader2, XCircle, CloudRain, Ban } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useUpdateService } from '@/hooks/useSupabaseData';
+import { useOficios, salvarOficioRestituicao, desfazerOficioCriado } from '@/hooks/useOficios';
+import { friendlyDbError } from '@/lib/dbErrors';
+import { proximoNumeroLocal } from '@/lib/oficios';
 import { triggerDownload, ASSINANTES_COMUNICADO } from '@/lib/comunicado';
 import {
   MOTIVOS_RESTITUICAO,
@@ -23,7 +27,6 @@ import {
   buildOficioRestituicaoPdf,
   descricaoServicoOficio,
   justificativaRestituicao,
-  numeroOficioCompleto,
   baixarComprovante,
   comprovanteEhPdf,
   type Comprovante,
@@ -40,6 +43,8 @@ export interface CancelamentoAlvo {
   comunidade: string;
   /** Comprovante de pagamento da DAM anexado (vai logo após o ofício). */
   comprovanteUrl?: string | null;
+  /** Ofício de restituição já cadastrado (ao gerar de novo, reaproveita o número). */
+  restituicaoOficioId?: string | null;
 }
 
 interface Props {
@@ -65,6 +70,10 @@ const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', cur
 export function CancelamentoRestituicaoDialog({ alvo, modo, podeGerarOficio, onClose }: Props) {
   const { toast } = useToast();
   const updateService = useUpdateService();
+  const queryClient = useQueryClient();
+  // Numeração da página Ofícios (só carrega quando pode gerar o ofício).
+  const { data: oficios = [] } = useOficios({ enabled: podeGerarOficio && !!alvo });
+  const [numeroEditado, setNumeroEditado] = useState(false);
   const [motivoCancel, setMotivoCancel] = useState('');
   const [gerarOficio, setGerarOficio] = useState(false);
   const [motivo, setMotivo] = useState<MotivoRestituicao>('climatica');
@@ -87,6 +96,7 @@ export function CancelamentoRestituicaoDialog({ alvo, modo, podeGerarOficio, onC
     setGerarOficio(modo === 'oficio' || (podeGerarOficio && !!alvo.dam_paid));
     setMotivo('climatica');
     setNumero('');
+    setNumeroEditado(false);
     setServico(descricaoServicoOficio(alvo.tipo.nome, alvo.tipo.categoria));
     setComunidade(alvo.comunidade || '');
     setTelefone(alvo.produtor.telefone || '');
@@ -97,12 +107,28 @@ export function CancelamentoRestituicaoDialog({ alvo, modo, podeGerarOficio, onC
   }, [alvo?.id, modo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const comOficio = podeGerarOficio && (modo === 'oficio' || gerarOficio);
+
+  // Número do ofício: automático (próximo livre do ano, na página Ofícios),
+  // mas pode ser alterado. Ao gerar de novo, reaproveita o número já usado.
+  const oficioExistente = useMemo(
+    () => (alvo?.restituicaoOficioId ? oficios.find((o) => o.id === alvo.restituicaoOficioId) ?? null : null),
+    [oficios, alvo?.restituicaoOficioId],
+  );
+  const anoOficio = oficioExistente?.ano ?? new Date().getFullYear();
+  const sugerido = oficioExistente?.numero ?? proximoNumeroLocal(oficios, anoOficio);
+  useEffect(() => {
+    if (!numeroEditado) setNumero(String(sugerido));
+  }, [sugerido, numeroEditado, alvo?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const numeroNum = Number(numero) || 0;
+  const numeroEmUso = numeroNum > 0 && oficios.some(
+    (o) => o.ano === anoOficio && o.numero === numeroNum && o.id !== oficioExistente?.id,
+  );
   const valorNum = parseNum(valor);
   const faltando = useMemo(() => {
     const f: string[] = [];
     if (modo === 'cancelar' && !motivoCancel.trim()) f.push('motivo do cancelamento');
     if (comOficio) {
-      if (!numero.trim()) f.push('nº do ofício');
+      if (!(numeroNum > 0)) f.push('nº do ofício');
       if (!servico.trim()) f.push('serviço');
       if (!banco.trim()) f.push('banco');
       if (!agencia.trim()) f.push('agência');
@@ -110,7 +136,8 @@ export function CancelamentoRestituicaoDialog({ alvo, modo, podeGerarOficio, onC
       if (!(valorNum > 0)) f.push('valor');
     }
     return f;
-  }, [modo, motivoCancel, comOficio, numero, servico, banco, agencia, conta, valorNum]);
+  }, [modo, motivoCancel, comOficio, numeroNum, servico, banco, agencia, conta, valorNum]);
+  const bloqueado = faltando.length > 0 || (comOficio && numeroEmUso);
 
   if (!alvo) return null;
 
@@ -133,12 +160,13 @@ export function CancelamentoRestituicaoDialog({ alvo, modo, podeGerarOficio, onC
   };
 
   const gerar = async (formato: 'docx' | 'pdf') => {
-    if (faltando.length) return;
+    if (bloqueado) return;
     setGerando(true);
-    let etapa: 'documento' | 'banco' = 'documento';
+    let etapa: 'documento' | 'oficio' | 'banco' = 'documento';
+    let oficioCriado: string | null = null;
     try {
       const agora = new Date();
-      const numeroCompleto = numeroOficioCompleto(numero, agora);
+      const numeroCompleto = `${numeroNum}/${anoOficio}`;
       const dados = {
         numero: numeroCompleto,
         data: agora,
@@ -166,7 +194,19 @@ export function CancelamentoRestituicaoDialog({ alvo, modo, podeGerarOficio, onC
         ? await buildOficioRestituicaoPdf(dados, comprovante)
         : await buildOficioRestituicaoDocx(dados, comprovante);
 
-      // 2) Grava ANTES do download (no iOS o download suspende a página).
+      // 2) Cadastra o ofício na página Ofícios (numeração única do ano).
+      etapa = 'oficio';
+      const motivoRotulo = MOTIVOS_RESTITUICAO.find((m) => m.id === motivo)?.rotulo ?? '';
+      const reg = await salvarOficioRestituicao({
+        existenteId: alvo.restituicaoOficioId ?? null,
+        numero: numeroNum,
+        data: `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`,
+        assunto: `Restituição de DAM – serviço de ${servico.trim()} – ${alvo.produtor.nome}`,
+        descricao: `Solicitação de restituição de ${fmtBRL(valorNum)} referente à DAM do atendimento cancelado (${motivoRotulo.toLowerCase()}).`,
+      });
+      if (reg.criado) oficioCriado = reg.id;
+
+      // 3) Grava o atendimento ANTES do download (no iOS o download suspende a página).
       etapa = 'banco';
       await updateService.mutateAsync({
         id: alvo.id,
@@ -175,14 +215,17 @@ export function CancelamentoRestituicaoDialog({ alvo, modo, podeGerarOficio, onC
         restituicao_valor: valorNum,
         restituicao_motivo: motivo,
         restituicao_oficio: numeroCompleto,
+        restituicao_oficio_id: reg.id,
         restituicao_solicitada_em: agora.toISOString(),
       });
+      oficioCriado = null;
+      queryClient.invalidateQueries({ queryKey: ['oficios'] });
 
       // 3) Download por último.
       triggerDownload(blob, filename);
       toast({
         title: `Ofício Nº ${numeroCompleto} gerado`,
-        description: `Restituição de ${fmtBRL(valorNum)} pendente — confirme nos detalhes do atendimento quando o valor for devolvido.`
+        description: `Cadastrado em Ofícios (anexe lá o PDF assinado). Restituição de ${fmtBRL(valorNum)} pendente — confirme nos detalhes do atendimento quando o valor for devolvido.`
           + (comprovanteIncluido ? ' Comprovante de pagamento incluído após o ofício.' : ''),
       });
       if (alvo.comprovanteUrl && !comprovanteIncluido) {
@@ -196,9 +239,16 @@ export function CancelamentoRestituicaoDialog({ alvo, modo, podeGerarOficio, onC
       }
       onClose();
     } catch (e: any) {
-      // Erro ao gravar já é avisado pelo useUpdateService; aqui cobre o documento.
+      // Atendimento não gravou: desfaz o ofício recém-cadastrado (o número volta a ficar livre).
+      if (oficioCriado) {
+        await desfazerOficioCriado(oficioCriado);
+        queryClient.invalidateQueries({ queryKey: ['oficios'] });
+      }
+      // Erro ao gravar o atendimento já é avisado pelo useUpdateService.
       if (etapa === 'documento') {
         toast({ title: 'Erro ao gerar o ofício', description: e?.message || String(e), variant: 'destructive' });
+      } else if (etapa === 'oficio') {
+        toast({ title: 'Não foi possível cadastrar o ofício', description: friendlyDbError(e), variant: 'destructive' });
       }
     } finally {
       setGerando(false);
@@ -289,7 +339,22 @@ export function CancelamentoRestituicaoDialog({ alvo, modo, podeGerarOficio, onC
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="of-numero">Nº do ofício *</Label>
-                  <Input id="of-numero" value={numero} onChange={(e) => setNumero(e.target.value)} placeholder={`Ex.: 473 (/${new Date().getFullYear()})`} inputMode="numeric" />
+                  <div className="flex items-center gap-2">
+                    <Input id="of-numero" value={numero} inputMode="numeric" aria-invalid={numeroEmUso}
+                      className={numeroEmUso ? 'border-destructive' : ''}
+                      onChange={(e) => { setNumeroEditado(true); setNumero(e.target.value.replace(/\D/g, '').slice(0, 6)); }} />
+                    <span className="text-sm text-muted-foreground shrink-0">/{anoOficio}</span>
+                  </div>
+                  {numeroEmUso ? (
+                    <p className="text-xs text-destructive">Nº {numeroNum}/{anoOficio} já está em uso em Ofícios. Próximo livre: {proximoNumeroLocal(oficios.filter((o) => o.id !== oficioExistente?.id), anoOficio)}.</p>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">
+                      {oficioExistente ? 'Mesmo número do ofício já gerado' : numeroEditado ? 'Número alterado' : 'Automático (próximo livre)'} — pode alterar.
+                      {numeroEditado && !oficioExistente && numeroNum !== sugerido && (
+                        <button type="button" className="ml-1 underline" onClick={() => setNumeroEditado(false)}>Voltar ao automático</button>
+                      )}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="of-valor">Valor a restituir (R$) *</Label>
@@ -368,11 +433,11 @@ export function CancelamentoRestituicaoDialog({ alvo, modo, podeGerarOficio, onC
           <Button variant="outline" onClick={fechar} disabled={gerando}>Voltar</Button>
           {comOficio ? (
             <div className="grid grid-cols-2 gap-2 sm:flex">
-              <Button variant="outline" onClick={() => gerar('docx')} disabled={gerando || faltando.length > 0}>
+              <Button variant="outline" onClick={() => gerar('docx')} disabled={gerando || bloqueado}>
                 {gerando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
                 {modo === 'cancelar' ? 'Cancelar + DOC' : 'Gerar DOC'}
               </Button>
-              <Button variant={modo === 'cancelar' ? 'destructive' : 'default'} onClick={() => gerar('pdf')} disabled={gerando || faltando.length > 0}>
+              <Button variant={modo === 'cancelar' ? 'destructive' : 'default'} onClick={() => gerar('pdf')} disabled={gerando || bloqueado}>
                 {gerando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileDown className="h-4 w-4 mr-2" />}
                 {modo === 'cancelar' ? 'Cancelar + PDF' : 'Gerar PDF'}
               </Button>

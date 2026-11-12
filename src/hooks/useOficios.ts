@@ -24,9 +24,10 @@ const QK = {
   modelos: ['oficio_modelos'] as const,
 };
 
-export function useOficios() {
+export function useOficios(opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: QK.oficios,
+    enabled: opts?.enabled ?? true,
     queryFn: async () => fetchAllRows<Oficio>(() => db.from('oficios').select('*')
       .order('ano', { ascending: false }).order('numero', { ascending: false }).order('id', { ascending: true })),
   });
@@ -263,4 +264,44 @@ export function useExcluirModelo() {
     },
     onError: (e: Error) => toast({ title: 'Erro ao excluir o modelo', description: friendlyDbError(e), variant: 'destructive' }),
   });
+}
+
+// ─── Ofício de restituição da DAM (gerado no cancelamento do atendimento) ────
+
+/**
+ * Cadastra (ou atualiza, ao gerar de novo) o ofício de restituição na página
+ * Ofícios, com o número escolhido. Sem arquivo: o PDF ASSINADO é anexado
+ * depois, na página Ofícios.
+ */
+export async function salvarOficioRestituicao(p: {
+  existenteId?: string | null;
+  numero: number;
+  data: string; // yyyy-MM-dd
+  assunto: string;
+  descricao: string;
+}): Promise<{ id: string; criado: boolean }> {
+  if (p.existenteId) {
+    const { data, error } = await db.from('oficios')
+      .update({ numero: p.numero, assunto: p.assunto, descricao: p.descricao })
+      .eq('id', p.existenteId).select('id').maybeSingle();
+    if (error) throw error;
+    if (data) return { id: data.id as string, criado: false };
+    // o ofício anterior foi excluído: cadastra um novo
+  }
+  const { data, error } = await db.from('oficios').insert({
+    numero: p.numero,
+    data_oficio: p.data,
+    destinatario: 'Secretaria Municipal de Finanças',
+    assunto: p.assunto,
+    categoria: 'Restituição de DAM',
+    situacao: 'emitido',
+    descricao: p.descricao,
+  }).select('id').single();
+  if (error) throw error;
+  return { id: data.id as string, criado: true };
+}
+
+/** Desfaz o cadastro de um ofício recém-criado (quando o passo seguinte falha). */
+export async function desfazerOficioCriado(id: string): Promise<void> {
+  try { await db.from('oficios').delete().eq('id', id); } catch { /* melhor esforço */ }
 }

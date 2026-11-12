@@ -187,6 +187,7 @@ interface DbService {
   restituicao_valor?: number | null;
   restituicao_motivo?: string | null;
   restituicao_oficio?: string | null;
+  restituicao_oficio_id?: string | null;
   restituicao_solicitada_em?: string | null;
   restituicao_confirmada_em?: string | null;
   purpose?: string | null;
@@ -694,6 +695,7 @@ export default function ServicesPage() {
       tipo: { nome: dt?.name || service.demand_types?.name || '', categoria: dt?.category ?? null },
       comunidade: [settlement?.name || service.settlements?.name, gleba || location?.name].filter(Boolean).join(' - '),
       comprovanteUrl: service.dam_receipt_url ?? null,
+      restituicaoOficioId: service.restituicao_oficio_id ?? null,
     };
   };
 
