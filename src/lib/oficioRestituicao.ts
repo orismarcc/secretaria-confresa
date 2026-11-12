@@ -9,6 +9,7 @@ import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import jsPDF from 'jspdf';
 import { valorPorExtenso, ASSINANTES_COMUNICADO, type AssinanteComunicado } from '@/lib/comunicado';
+import { criarTimbrado, linhaJustificada as justificar } from '@/lib/timbradoPdf';
 
 export type MotivoRestituicao = 'climatica' | 'area_inadequada';
 
@@ -236,55 +237,16 @@ export async function buildOficioRestituicaoDocx(d: OficioRestituicaoData, compr
   return { blob, filename: `Oficio-Restituicao-DAM-${nomeArquivo(d.nome)}.docx`, comprovanteIncluido };
 }
 
-function u8ToBase64(u8: Uint8Array): string {
-  let bin = '';
-  for (let i = 0; i < u8.length; i += 0x8000) {
-    bin += String.fromCharCode.apply(null, Array.from(u8.subarray(i, i + 0x8000)));
-  }
-  return btoa(bin);
-}
-
 /** Monta o ofício em PDF (mesmo texto e timbrado do modelo). */
 export async function buildOficioRestituicaoPdf(d: OficioRestituicaoData, comprovante?: Comprovante | null): Promise<{ blob: Blob; filename: string; comprovanteIncluido: boolean }> {
   const c = campos(d);
   const resp = await fetch(MODELO);
   if (!resp.ok) throw new Error('Modelo do ofício não encontrado.');
   const zip = new PizZip(await resp.arrayBuffer());
-  const png = (n: string) => { const f = zip.file(n); return f ? 'data:image/png;base64,' + u8ToBase64(f.asUint8Array()) : null; };
-  const logoB64 = png('word/media/image4.png');
-  const iconeB64 = png('word/media/image3.png');
-  const footerImg = zip.file('word/media/image1.jpg');
-  const footerB64 = footerImg ? 'data:image/jpeg;base64,' + u8ToBase64(footerImg.asUint8Array()) : null;
-
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
-
-  // Cabeçalho: redesenha o grupo de formas do modelo (faixa amarela, faixas
-  // cinza e verde à direita, brasão e ícone) nas posições e proporções reais —
-  // em vez de esticar a imagem do brasão na largura da página.
-  const EMU = 12700; // EMU por ponto
-  const hx0 = -38084 / EMU, hW = 7629525 / EMU, hH = 866770 / EMU;
-  const sx = hW / 7466965, sy = hH / 792475;
-  const gx = (v: number) => hx0 + v * sx;
-  const gy = (v: number) => v * sy;
-  const poligono = (cor: [number, number, number], ox: number, oy: number, pts: [number, number][]) => {
-    doc.setFillColor(...cor);
-    const abs = pts.map(([px, py]) => [gx(ox + px), gy(oy + py)] as [number, number]);
-    const deltas = abs.slice(1).map(([px, py], i) => [px - abs[i][0], py - abs[i][1]]);
-    doc.lines(deltas, abs[0][0], abs[0][1], [1, 1], 'F', true);
-  };
-  const headerH = hH;
-  // Rodapé: imagem do modelo na proporção original (sem achatar).
-  const footerH = W * (142 / 769);
-  const timbrado = () => {
-    poligono([0xD0, 0xD0, 0xD0], 4076063, 172719, [[3260597, 436878], [567053, 436878], [0, 0], [2693670, 0]]);
-    poligono([0xFF, 0xCC, 0x29], 0, 38, [[7466963, 287615], [0, 287615], [0, 0], [7466963, 0]]);
-    poligono([0x12, 0xAA, 0x04], 4646928, 0, [[2820035, 609853], [0, 609853], [395731, 0], [2820035, 0]]);
-    if (logoB64) { try { doc.addImage(logoB64, 'PNG', gx(1142782), gy(292099), 2097835 * sx, 499997 * sy, undefined, 'FAST'); } catch { /* ignora */ } }
-    if (iconeB64) { try { doc.addImage(iconeB64, 'PNG', gx(3355338), gy(284478), 534034 * sx, 505458 * sy, undefined, 'FAST'); } catch { /* ignora */ } }
-    if (footerB64) { try { doc.addImage(footerB64, 'JPEG', 0, H - footerH, W, footerH, undefined, 'FAST'); } catch { /* ignora */ } }
-  };
+  const { desenhar: timbrado, headerH, footerH } = criarTimbrado(doc, zip);
   timbrado();
 
   const mL = 56, mR = 42, cW = W - mL - mR;
@@ -294,15 +256,7 @@ export async function buildOficioRestituicaoPdf(d: OficioRestituicaoData, compro
   const setFont = (bold: boolean) => doc.setFont('helvetica', bold ? 'bold' : 'normal');
   const ensure = (h: number) => { if (y + h > bottomLimit) { doc.addPage(); timbrado(); y = topo; } };
 
-  // Justifica uma linha distribuindo o espaço que sobra entre as palavras.
-  const linhaJustificada = (ln: string, x: number, yy: number, largura: number) => {
-    const palavras = ln.trim().split(/\s+/);
-    if (palavras.length < 2) { doc.text(ln, x, yy); return; }
-    const total = palavras.reduce((t, w) => t + doc.getTextWidth(w), 0);
-    const espaco = (largura - total) / (palavras.length - 1);
-    let cx = x;
-    palavras.forEach((w) => { doc.text(w, cx, yy); cx += doc.getTextWidth(w) + espaco; });
-  };
+  const linhaJustificada = (ln: string, x: number, yy: number, largura: number) => justificar(doc, ln, x, yy, largura);
 
   const para = (text: string, o: { bold?: boolean; justify?: boolean; center?: boolean; gap?: number; lh?: number } = {}) => {
     const size = 10.5;
@@ -325,8 +279,9 @@ export async function buildOficioRestituicaoPdf(d: OficioRestituicaoData, compro
     ensure(lh);
     doc.setFontSize(10.5); doc.setTextColor(25);
     setFont(false);
-    doc.text(label + ' ', mL, y);
-    const lw = doc.getTextWidth(label + ' ');
+    doc.text(label, mL, y);
+    // Rótulo + espaço folgado (em rótulos longos um espaço simples some na tela).
+    const lw = doc.getTextWidth(label) + doc.getTextWidth(' ') * 2;
     setFont(true);
     const lines = doc.splitTextToSize(String(value), cW - lw) as string[];
     doc.text(lines[0] ?? '', mL + lw, y);

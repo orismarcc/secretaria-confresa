@@ -6,6 +6,7 @@
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import jsPDF from 'jspdf';
+import { criarTimbrado, linhaJustificada } from '@/lib/timbradoPdf';
 
 // ─── Valor por extenso (pt-BR, BRL) ───────────────────────────────────────────
 
@@ -210,15 +211,6 @@ export async function gerarComunicadoDam(dados: ComunicadoData): Promise<void> {
 
 // ─── Geração em PDF (mesmo conteúdo e timbrado do modelo) ────────────────────────
 
-function u8ToBase64(u8: Uint8Array): string {
-  let bin = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < u8.length; i += chunk) {
-    bin += String.fromCharCode.apply(null, Array.from(u8.subarray(i, i + chunk)));
-  }
-  return btoa(bin);
-}
-
 /**
  * Gera o comunicado em PDF (alternativa ao .docx). Reaproveita o timbrado do
  * modelo oficial (cabeçalho e rodapé) e replica o texto do documento.
@@ -230,27 +222,21 @@ export async function buildComunicadoDamPdf(dados: ComunicadoData): Promise<{ bl
   const resp = await fetch('/templates/comunicado-dam.docx');
   if (!resp.ok) throw new Error('Modelo do comunicado não encontrado.');
   const zip = new PizZip(await resp.arrayBuffer());
-  const headerImg = zip.file('word/media/image4.png');
-  const footerImg = zip.file('word/media/image1.jpg');
-  const headerB64 = headerImg ? 'data:image/png;base64,' + u8ToBase64(headerImg.asUint8Array()) : null;
-  const footerB64 = footerImg ? 'data:image/jpeg;base64,' + u8ToBase64(footerImg.asUint8Array()) : null;
-
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
 
-  // Timbrado (largura total, proporções do modelo)
-  const headerH = W * (866775 / 7629525); // ≈ 67.6 pt
-  const footerH = W * (893326 / 7556500); // ≈ 70.3 pt
-  if (headerB64) { try { doc.addImage(headerB64, 'PNG', 0, 14, W, headerH, undefined, 'FAST'); } catch { /* ignora */ } }
-  if (footerB64) { try { doc.addImage(footerB64, 'JPEG', 0, H - footerH - 6, W, footerH, undefined, 'FAST'); } catch { /* ignora */ } }
+  // Timbrado fiel ao modelo (cabeçalho redesenhado, rodapé sem achatar).
+  const { desenhar: timbrado, headerH, footerH } = criarTimbrado(doc, zip);
+  timbrado();
 
   const mL = 42, mR = 42, cW = W - mL - mR;
-  const bottomLimit = H - footerH - 18;
-  let y = 14 + headerH + 26;
+  const bottomLimit = H - footerH - 8;
+  const topo = headerH + 26;
+  let y = topo;
 
   const setFont = (bold: boolean) => doc.setFont('helvetica', bold ? 'bold' : 'normal');
-  const ensure = (h: number) => { if (y + h > bottomLimit) { doc.addPage(); y = 40; } };
+  const ensure = (h: number) => { if (y + h > bottomLimit) { doc.addPage(); timbrado(); y = topo; } };
 
   const para = (
     text: string,
@@ -263,7 +249,7 @@ export async function buildComunicadoDamPdf(dados: ComunicadoData): Promise<{ bl
     lines.forEach((ln, i) => {
       ensure(lh);
       if (opts.center) doc.text(ln, W / 2, y, { align: 'center' });
-      else if (opts.justify && i < lines.length - 1) doc.text(ln, mL, y, { align: 'justify', maxWidth: cW });
+      else if (opts.justify && i < lines.length - 1) linhaJustificada(doc, ln, mL, y, cW);
       else doc.text(ln, mL, y);
       y += lh;
     });
@@ -275,8 +261,9 @@ export async function buildComunicadoDamPdf(dados: ComunicadoData): Promise<{ bl
     ensure(lh);
     doc.setFontSize(10.5); doc.setTextColor(25);
     setFont(false);
-    doc.text(label + ' ', mL, y);
-    const lw = doc.getTextWidth(label + ' ');
+    doc.text(label, mL, y);
+    // Rótulo + espaço folgado (em rótulos longos um espaço simples some na tela).
+    const lw = doc.getTextWidth(label) + doc.getTextWidth(' ') * 2;
     setFont(true);
     doc.text(String(value), mL + lw, y);
     y += lh + 1.5;
