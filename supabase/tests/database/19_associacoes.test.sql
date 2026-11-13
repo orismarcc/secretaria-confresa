@@ -23,7 +23,11 @@ insert into public.demand_types (id, name, category) values ('20000000-0000-0000
 insert into public.machinery (id, name, patrimony_number) values ('80000000-0000-0000-0000-0000000019a1', 'Trator Teste 19', 'PAT-19');
 
 select is((select public from storage.buckets where id = 'associacoes'), false, 'bucket de associações é privado');
-select ok((select count(*) from public.associacao_checklist_itens where codigo is not null) >= 17, 'checklist padrão cadastrado');
+-- O banco de teste copia só a ESTRUTURA da produção (sem dados): o checklist
+-- padrão (semente) pode não estar aqui. Garante o item usado no teste.
+insert into public.associacao_checklist_itens (codigo, nome, categoria, tem_validade)
+values ('cnd_federal', 'CND Federal', 'fiscal', true) on conflict (codigo) do nothing;
+select ok((select count(*) from public.associacao_checklist_itens where codigo = 'cnd_federal') = 1, 'item do checklist disponível (código único)');
 
 -- ─── Admin pleno ─────────────────────────────────────────────────────────────
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000019a1","role":"authenticated"}', true);
