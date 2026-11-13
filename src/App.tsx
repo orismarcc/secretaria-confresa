@@ -36,6 +36,7 @@ import NotFound from "./pages/NotFound";
 const TransparenciaPage = lazy(() => import("./pages/TransparenciaPage"));
 const VitrinePage = lazy(() => import("./modules/vitrine/VitrinePage"));
 const OficiosPage = lazy(() => import("./pages/OficiosPage"));
+const OficioEditorPage = lazy(() => import("./pages/OficioEditorPage"));
 
 const queryClient = new QueryClient();
 
@@ -104,6 +105,7 @@ function AppRoutes() {
       <Route path="/import" element={<ProtectedRoute adminOnly><ImportServicesPage /></ProtectedRoute>} />
       <Route path="/dam" element={<ProtectedRoute fullAdminOnly><DAMPage /></ProtectedRoute>} />
       <Route path="/oficios" element={<ProtectedRoute adminOnly><Suspense fallback={<Loading />}><OficiosPage /></Suspense></ProtectedRoute>} />
+      <Route path="/oficios/editor/:tipo/:id" element={<ProtectedRoute adminOnly><Suspense fallback={<Loading />}><OficioEditorPage /></Suspense></ProtectedRoute>} />
       <Route path="/patrimony" element={<ProtectedRoute adminOnly><PatrimonyPage /></ProtectedRoute>} />
       <Route path="/sefaz" element={<ProtectedRoute adminOnly><SEFAZPage /></ProtectedRoute>} />
       <Route path="/import-sefaz" element={<ProtectedRoute adminOnly><ImportSEFAZPage /></ProtectedRoute>} />

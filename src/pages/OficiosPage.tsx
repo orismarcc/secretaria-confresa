@@ -1,7 +1,7 @@
 // Ofícios da Secretaria: Painel · Ofícios Cadastrados · Modelos de Ofícios.
 // Acesso: equipe interna (exceto Assistente de Campo). Excluir: admin pleno.
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -19,6 +19,7 @@ const ABAS: Aba[] = ['painel', 'oficios', 'modelos'];
 
 export default function OficiosPage() {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const aba: Aba = ABAS.includes(params.get('aba') as Aba) ? (params.get('aba') as Aba) : 'painel';
   const setAba = (a: string) => setParams((p) => { const n = new URLSearchParams(p); n.set('aba', a); return n; }, { replace: true });
 
@@ -69,6 +70,7 @@ export default function OficiosPage() {
         modelos={modelos}
         onClose={() => setForm(null)}
         onSalvo={(o) => setDetalheId(o.id)}
+        onEscrever={(o) => navigate(`/oficios/editor/oficio/${o.id}`)}
       />
       <OficioDetalheSheet
         oficio={detalhe}

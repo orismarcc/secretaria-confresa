@@ -50,6 +50,9 @@ export interface Oficio {
   arquivo_nome: string | null;
   arquivo_tamanho: number | null;
   arquivo_versao: number;
+  /** Texto escrito no editor do sistema (HTML normalizado pelo editor). */
+  conteudo_html?: string | null;
+  conteudo_atualizado_em?: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -78,6 +81,8 @@ export interface OficioModelo {
   arquivo_path: string | null;
   arquivo_nome: string | null;
   arquivo_tamanho: number | null;
+  /** Modelo de texto (escrito no editor). Sem arquivo = modelo do editor. */
+  conteudo_html?: string | null;
   ativo: boolean;
   created_at: string;
   updated_at: string;
@@ -280,3 +285,7 @@ export function preencherModeloDocx(conteudo: ArrayBuffer, d: DadosModelo): Blob
   });
   return doc.getZip().generate({ type: 'blob', mimeType: MIME_DOCX, compression: 'DEFLATE' });
 }
+
+/** Modelo escrito no editor (sem arquivo Word/PDF). */
+export const ehModeloDeTexto = (m: Pick<OficioModelo, 'arquivo_path' | 'conteudo_html'> | null | undefined) =>
+  !!m && !m.arquivo_path;

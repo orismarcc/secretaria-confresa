@@ -305,3 +305,26 @@ export async function salvarOficioRestituicao(p: {
 export async function desfazerOficioCriado(id: string): Promise<void> {
   try { await db.from('oficios').delete().eq('id', id); } catch { /* melhor esforço */ }
 }
+
+// ─── Texto do editor ─────────────────────────────────────────────────────────
+
+/** Salva o texto escrito no editor (ofício ou modelo de texto). */
+export function useSalvarConteudo() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({ tipo, id, html }: { tipo: 'oficio' | 'modelo'; id: string; html: string }) => {
+      const tabela = tipo === 'oficio' ? 'oficios' : 'oficio_modelos';
+      const campos = tipo === 'oficio'
+        ? { conteudo_html: html, conteudo_atualizado_em: new Date().toISOString() }
+        : { conteudo_html: html };
+      const { error } = await db.from(tabela).update(campos).eq('id', id);
+      if (error) throw error;
+      return { tipo, id };
+    },
+    onSuccess: ({ tipo }) => {
+      qc.invalidateQueries({ queryKey: tipo === 'oficio' ? QK.oficios : QK.modelos });
+    },
+    onError: (e: Error) => toast({ title: 'Erro ao salvar o texto', description: friendlyDbError(e), variant: 'destructive' }),
+  });
+}

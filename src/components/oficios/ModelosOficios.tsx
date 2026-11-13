@@ -2,6 +2,7 @@
 // (.docx preserva toda a formatação; PDF também é aceito). Criar, editar,
 // substituir arquivo, excluir e usar como base para um novo ofício.
 import { useMemo, useRef, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,14 +17,14 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  BookTemplate, Download, FilePlus2, FileText, Info, Loader2, Paperclip, Pencil, Plus, Stamp, Trash2, X,
+  BookTemplate, Download, FilePlus2, FileText, Info, Loader2, NotebookPen, Paperclip, Pencil, Plus, Stamp, Trash2, X,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { abrirArquivoOficio, useExcluirModelo, useSalvarModelo } from '@/hooks/useOficios';
 import { triggerDownload } from '@/lib/comunicado';
 import {
-  CAMPOS_MODELO, CATEGORIAS_OFICIO, MODELO_PADRAO_URL, ehDocx, normalizar, problemaModelo, tamanhoLegivel,
+  CAMPOS_MODELO, CATEGORIAS_OFICIO, MODELO_PADRAO_URL, ehDocx, ehModeloDeTexto, normalizar, problemaModelo, tamanhoLegivel,
   type Oficio, type OficioModelo,
 } from '@/lib/oficios';
 
@@ -32,7 +33,9 @@ const selectCls = 'w-full h-10 rounded-md border border-input bg-background px-3
 function ModeloFormDialog({ aberto, modelo, onClose }: { aberto: boolean; modelo: OficioModelo | null; onClose: () => void }) {
   const { toast } = useToast();
   const salvar = useSalvarModelo();
+  const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [tipo, setTipo] = useState<'texto' | 'arquivo'>('texto');
   const [nome, setNome] = useState('');
   const [categoria, setCategoria] = useState<string>(CATEGORIAS_OFICIO[0]);
   const [finalidade, setFinalidade] = useState('');
@@ -49,6 +52,7 @@ function ModeloFormDialog({ aberto, modelo, onClose }: { aberto: boolean; modelo
     setDescricao(modelo?.descricao ?? '');
     setAtivo(modelo?.ativo ?? true);
     setArquivo(null);
+    setTipo(modelo ? (modelo.arquivo_path ? 'arquivo' : 'texto') : 'texto');
   }, [aberto, modelo?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const escolher = (f: File | null) => {
@@ -58,14 +62,16 @@ function ModeloFormDialog({ aberto, modelo, onClose }: { aberto: boolean; modelo
     setArquivo(f);
   };
 
-  const podeSalvar = nome.trim().length > 0 && (!!modelo?.arquivo_path || !!arquivo) && !salvar.isPending;
+  const podeSalvar = nome.trim().length > 0 && (tipo === 'texto' || !!modelo?.arquivo_path || !!arquivo) && !salvar.isPending;
   const gravar = async () => {
     try {
-      await salvar.mutateAsync({
-        modelo, arquivo,
+      const r = await salvar.mutateAsync({
+        modelo, arquivo: tipo === 'arquivo' ? arquivo : null,
         dados: { nome: nome.trim(), categoria, finalidade: finalidade.trim() || null, descricao: descricao.trim() || null, ativo },
       });
       onClose();
+      // Modelo de texto novo: já abre o editor para escrever.
+      if (!modelo && tipo === 'texto') navigate(`/oficios/editor/modelo/${r.salvo.id}`);
     } catch { /* aviso já exibido */ }
   };
 
@@ -75,9 +81,19 @@ function ModeloFormDialog({ aberto, modelo, onClose }: { aberto: boolean; modelo
         <DialogContent className="sm:max-w-lg max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><BookTemplate className="h-5 w-5 text-primary" /> {modelo ? 'Editar modelo' : 'Novo modelo'}</DialogTitle>
-            <DialogDescription>Envie o modelo em Word (.docx) — a formatação original é preservada. Use os campos entre chaves para preenchimento automático.</DialogDescription>
+            <DialogDescription>Escreva o modelo no editor do sistema ou envie um arquivo Word (.docx). Os campos entre chaves são preenchidos com os dados de cada ofício.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            {!modelo && (
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Tipo de modelo">
+                {([['texto', 'Escrever no editor', NotebookPen], ['arquivo', 'Enviar arquivo Word/PDF', Paperclip]] as const).map(([v, rot, Ic]) => (
+                  <button key={v} type="button" role="radio" aria-checked={tipo === v} onClick={() => setTipo(v)}
+                    className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-left transition-colors ${tipo === v ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'hover:bg-muted/50'}`}>
+                    <Ic className="h-4 w-4 shrink-0" /> {rot}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="md-nome">Nome *</Label>
               <Input id="md-nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Solicitação de máquinas ao Estado" />
@@ -98,7 +114,7 @@ function ModeloFormDialog({ aberto, modelo, onClose }: { aberto: boolean; modelo
               <Label htmlFor="md-desc">Descrição</Label>
               <Textarea id="md-desc" value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={2} placeholder="Quando usar este modelo" />
             </div>
-            <div className="space-y-1.5">
+            {tipo === 'arquivo' && (<div className="space-y-1.5">
               <Label>Arquivo do modelo *</Label>
               <input ref={inputRef} type="file" accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden"
                 onChange={(e) => { escolher(e.target.files?.[0] ?? null); e.target.value = ''; }} />
@@ -117,7 +133,7 @@ function ModeloFormDialog({ aberto, modelo, onClose }: { aberto: boolean; modelo
                   <Paperclip className="h-4 w-4 mr-2" /> Escolher arquivo (.docx ou .pdf)
                 </Button>
               )}
-            </div>
+            </div>)}
             <label htmlFor="md-ativo" className="flex items-center justify-between rounded-lg border px-3 py-2 cursor-pointer">
               <span className="text-sm">Disponível para novos ofícios</span>
               <Switch id="md-ativo" checked={ativo} onCheckedChange={setAtivo} />
@@ -127,7 +143,7 @@ function ModeloFormDialog({ aberto, modelo, onClose }: { aberto: boolean; modelo
             <Button variant="outline" onClick={onClose} disabled={salvar.isPending}>Cancelar</Button>
             <Button onClick={gravar} disabled={!podeSalvar}>
               {salvar.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {modelo ? 'Salvar' : 'Criar modelo'}
+              {modelo ? 'Salvar' : tipo === 'texto' ? 'Criar e escrever' : 'Criar modelo'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -153,6 +169,7 @@ export function ModelosOficios({ modelos, oficios, carregando, onUsar, podeCriar
   podeCriar: boolean;
 }) {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const { canDelete } = useAuth();
   const excluir = useExcluirModelo();
   const [busca, setBusca] = useState('');
@@ -223,7 +240,7 @@ export function ModelosOficios({ modelos, oficios, carregando, onUsar, podeCriar
             <div className="p-2.5 rounded-xl bg-primary/10 shrink-0"><Stamp className="h-5 w-5 text-primary" /></div>
             <div className="min-w-0">
               <p className="font-semibold flex items-center gap-2 flex-wrap">Modelo padrão <Badge variant="secondary">Timbrado oficial</Badge></p>
-              <p className="text-sm text-muted-foreground">Cabeçalho e rodapé da Prefeitura, com número, data, destinatário, assunto e texto. Baixe para criar modelos próprios.</p>
+              <p className="text-sm text-muted-foreground">Cabeçalho e rodapé da Prefeitura, com número, data, destinatário, assunto e texto. É o ponto de partida do editor.</p>
             </div>
           </div>
           <div className="flex gap-2 shrink-0">
@@ -248,7 +265,9 @@ export function ModelosOficios({ modelos, oficios, carregando, onUsar, podeCriar
                 <Card key={m.id} className={m.ativo ? '' : 'opacity-60'}>
                   <CardContent className="p-4 flex flex-col h-full gap-3">
                     <div className="flex items-start gap-3">
-                      <div className="p-2 rounded-lg bg-muted shrink-0"><FileText className={ehDocx(m.arquivo_nome) ? 'h-5 w-5 text-blue-600' : 'h-5 w-5 text-red-600'} /></div>
+                      <div className="p-2 rounded-lg bg-muted shrink-0">{ehModeloDeTexto(m)
+                        ? <NotebookPen className="h-5 w-5 text-primary" />
+                        : <FileText className={ehDocx(m.arquivo_nome) ? 'h-5 w-5 text-blue-600' : 'h-5 w-5 text-red-600'} />}</div>
                       <div className="min-w-0">
                         <p className="font-semibold leading-tight break-words">{m.nome}</p>
                         {m.finalidade && <p className="text-xs text-muted-foreground">{m.finalidade}</p>}
@@ -256,7 +275,7 @@ export function ModelosOficios({ modelos, oficios, carregando, onUsar, podeCriar
                     </div>
                     {m.descricao && <p className="text-sm text-muted-foreground line-clamp-3">{m.descricao}</p>}
                     <div className="flex flex-wrap gap-1.5 text-[11px]">
-                      <Badge variant="outline">{ehDocx(m.arquivo_nome) ? 'Word' : 'PDF'} · {tamanhoLegivel(m.arquivo_tamanho)}</Badge>
+                      <Badge variant="outline">{ehModeloDeTexto(m) ? 'Texto (editor)' : `${ehDocx(m.arquivo_nome) ? 'Word' : 'PDF'} · ${tamanhoLegivel(m.arquivo_tamanho)}`}</Badge>
                       <Badge variant="outline">{usos.get(m.id) ?? 0} ofício(s)</Badge>
                       {!m.ativo && <Badge variant="secondary">Inativo</Badge>}
                     </div>
@@ -264,8 +283,10 @@ export function ModelosOficios({ modelos, oficios, carregando, onUsar, podeCriar
                       {podeCriar && m.ativo && (
                         <Button size="sm" onClick={() => onUsar(m)} className="col-span-2 gap-1.5"><FilePlus2 className="h-4 w-4" /> Usar modelo</Button>
                       )}
-                      <Button size="sm" variant="outline" onClick={() => baixar(m)} className="gap-1.5"><Download className="h-4 w-4" /> Baixar</Button>
-                      {podeCriar && <Button size="sm" variant="outline" onClick={() => setEditando(m)} className="gap-1.5"><Pencil className="h-4 w-4" /> Editar</Button>}
+                      {ehModeloDeTexto(m)
+                        ? podeCriar && <Button size="sm" variant="outline" onClick={() => navigate(`/oficios/editor/modelo/${m.id}`)} className="gap-1.5"><NotebookPen className="h-4 w-4" /> Editar texto</Button>
+                        : <Button size="sm" variant="outline" onClick={() => baixar(m)} className="gap-1.5"><Download className="h-4 w-4" /> Baixar</Button>}
+                      {podeCriar && <Button size="sm" variant="outline" onClick={() => setEditando(m)} className="gap-1.5"><Pencil className="h-4 w-4" /> Dados</Button>}
                       {canDelete && (
                         <Button size="sm" variant="ghost" onClick={() => setAExcluir(m)} className="col-span-2 gap-1.5 text-destructive hover:text-destructive">
                           <Trash2 className="h-4 w-4" /> Excluir

@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { FileDown, FilePlus2, Loader2, Paperclip, X } from 'lucide-react';
+import { FileDown, FilePlus2, Loader2, NotebookPen, Paperclip, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSalvarOficio } from '@/hooks/useOficios';
 import { gerarDocumentoDoModelo } from './comum';
@@ -27,7 +27,7 @@ const anoDe = (iso: string) => Number(iso.slice(0, 4)) || new Date().getFullYear
 
 const selectCls = 'w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
 
-export function OficioFormDialog({ aberto, oficio, modeloInicial, oficios, modelos, onClose, onSalvo }: {
+export function OficioFormDialog({ aberto, oficio, modeloInicial, oficios, modelos, onClose, onSalvo, onEscrever }: {
   aberto: boolean;
   /** Ofício em edição (null = novo). */
   oficio: Oficio | null;
@@ -37,6 +37,8 @@ export function OficioFormDialog({ aberto, oficio, modeloInicial, oficios, model
   modelos: OficioModelo[];
   onClose: () => void;
   onSalvo?: (o: Oficio) => void;
+  /** "Cadastrar e escrever": abre o editor depois de salvar. */
+  onEscrever?: (o: Oficio) => void;
 }) {
   const { toast } = useToast();
   const salvar = useSalvarOficio();
@@ -124,7 +126,7 @@ export function OficioFormDialog({ aberto, oficio, modeloInicial, oficios, model
     }
   };
 
-  const enviar = async () => {
+  const enviar = async (escrever = false) => {
     if (!podeSalvar) return;
     try {
       const r = await salvar.mutateAsync({
@@ -136,8 +138,8 @@ export function OficioFormDialog({ aberto, oficio, modeloInicial, oficios, model
         },
         arquivo,
       });
-      onSalvo?.(r.oficio);
       onClose();
+      if (escrever && onEscrever) onEscrever(r.oficio); else onSalvo?.(r.oficio);
     } catch { /* aviso já exibido */ }
   };
 
@@ -170,13 +172,17 @@ export function OficioFormDialog({ aberto, oficio, modeloInicial, oficios, model
                   <option key={m.id} value={m.id}>{m.nome} — {m.categoria}</option>
                 ))}
               </select>
-              <Button type="button" variant="outline" onClick={gerarDoc} disabled={modeloId === '' || gerando} className="shrink-0">
-                {gerando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileDown className="h-4 w-4 mr-2" />}
-                Gerar documento
-              </Button>
+              {modeloEscolhido?.arquivo_path && (
+                <Button type="button" variant="outline" onClick={gerarDoc} disabled={gerando} className="shrink-0">
+                  {gerando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileDown className="h-4 w-4 mr-2" />}
+                  Gerar documento
+                </Button>
+              )}
             </div>
             <p className="text-xs text-muted-foreground">
-              "Gerar documento" baixa o modelo com número, data, destinatário e assunto preenchidos, para revisar, assinar e anexar o PDF.
+              {modeloEscolhido?.arquivo_path
+                ? '"Gerar documento" baixa o modelo Word com número, data, destinatário e assunto preenchidos.'
+                : 'Use "Cadastrar e escrever" para redigir o ofício no editor, já com o timbrado e os dados preenchidos.'}
             </p>
           </div>
 
@@ -273,7 +279,12 @@ export function OficioFormDialog({ aberto, oficio, modeloInicial, oficios, model
 
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onClose} disabled={salvar.isPending}>Cancelar</Button>
-          <Button onClick={enviar} disabled={!podeSalvar}>
+          {!oficio && onEscrever && (
+            <Button variant="secondary" onClick={() => enviar(true)} disabled={!podeSalvar} className="gap-2">
+              <NotebookPen className="h-4 w-4" /> Cadastrar e escrever
+            </Button>
+          )}
+          <Button onClick={() => enviar()} disabled={!podeSalvar}>
             {salvar.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             {oficio ? 'Salvar alterações' : 'Cadastrar ofício'}
           </Button>

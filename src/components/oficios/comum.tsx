@@ -23,6 +23,9 @@ export type ModeloEscolhido = OficioModelo | null;
  */
 export async function gerarDocumentoDoModelo(modelo: ModeloEscolhido, dados: DadosModelo): Promise<string | null> {
   const nomeBase = `Oficio-${dados.numero.replace('/', '-')}`;
+  if (modelo && !modelo.arquivo_path) {
+    throw new Error('Este é um modelo de texto: cadastre o ofício e use "Escrever no editor".');
+  }
   if (modelo && !ehDocx(modelo.arquivo_nome)) {
     if (!modelo.arquivo_path) throw new Error('Este modelo não tem arquivo.');
     const bytes = await baixarConteudoOficio(modelo.arquivo_path);

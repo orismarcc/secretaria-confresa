@@ -1,6 +1,7 @@
 // Detalhes do ofício: dados, arquivo assinado (ver/baixar/enviar/substituir),
 // histórico de versões, gerar documento do modelo, editar e excluir.
 import { useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -12,7 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import {
-  Download, Eye, FileCheck2, FileDown, FileWarning, History, Loader2, Pencil, RefreshCw, Trash2, Upload,
+  Download, Eye, FileCheck2, FileDown, FileWarning, History, Loader2, NotebookPen, Pencil, RefreshCw, Trash2, Upload,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,6 +37,7 @@ export function OficioDetalheSheet({ oficio, modelos, onClose, onEditar }: {
   onEditar: (o: Oficio) => void;
 }) {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const { canDelete } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
   const { data: versoes = [], isLoading } = useOficioArquivos(oficio?.id ?? null);
@@ -198,10 +200,19 @@ export function OficioDetalheSheet({ oficio, modelos, onClose, onEditar }: {
             <Separator />
 
             <div className="flex flex-col gap-2">
-              <Button variant="outline" onClick={gerarDoc} disabled={gerando}>
-                {gerando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileDown className="h-4 w-4 mr-2" />}
-                Gerar documento do {modelo ? `modelo "${modelo.nome}"` : 'modelo padrão'}
+              <Button onClick={() => navigate(`/oficios/editor/oficio/${oficio.id}`)}>
+                <NotebookPen className="h-4 w-4 mr-2" />
+                {oficio.conteudo_html ? 'Abrir o texto no editor' : 'Escrever no editor'}
               </Button>
+              {oficio.conteudo_atualizado_em && (
+                <p className="text-xs text-muted-foreground text-center -mt-1">Texto salvo em {dataHora(oficio.conteudo_atualizado_em)}</p>
+              )}
+              {modelo?.arquivo_path && (
+                <Button variant="outline" onClick={gerarDoc} disabled={gerando}>
+                  {gerando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileDown className="h-4 w-4 mr-2" />}
+                  Gerar documento do modelo Word "{modelo.nome}"
+                </Button>
+              )}
               <Button variant="outline" onClick={() => onEditar(oficio)}>
                 <Pencil className="h-4 w-4 mr-2" /> Editar dados
               </Button>
