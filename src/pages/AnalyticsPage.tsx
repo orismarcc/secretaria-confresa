@@ -5,6 +5,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { MapaDemandaCard } from '@/components/demanda/MapaDemandaCard';
 import { EconomiaProdutorCard } from '@/components/analytics/EconomiaProdutorCard';
+import { AssociacoesNoMunicipioCard } from '@/components/analytics/AssociacoesNoMunicipioCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -1628,6 +1629,7 @@ export default function AnalyticsPage() {
 
           {/* ── Economia do produtor (Grade e PC × preço de mercado) ───── */}
           <EconomiaProdutorCard services={scopedServices as any[]} demandTypes={demandTypes as any[]} exercicioLabel={exercicioLabel} />
+          <AssociacoesNoMunicipioCard servicosSecretaria={scopedServices as any[]} exercicio={exercicio} exercicioLabel={exercicioLabel} />
         </div>
       )}
 

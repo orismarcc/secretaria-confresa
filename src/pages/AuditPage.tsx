@@ -26,6 +26,12 @@ const TABLE_LABEL: Record<string, string> = {
   oficios: 'Ofício',
   oficio_arquivos: 'Arquivo de ofício',
   oficio_modelos: 'Modelo de ofício',
+  associacoes: 'Associação',
+  associacao_documentos: 'Documento de associação',
+  associacao_checklist_itens: 'Item do checklist de associações',
+  associacao_dispensas: 'Item dispensado (associação)',
+  associacao_cessoes: 'Cessão de máquina',
+  associacao_atendimentos: 'Atendimento de associação',
   'auth.users': 'Usuário',
 };
 

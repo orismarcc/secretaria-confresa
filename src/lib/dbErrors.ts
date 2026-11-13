@@ -26,6 +26,11 @@ export function friendlyDbError(error: unknown): string {
     return 'O arquivo foi atualizado por outra pessoa ao mesmo tempo. Recarregue e tente de novo.';
   }
 
+  // Associações: CNPJ repetido
+  if (/associacoes_cnpj_key/i.test(msg)) {
+    return 'Já existe uma associação cadastrada com este CNPJ.';
+  }
+
   // CPF/CNPJ duplicado
   if (code === '23505' || /duplicate key|producers_cpf_key/i.test(msg)) {
     return 'Já existe um cadastro com este CPF/CNPJ. Use a busca para localizá-lo.';
