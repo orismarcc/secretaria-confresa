@@ -35,7 +35,7 @@ import NotFound from "./pages/NotFound";
 // carregado só quando a página é aberta (não pesa no restante do sistema).
 const TransparenciaPage = lazy(() => import("./pages/TransparenciaPage"));
 const VitrinePage = lazy(() => import("./modules/vitrine/VitrinePage"));
-import { OFICIOS_HABILITADO } from "@/lib/funcionalidades";
+import { OFICIOS_HABILITADO, CONECTA_CONFRESA_HABILITADO } from "@/lib/funcionalidades";
 const OficiosPage = lazy(() => import("./pages/OficiosPage"));
 const OficioEditorPage = lazy(() => import("./pages/OficioEditorPage"));
 const AssociacoesPage = lazy(() => import("./pages/AssociacoesPage"));
@@ -97,9 +97,10 @@ function AppRoutes() {
       <Route path="/settlements" element={<ProtectedRoute adminOnly><SettlementsPage /></ProtectedRoute>} />
       <Route path="/machinery" element={<ProtectedRoute adminOnly assistenteOk><MachineryPage /></ProtectedRoute>} />
       <Route path="/transito" element={<ProtectedRoute adminOnly><TransitoPage /></ProtectedRoute>} />
-      <Route path="/conecta-confresa" element={<ProtectedRoute adminOnly><Suspense fallback={<Loading />}><VitrinePage /></Suspense></ProtectedRoute>} />
+      {/* Conecta Confresa: guardado para lançar depois (lib/funcionalidades.ts). */}
+      {CONECTA_CONFRESA_HABILITADO && <Route path="/conecta-confresa" element={<ProtectedRoute adminOnly><Suspense fallback={<Loading />}><VitrinePage /></Suspense></ProtectedRoute>} />}
       {/* Endereço antigo (Fase 1) → novo nome */}
-      <Route path="/agricultura-familiar" element={<Navigate to="/conecta-confresa" replace />} />
+      {CONECTA_CONFRESA_HABILITADO && <Route path="/agricultura-familiar" element={<Navigate to="/conecta-confresa" replace />} />}
       <Route path="/field-services" element={<ProtectedRoute adminOnly assistenteOk><FieldServicesPage /></ProtectedRoute>} />
       <Route path="/maintenance" element={<ProtectedRoute adminOnly><MaintenancePage /></ProtectedRoute>} />
       <Route path="/analytics" element={<ProtectedRoute adminOnly><AnalyticsPage /></ProtectedRoute>} />

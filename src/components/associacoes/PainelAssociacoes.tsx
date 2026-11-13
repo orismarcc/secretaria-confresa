@@ -11,8 +11,8 @@ import { useDemandTypes, useMachinery } from '@/hooks/useSupabaseData';
 import { AnelRegularidade, Ajuda, SituacaoBadge, dataBR, fmtNum } from './comum';
 import { GraficoMensal, KpisAtendimentos } from './AtendimentosAssociacao';
 import {
-  calcularMetricas, cessoesAtivas, situacaoMandato,
-  type Associacao, type AtendimentoAssociacao, type Cessao, type Regularidade,
+  alertasVencimento, calcularMetricas, cessoesAtivas, situacaoMandato,
+  type Associacao, type AtendimentoAssociacao, type Cessao, type DocumentoAssociacao, type Regularidade,
 } from '@/lib/associacoes';
 
 const fmtInt = (v: number) => Math.round(v).toLocaleString('pt-BR');
@@ -48,8 +48,10 @@ export function PrimeirosPassos({ onNova }: { onNova: () => void }) {
   );
 }
 
-export function PainelAssociacoes({ associacoes, regularidades, cessoes, atendimentos, onAbrir, onNova }: {
+export function PainelAssociacoes({ associacoes, regularidades, cessoes, atendimentos, documentos = [], onAbrir, onNova }: {
   associacoes: Associacao[];
+  /** Para alertar também documentos avulsos (fora do checklist) com validade. */
+  documentos?: DocumentoAssociacao[];
   regularidades: Map<string, Regularidade>;
   cessoes: Cessao[];
   atendimentos: AtendimentoAssociacao[];
@@ -59,6 +61,8 @@ export function PainelAssociacoes({ associacoes, regularidades, cessoes, atendim
   const { data: maquinas = [] } = useMachinery();
   const { data: tipos = [] } = useDemandTypes();
   const porSituacao = (s: string) => associacoes.filter((a) => a.situacao === s).length;
+  // Avulsos com validade (os itens do checklist já vêm da regularidade).
+  const avulsos = useMemo(() => alertasVencimento(associacoes, [], documentos.filter((d) => !d.item_id), []), [associacoes, documentos]);
   const regulares = associacoes.filter((a) => regularidades.get(a.id)?.regular).length;
   const media = associacoes.length ? Math.round(associacoes.reduce((t, a) => t + (regularidades.get(a.id)?.percentual ?? 0), 0) / associacoes.length) : 0;
 
@@ -72,12 +76,16 @@ export function PainelAssociacoes({ associacoes, regularidades, cessoes, atendim
         texto: `${p.item.nome}: ${p.status === 'vencido' ? `vencido em ${dataBR(p.documento?.data_validade)}` : p.status === 'sem_validade' ? 'falta informar a validade' : 'pendente'}`,
       }));
       r?.vencendo.forEach((p) => l.push({ id: `${a.id}-${p.item.id}-v`, assoc: a, nivel: 2, texto: `${p.item.nome}: vence em ${p.diasParaVencer} dia(s)` }));
+      avulsos.filter((x) => x.associacao.id === a.id).forEach((x) => l.push({
+        id: x.chave, assoc: a, nivel: x.status === 'vencido' ? 0 : 2,
+        texto: `${x.titulo}: ${x.status === 'vencido' ? `vencido em ${dataBR(x.validade)}` : `vence em ${x.dias} dia(s)`}`,
+      }));
       const m = situacaoMandato(a.mandato_fim);
       if (m === 'vencido') l.push({ id: `${a.id}-mand`, assoc: a, nivel: 0, texto: `Mandato da diretoria venceu em ${dataBR(a.mandato_fim)}` });
       if (m === 'vencendo') l.push({ id: `${a.id}-mand`, assoc: a, nivel: 2, texto: `Mandato da diretoria termina em ${dataBR(a.mandato_fim)}` });
     });
     return l.sort((x, y) => x.nivel - y.nivel);
-  }, [associacoes, regularidades]);
+  }, [associacoes, regularidades, avulsos]);
 
   const ativasCessoes = cessoesAtivas(cessoes);
   const metricas = useMemo(() => calcularMetricas(atendimentos), [atendimentos]);

@@ -105,3 +105,28 @@ describe('associações — métricas de atendimentos', () => {
     expect(problemaArquivo(new File(['x'], 'planilha.xlsx'))).toMatch(/PDF/);
   });
 });
+
+describe('associações — alertas de vencimento', () => {
+  it('lista vencidos e vencendo (checklist e avulsos), ignora renovados, ok e associações inativas', async () => {
+    const { alertasVencimento } = await import('./associacoes');
+    const A = (id: string, situacao: 'ativa' | 'inativa' | 'em_regularizacao') => ({
+      id, nome: id, sigla: null, cnpj: null, situacao, tipo: 'rural' as const, data_fundacao: null, settlement_id: null, endereco: null,
+      telefone: null, email: null, presidente_nome: null, presidente_telefone: null, mandato_inicio: null, mandato_fim: null,
+      numero_associados: null, observacoes: null, created_at: '', updated_at: '',
+    });
+    const itens = [item({ id: 'cnd', nome: 'CND' }), item({ id: 'crf', nome: 'CRF' })];
+    const docs = [
+      doc({ associacao_id: 'A', item_id: 'cnd', data_validade: dia(-3), data_emissao: '2026-01-01' }), // vencido…
+      doc({ associacao_id: 'A', item_id: 'cnd', data_validade: dia(200), data_emissao: '2026-06-01' }), // …mas renovado
+      doc({ associacao_id: 'A', item_id: 'crf', data_validade: dia(-1) }),                               // vencido
+      doc({ associacao_id: 'A', item_id: null, titulo: 'Contrato de comodato', data_validade: dia(15) }), // avulso vencendo
+      doc({ associacao_id: 'A', item_id: null, titulo: 'Sem prazo' }),                                   // avulso sem validade
+      doc({ associacao_id: 'B', item_id: 'crf', data_validade: dia(-30) }),                              // associação inativa
+      doc({ associacao_id: 'C', item_id: 'crf', data_validade: dia(5) }),                                // vencendo
+    ];
+    const r = alertasVencimento([A('A', 'ativa'), A('B', 'inativa'), A('C', 'em_regularizacao')], itens, docs, []);
+    expect(r.map((x) => [x.associacao.id, x.titulo, x.status])).toEqual([
+      ['A', 'CRF', 'vencido'], ['C', 'CRF', 'vencendo'], ['A', 'Contrato de comodato', 'vencendo'],
+    ]);
+  });
+});

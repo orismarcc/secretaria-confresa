@@ -120,10 +120,11 @@ export function DocumentoDialog({ aberto, associacaoId, itens, itemInicial, docu
               <Input id="dc-em" type="date" value={emissao} onChange={(e) => setEmissao(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="dc-val">Validade{item?.tem_validade ? ' *' : ''}</Label>
+              <Label htmlFor="dc-val">Validade (vencimento){item?.tem_validade ? ' *' : ''}</Label>
               <Input id="dc-val" type="date" value={validade} onChange={(e) => setValidade(e.target.value)} aria-invalid={validadeInvalida} />
             </div>
           </div>
+          <p className="text-xs text-muted-foreground">Com a validade preenchida, o sistema avisa 30 dias antes de vencer e quando vencer (aqui, no Painel e no Dashboard). Deixe em branco só se o documento não tiver prazo.</p>
           {validadeInvalida && <p className="text-xs text-destructive">A validade não pode ser antes da emissão.</p>}
           {faltaValidade && <p className="text-xs text-amber-700 dark:text-amber-400">Este documento tem prazo: informe a validade (vem impressa no documento). Sem ela o item fica como "Falta a validade".</p>}
           <div className="space-y-1.5">

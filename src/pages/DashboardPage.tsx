@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useCallback, useState } from 'react';
+import { AlertasVencimentoAssociacoes } from '@/components/associacoes/AlertasVencimento';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { StatsCard } from '@/components/StatsCard';
@@ -329,6 +330,9 @@ export default function DashboardPage() {
           </SelectContent>
         </Select>
       </div>
+
+      {/* ── Documentos de associações vencidos / vencendo (só aparece se houver) ── */}
+      <div className="mb-4 empty:hidden"><AlertasVencimentoAssociacoes ocultarSeVazio limite={4} /></div>
 
       {/* ── Stats row (4 cards) ─────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 mb-6">

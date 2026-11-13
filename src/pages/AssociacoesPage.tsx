@@ -15,6 +15,7 @@ import { PainelAssociacoes } from '@/components/associacoes/PainelAssociacoes';
 import { ListaAssociacoes } from '@/components/associacoes/ListaAssociacoes';
 import { ChecklistPadrao } from '@/components/associacoes/ChecklistPadrao';
 import { AssociacaoFormDialog } from '@/components/associacoes/AssociacaoFormDialog';
+import { AlertasVencimentoAssociacoes } from '@/components/associacoes/AlertasVencimento';
 import { calcularRegularidade, type Regularidade } from '@/lib/associacoes';
 
 type Aba = 'painel' | 'associacoes' | 'checklist';
@@ -56,8 +57,9 @@ export default function AssociacoesPage() {
           <div className="space-y-3"><Skeleton className="h-36 w-full" /><Skeleton className="h-64 w-full" /></div>
         ) : (
           <>
-            <TabsContent value="painel">
-              <PainelAssociacoes associacoes={associacoes} regularidades={regularidades} cessoes={cessoes} atendimentos={atendimentos} onAbrir={abrir} onNova={() => setNovo(true)} />
+            <TabsContent value="painel" className="space-y-4">
+              <AlertasVencimentoAssociacoes />
+              <PainelAssociacoes associacoes={associacoes} regularidades={regularidades} cessoes={cessoes} atendimentos={atendimentos} documentos={documentos} onAbrir={abrir} onNova={() => setNovo(true)} />
             </TabsContent>
             <TabsContent value="associacoes">
               <ListaAssociacoes associacoes={associacoes} regularidades={regularidades} cessoes={cessoes} onAbrir={abrir} onNova={() => setNovo(true)} />

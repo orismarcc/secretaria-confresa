@@ -26,7 +26,7 @@ import {
   FileStack,
   Handshake,
 } from 'lucide-react';
-import { OFICIOS_HABILITADO } from '@/lib/funcionalidades';
+import { OFICIOS_HABILITADO, CONECTA_CONFRESA_HABILITADO } from '@/lib/funcionalidades';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import logoTransparent from '@/assets/logo-transparent.png';
@@ -44,15 +44,16 @@ const adminNavItems = [
   { path: '/dam', label: 'DAMs', icon: Receipt },
   // Ofícios: guardado para lançar depois (lib/funcionalidades.ts).
   ...(OFICIOS_HABILITADO ? [{ path: '/oficios', label: 'Ofícios', icon: FileStack }] : []),
-  { path: '/associacoes', label: 'Associações', icon: Handshake },
   { path: '/operators', label: 'Colaboradores', icon: UserCog },
   { path: '/demand-types', label: 'Serviços', icon: FileText },
   { path: '/settlements', label: 'Assentamentos', icon: Landmark },
+  { path: '/associacoes', label: 'Associações', icon: Handshake },
   { path: '/machinery', label: 'Frotas', icon: Wrench },
   { path: '/transito', label: 'Trânsito', icon: Car },
   { path: '/maintenance', label: 'Manutenções', icon: Hammer },
   { path: '/patrimony', label: 'Patrimônio', icon: Building2 },
-  { path: '/conecta-confresa', label: 'Conecta Confresa', icon: Sprout },
+  // Conecta Confresa: guardado para lançar depois (lib/funcionalidades.ts).
+  ...(CONECTA_CONFRESA_HABILITADO ? [{ path: '/conecta-confresa', label: 'Conecta Confresa', icon: Sprout }] : []),
   { path: '/sefaz', label: 'SEFAZ', icon: FileText },
   { path: '/calendar', label: 'Calendário', icon: CalendarDays },
   { path: '/audit', label: 'Auditoria', icon: History },

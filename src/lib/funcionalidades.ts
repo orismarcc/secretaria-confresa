@@ -6,3 +6,9 @@
  * Para lançar, troque para `true`.
  */
 export const OFICIOS_HABILITADO = false;
+
+/**
+ * CONECTA CONFRESA: vitrine da agricultura familiar (PNAE/PAA).
+ * Para lançar, troque para `true`.
+ */
+export const CONECTA_CONFRESA_HABILITADO = false;

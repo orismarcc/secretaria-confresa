@@ -288,3 +288,43 @@ export function tipoMime(nome: string): string {
   if (/\.jpe?g$/i.test(nome)) return 'image/jpeg';
   return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 }
+
+// ─── Alertas de vencimento (documentos com validade) ─────────────────────────
+
+export interface AlertaVencimento {
+  chave: string;
+  associacao: Associacao;
+  titulo: string;           // nome do item (ou do documento avulso)
+  documento: DocumentoAssociacao;
+  validade: string;         // yyyy-MM-dd
+  status: 'vencido' | 'vencendo';
+  dias: number;             // negativo = vencido há |dias|
+}
+
+/**
+ * Documentos vencidos ou vencendo (até DIAS_PROXIMO dias), de associações
+ * que não estão inativas. Itens do checklist: vale o documento mais recente
+ * (renovado não alerta). Documentos avulsos com validade também entram.
+ * Ordem: vencidos primeiro, depois os que vencem antes.
+ */
+export function alertasVencimento(
+  associacoes: Associacao[], itens: ItemChecklist[], docs: DocumentoAssociacao[], dispensas: Dispensa[],
+): AlertaVencimento[] {
+  const lista: AlertaVencimento[] = [];
+  associacoes.filter((a) => a.situacao !== 'inativa').forEach((a) => {
+    const reg = calcularRegularidade(a.id, itens, docs, dispensas);
+    reg.itens.forEach((s) => {
+      if ((s.status === 'vencido' || s.status === 'vencendo') && s.documento?.data_validade && s.diasParaVencer != null) {
+        lista.push({ chave: `${a.id}:${s.item.id}`, associacao: a, titulo: s.item.nome, documento: s.documento,
+          validade: s.documento.data_validade, status: s.status, dias: s.diasParaVencer });
+      }
+    });
+    docs.filter((d) => d.associacao_id === a.id && !d.item_id && d.data_validade).forEach((d) => {
+      const v = statusVencimento(d.data_validade);
+      if (v.status === 'ok' || v.dias == null) return;
+      lista.push({ chave: `${a.id}:doc:${d.id}`, associacao: a, titulo: d.titulo, documento: d,
+        validade: d.data_validade!, status: v.status === 'vencido' ? 'vencido' : 'vencendo', dias: v.dias });
+    });
+  });
+  return lista.sort((x, y) => x.dias - y.dias);
+}
