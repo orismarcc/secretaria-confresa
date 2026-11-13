@@ -20,10 +20,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Pencil, Trash2, Wrench, Droplet, User, FileText, Car } from 'lucide-react';
+import { Plus, Pencil, Trash2, Wrench, Droplet, User, FileText, Car, Link2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   useMachinery,
+  usePatrimony,
   useCreateMachinery,
   useUpdateMachinery,
   useDeleteMachinery,
@@ -45,7 +46,8 @@ import { format } from 'date-fns';
 interface MachineryItem {
   id: string;
   name: string;
-  patrimony_number: string;
+  patrimony_number: string | null;
+  patrimony_id?: string | null;
   chassis: string | null;
   fuel_type: string | null;
   kind: string | null;
@@ -65,6 +67,8 @@ export default function MachineryPage() {
   // Assistente de Campo: só vê e ABASTECE — não cria/edita/exclui maquinário.
   const canManage = !isAssistente;
   const { data: machinery = [], isLoading } = useMachinery();
+  const { data: bensPatrimonio = [] } = usePatrimony();
+  const [formPatrimonyId, setFormPatrimonyId] = useState('');
   const createMachinery = useCreateMachinery();
   const updateMachinery = useUpdateMachinery();
   const deleteMachinery = useDeleteMachinery();
@@ -120,6 +124,7 @@ export default function MachineryPage() {
     setEditing(null);
     setFormName('');
     setFormPatrimony('');
+    setFormPatrimonyId('');
     setFormChassis('');
     setFormFuel('');
     setFormKind(isVeiculoTab ? 'veiculo' : 'maquinario'); // novo item herda a aba atual
@@ -133,7 +138,8 @@ export default function MachineryPage() {
   const openEditForm = (item: MachineryItem) => {
     setEditing(item);
     setFormName(item.name);
-    setFormPatrimony(item.patrimony_number);
+    setFormPatrimony(item.patrimony_number ?? '');
+    setFormPatrimonyId(item.patrimony_id ?? '');
     setFormChassis(item.chassis || '');
     setFormFuel(item.fuel_type || '');
     setFormKind(kindOf(item));
@@ -156,6 +162,11 @@ export default function MachineryPage() {
       toast({ title: 'Datas inválidas', description: 'O término não pode ser antes da admissão.', variant: 'destructive' });
       return;
     }
+    // Próprio exige o nº de patrimônio; cedido/locado/consórcio pode não ter.
+    if (isProprio && !formPatrimony.trim()) {
+      toast({ title: 'Informe o nº de patrimônio', description: 'Obrigatório para itens próprios. Cedidos, locados e de consórcio podem ficar sem.', variant: 'destructive' });
+      return;
+    }
     // Próprio: limpa os dados de vínculo (evita datas "órfãs" se o tipo mudou).
     const vinculoFields = {
       vinculo: formVinculo,
@@ -167,7 +178,8 @@ export default function MachineryPage() {
       updateMachinery.mutate({
         id: editing.id,
         name: formName,
-        patrimony_number: formPatrimony,
+        patrimony_number: formPatrimony.trim() || null,
+        patrimony_id: formPatrimonyId || null,
         chassis: formChassis || null,
         fuel_type: formFuel || null,
         kind: formKind,
@@ -176,7 +188,8 @@ export default function MachineryPage() {
     } else {
       createMachinery.mutate({
         name: formName,
-        patrimony_number: formPatrimony,
+        patrimony_number: formPatrimony.trim() || null,
+        patrimony_id: formPatrimonyId || null,
         chassis: formChassis || null,
         fuel_type: formFuel || null,
         kind: formKind,
@@ -215,7 +228,14 @@ export default function MachineryPage() {
       key: 'patrimony',
       header: 'Nº Patrimônio',
       className: 'hidden sm:table-cell',
-      render: (m: MachineryItem) => m.patrimony_number,
+      render: (m: MachineryItem) => (
+        <div className="flex flex-col gap-0.5">
+          <span>{m.patrimony_number || <span className="text-muted-foreground">—</span>}</span>
+          {m.patrimony_id && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-primary"><Link2 className="h-3 w-3" /> no Patrimônio</span>
+          )}
+        </div>
+      ),
     },
     {
       key: 'vinculo',
@@ -399,14 +419,33 @@ export default function MachineryPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="patrimony">Nº do Patrimônio *</Label>
+              <Label htmlFor="patrimony">Nº do Patrimônio{isProprio ? ' *' : ' (opcional)'}</Label>
               <Input
                 id="patrimony"
                 value={formPatrimony}
                 onChange={(e) => setFormPatrimony(e.target.value)}
-                placeholder="Ex: PAT-001"
-                required
+                placeholder={isProprio ? 'Ex: PAT-001' : 'Cedido/locado pode ficar em branco'}
+                required={isProprio}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="patrimony-link">Bem no cadastro de Patrimônio (opcional)</Label>
+              <select
+                id="patrimony-link"
+                value={formPatrimonyId}
+                onChange={(e) => {
+                  setFormPatrimonyId(e.target.value);
+                  const bem = (bensPatrimonio as { id: string; patrimony_number: string }[]).find((b) => b.id === e.target.value);
+                  if (bem) setFormPatrimony(bem.patrimony_number);
+                }}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Não vinculado</option>
+                {(bensPatrimonio as { id: string; name: string; patrimony_number: string; written_off?: boolean }[])
+                  .filter((b) => (!b.written_off && !(machinery as MachineryItem[]).some((m) => m.patrimony_id === b.id && m.id !== editing?.id)) || b.id === formPatrimonyId)
+                  .map((b) => <option key={b.id} value={b.id}>{b.name} — Nº {b.patrimony_number}</option>)}
+              </select>
+              <p className="text-xs text-muted-foreground">Ligar ao bem do Patrimônio é opcional. Ao escolher, o nº é preenchido. Itens cedidos ou locados normalmente não têm.</p>
             </div>
             <div className="space-y-2">
               <Label>Vínculo</Label>

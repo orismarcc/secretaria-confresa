@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
+import { OFICIOS_HABILITADO } from '@/lib/funcionalidades';
 import { ptBR } from 'date-fns/locale';
 import { Separator } from '@/components/ui/separator';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -118,7 +119,7 @@ interface ServiceDetailViewProps {
     demand_types?: { name: string } | null;
     settlements?: { name: string } | null;
     locations?: { name: string } | null;
-    machinery?: { name: string; patrimony_number: string } | null;
+    machinery?: { name: string; patrimony_number: string | null } | null;
     profiles?: { name: string } | null;
     operador?: { name: string } | null;
     responsible_technicians?: { name: string } | null;
@@ -256,10 +257,10 @@ export function ServiceDetailView({
               <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Restituição da DAM pendente</p>
               <p className="text-xs text-muted-foreground">
                 {fmtValor(service.restituicao_valor)}
-                {service.restituicao_oficio && !service.restituicao_oficio_id ? ` · Ofício Nº ${service.restituicao_oficio}` : ''}
+                {service.restituicao_oficio && (!service.restituicao_oficio_id || !OFICIOS_HABILITADO) ? ` · Ofício Nº ${service.restituicao_oficio}` : ''}
                 {service.restituicao_solicitada_em ? ` · solicitada em ${fmtData(service.restituicao_solicitada_em)}` : ''}
               </p>
-              {service.restituicao_oficio_id && (
+              {OFICIOS_HABILITADO && service.restituicao_oficio_id && (
                 <Link to={`/oficios?aba=oficios&oficio=${service.restituicao_oficio_id}`} className="inline-flex items-center gap-1 text-xs font-medium text-primary underline">
                   <ExternalLink className="h-3.5 w-3.5" /> Ofício Nº {service.restituicao_oficio} em Ofícios (anexar o PDF assinado)
                 </Link>
@@ -375,7 +376,7 @@ export function ServiceDetailView({
           <div>
             <p className="text-sm text-muted-foreground">Maquinário</p>
             <p className="font-medium">{service.machinery.name}</p>
-            <p className="text-sm text-muted-foreground">Patrimônio: {service.machinery.patrimony_number}</p>
+            {service.machinery.patrimony_number && <p className="text-sm text-muted-foreground">Patrimônio: {service.machinery.patrimony_number}</p>}
           </div>
         )}
 

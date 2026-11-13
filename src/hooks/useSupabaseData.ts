@@ -1503,7 +1503,7 @@ export function useCreateMachinery() {
 
   return useMutation({
     mutationFn: async (item: {
-      name: string; patrimony_number: string; chassis?: string | null; fuel_type?: string | null; kind?: string | null;
+      name: string; patrimony_number: string | null; patrimony_id?: string | null; chassis?: string | null; fuel_type?: string | null; kind?: string | null;
       vinculo?: string; vinculo_origem?: string | null; vinculo_inicio?: string | null; vinculo_fim?: string | null;
     }) => {
       const { data, error } = await supabase

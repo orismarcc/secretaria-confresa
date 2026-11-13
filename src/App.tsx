@@ -35,6 +35,7 @@ import NotFound from "./pages/NotFound";
 // carregado só quando a página é aberta (não pesa no restante do sistema).
 const TransparenciaPage = lazy(() => import("./pages/TransparenciaPage"));
 const VitrinePage = lazy(() => import("./modules/vitrine/VitrinePage"));
+import { OFICIOS_HABILITADO } from "@/lib/funcionalidades";
 const OficiosPage = lazy(() => import("./pages/OficiosPage"));
 const OficioEditorPage = lazy(() => import("./pages/OficioEditorPage"));
 const AssociacoesPage = lazy(() => import("./pages/AssociacoesPage"));
@@ -106,8 +107,9 @@ function AppRoutes() {
       <Route path="/deliveries" element={<ProtectedRoute adminOnly><DeliveriesPage /></ProtectedRoute>} />
       <Route path="/import" element={<ProtectedRoute adminOnly><ImportServicesPage /></ProtectedRoute>} />
       <Route path="/dam" element={<ProtectedRoute fullAdminOnly><DAMPage /></ProtectedRoute>} />
-      <Route path="/oficios" element={<ProtectedRoute adminOnly><Suspense fallback={<Loading />}><OficiosPage /></Suspense></ProtectedRoute>} />
-      <Route path="/oficios/editor/:tipo/:id" element={<ProtectedRoute adminOnly><Suspense fallback={<Loading />}><OficioEditorPage /></Suspense></ProtectedRoute>} />
+      {/* Ofícios: guardado para lançar depois (lib/funcionalidades.ts). */}
+      {OFICIOS_HABILITADO && <Route path="/oficios" element={<ProtectedRoute adminOnly><Suspense fallback={<Loading />}><OficiosPage /></Suspense></ProtectedRoute>} />}
+      {OFICIOS_HABILITADO && <Route path="/oficios/editor/:tipo/:id" element={<ProtectedRoute adminOnly><Suspense fallback={<Loading />}><OficioEditorPage /></Suspense></ProtectedRoute>} />}
       <Route path="/associacoes" element={<ProtectedRoute adminOnly><Suspense fallback={<Loading />}><AssociacoesPage /></Suspense></ProtectedRoute>} />
       <Route path="/associacoes/:id" element={<ProtectedRoute adminOnly><Suspense fallback={<Loading />}><AssociacaoPage /></Suspense></ProtectedRoute>} />
       <Route path="/patrimony" element={<ProtectedRoute adminOnly><PatrimonyPage /></ProtectedRoute>} />

@@ -113,7 +113,7 @@ describe('Cancelar atendimento com ofício de restituição', () => {
     render(<CancelamentoRestituicaoDialog alvo={{ ...alvo, status: 'cancelled' }} modo="oficio" podeGerarOficio onClose={vi.fn()} />);
     preencher(/^Banco/, 'B'); preencher(/^Agência/, '1'); preencher(/^Conta/, '2');
     preencher(/Nº do ofício/, '400');
-    expect(screen.getByText(new RegExp(`400/${ANO} já está em uso`))).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`400/${ANO} já foi usado em outro ofício`))).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Gerar DOC/ })).toBeDisabled();
     preencher(/Nº do ofício/, '900'); // 900 é do ano anterior: livre neste ano
     expect(screen.getByRole('button', { name: /Gerar DOC/ })).not.toBeDisabled();
@@ -124,7 +124,7 @@ describe('Cancelar atendimento com ofício de restituição', () => {
   it('gerar de novo reaproveita o número do ofício já cadastrado', () => {
     render(<CancelamentoRestituicaoDialog alvo={{ ...alvo, status: 'cancelled', restituicaoOficioId: 'of-472' }} modo="oficio" podeGerarOficio onClose={vi.fn()} />);
     expect((screen.getByLabelText(/Nº do ofício/) as HTMLInputElement).value).toBe('472');
-    expect(screen.queryByText(/já está em uso/)).toBeNull();
+    expect(screen.queryByText(/já foi usado em outro ofício/)).toBeNull();
   });
 
   it('se o atendimento não gravar, o ofício recém-cadastrado é desfeito e nada é baixado', async () => {

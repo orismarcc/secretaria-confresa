@@ -26,6 +26,7 @@ import {
   FileStack,
   Handshake,
 } from 'lucide-react';
+import { OFICIOS_HABILITADO } from '@/lib/funcionalidades';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import logoTransparent from '@/assets/logo-transparent.png';
@@ -41,7 +42,8 @@ const adminNavItems = [
   { path: '/services', label: 'Atendimentos', icon: ClipboardList },
   { path: '/producers', label: 'Produtores', icon: Users },
   { path: '/dam', label: 'DAMs', icon: Receipt },
-  { path: '/oficios', label: 'Ofícios', icon: FileStack },
+  // Ofícios: guardado para lançar depois (lib/funcionalidades.ts).
+  ...(OFICIOS_HABILITADO ? [{ path: '/oficios', label: 'Ofícios', icon: FileStack }] : []),
   { path: '/associacoes', label: 'Associações', icon: Handshake },
   { path: '/operators', label: 'Colaboradores', icon: UserCog },
   { path: '/demand-types', label: 'Serviços', icon: FileText },

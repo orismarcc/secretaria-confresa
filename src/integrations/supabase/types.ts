@@ -637,7 +637,8 @@ export type Database = {
           is_active: boolean
           kind: string
           name: string
-          patrimony_number: string
+          patrimony_id: string | null
+          patrimony_number: string | null
           updated_at: string
           vinculo: string
           vinculo_fim: string | null
@@ -652,7 +653,8 @@ export type Database = {
           is_active?: boolean
           kind?: string
           name: string
-          patrimony_number: string
+          patrimony_id?: string | null
+          patrimony_number?: string | null
           updated_at?: string
           vinculo?: string
           vinculo_fim?: string | null
@@ -667,7 +669,8 @@ export type Database = {
           is_active?: boolean
           kind?: string
           name?: string
-          patrimony_number?: string
+          patrimony_id?: string | null
+          patrimony_number?: string | null
           updated_at?: string
           vinculo?: string
           vinculo_fim?: string | null

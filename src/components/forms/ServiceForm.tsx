@@ -83,7 +83,7 @@ interface OperatorOption {
 interface MachineryOption {
   id: string;
   name: string;
-  patrimony_number: string;
+  patrimony_number: string | null;
 }
 
 interface TechnicianOption {
@@ -861,7 +861,7 @@ export function ServiceForm({
                           <SelectItem value="none">Nenhum</SelectItem>
                           {activeMachinery.map((m) => (
                             <SelectItem key={m.id} value={m.id}>
-                              {m.name} — Nº {m.patrimony_number}
+                              {m.name}{m.patrimony_number ? ` — Nº ${m.patrimony_number}` : ''}
                             </SelectItem>
                           ))}
                         </SelectContent>

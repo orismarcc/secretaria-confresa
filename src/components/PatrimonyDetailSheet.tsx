@@ -19,7 +19,7 @@ import {
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { openWhatsApp } from '@/lib/phone';
-import { usePatrimonyTransfers } from '@/hooks/useSupabaseData';
+import { useMachinery, usePatrimonyTransfers } from '@/hooks/useSupabaseData';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -231,6 +231,7 @@ export function PatrimonyDetailSheet({
   onEdit,
   onTransfer,
 }: PatrimonyDetailSheetProps) {
+  const { data: frota = [] } = useMachinery();
   const { data: transfers = [], isLoading: transfersLoading } = usePatrimonyTransfers(
     open && item ? item.id : null,
   );
@@ -318,6 +319,13 @@ export function PatrimonyDetailSheet({
                 </div>
               )}
             </div>
+
+            {(() => {
+              const ligado = (frota as { id: string; name: string; patrimony_id?: string | null }[]).find((m) => m.patrimony_id === item.id);
+              return ligado ? (
+                <p className="text-sm rounded-lg border bg-primary/5 px-3 py-2">Ligado em <strong>Frotas</strong>: {ligado.name}</p>
+              ) : null;
+            })()}
 
             {/* Value & Date */}
             <div className="grid grid-cols-2 gap-3">

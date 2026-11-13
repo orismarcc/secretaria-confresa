@@ -20,6 +20,7 @@ import { useUpdateService } from '@/hooks/useSupabaseData';
 import { useOficios, salvarOficioRestituicao, desfazerOficioCriado } from '@/hooks/useOficios';
 import { friendlyDbError } from '@/lib/dbErrors';
 import { proximoNumeroLocal } from '@/lib/oficios';
+import { OFICIOS_HABILITADO } from '@/lib/funcionalidades';
 import { triggerDownload, ASSINANTES_COMUNICADO } from '@/lib/comunicado';
 import {
   MOTIVOS_RESTITUICAO,
@@ -225,7 +226,7 @@ export function CancelamentoRestituicaoDialog({ alvo, modo, podeGerarOficio, onC
       triggerDownload(blob, filename);
       toast({
         title: `Ofício Nº ${numeroCompleto} gerado`,
-        description: `Cadastrado em Ofícios (anexe lá o PDF assinado). Restituição de ${fmtBRL(valorNum)} pendente — confirme nos detalhes do atendimento quando o valor for devolvido.`
+        description: `${OFICIOS_HABILITADO ? 'Cadastrado em Ofícios (anexe lá o PDF assinado). ' : ''}Restituição de ${fmtBRL(valorNum)} pendente — confirme nos detalhes do atendimento quando o valor for devolvido.`
           + (comprovanteIncluido ? ' Comprovante de pagamento incluído após o ofício.' : ''),
       });
       if (alvo.comprovanteUrl && !comprovanteIncluido) {
@@ -346,7 +347,7 @@ export function CancelamentoRestituicaoDialog({ alvo, modo, podeGerarOficio, onC
                     <span className="text-sm text-muted-foreground shrink-0">/{anoOficio}</span>
                   </div>
                   {numeroEmUso ? (
-                    <p className="text-xs text-destructive">Nº {numeroNum}/{anoOficio} já está em uso em Ofícios. Próximo livre: {proximoNumeroLocal(oficios.filter((o) => o.id !== oficioExistente?.id), anoOficio)}.</p>
+                    <p className="text-xs text-destructive">Nº {numeroNum}/{anoOficio} já foi usado em outro ofício. Próximo livre: {proximoNumeroLocal(oficios.filter((o) => o.id !== oficioExistente?.id), anoOficio)}.</p>
                   ) : (
                     <p className="text-[11px] text-muted-foreground">
                       {oficioExistente ? 'Mesmo número do ofício já gerado' : numeroEditado ? 'Número alterado' : 'Automático (próximo livre)'} — pode alterar.
