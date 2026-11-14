@@ -33,6 +33,7 @@ export interface PatrimonyDetailItem {
   description: string | null;
   value: number | null;
   category: string | null;
+  current_value?: number | null;
   acquisition_date: string | null;
   written_off: boolean;
   condition: Condition | null;
@@ -333,8 +334,11 @@ export function PatrimonyDetailSheet({
                 <div className="flex items-center gap-2">
                   <DollarSign className="h-4 w-4 text-emerald-600 shrink-0" />
                   <div>
-                    <p className="text-xs text-muted-foreground">Valor</p>
+                    <p className="text-xs text-muted-foreground">Valor de aquisição</p>
                     <p className="font-semibold text-sm text-emerald-700">{formatBRL(item.value)}</p>
+                    {item.current_value != null && (
+                      <p className="text-xs text-muted-foreground">Atual: <span className="font-medium text-foreground">{formatBRL(Number(item.current_value))}</span></p>
+                    )}
                   </div>
                 </div>
               )}

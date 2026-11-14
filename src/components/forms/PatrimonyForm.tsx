@@ -25,6 +25,7 @@ export interface PatrimonyFormItem {
   patrimony_number_state?: string | null;
   description: string | null;
   value: number | null;
+  current_value?: number | null;
   category: string | null;
   acquisition_date: string | null;
   written_off: boolean;
@@ -48,6 +49,7 @@ export interface PatrimonyFormPayload {
   patrimony_number_state: string | null;
   description: string | null;
   value: number | null;
+  current_value: number | null;
   category: string | null;
   acquisition_date: string | null;
   written_off: boolean;
@@ -160,6 +162,7 @@ export function PatrimonyForm({ open, onOpenChange, item, onSubmit }: PatrimonyF
   const [patrimonyNumberState, setPatrimonyNumberState] = useState('');
   const [description, setDescription]             = useState('');
   const [value, setValue]                         = useState('');
+  const [currentValue, setCurrentValue]           = useState('');
   const [category, setCategory]                   = useState('');
   const [acquisitionDate, setAcquisitionDate]     = useState('');
   const [writtenOff, setWrittenOff]               = useState(false);
@@ -194,6 +197,11 @@ export function PatrimonyForm({ open, onOpenChange, item, onSubmit }: PatrimonyF
         setPatrimonyNumber(item.patrimony_number);
         setPatrimonyNumberState(item.patrimony_number_state ?? '');
         setDescription(item.description ?? '');
+        setCurrentValue(
+          item.current_value != null
+            ? Number(item.current_value).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : '',
+        );
         setValue(
           item.value != null
             ? item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -218,7 +226,7 @@ export function PatrimonyForm({ open, onOpenChange, item, onSubmit }: PatrimonyF
         setResponsiblePhone('');
       } else {
         setName(''); setPatrimonyNumber(''); setPatrimonyNumberState('');
-        setDescription(''); setValue(''); setCategory('');
+        setDescription(''); setValue(''); setCurrentValue(''); setCategory('');
         setAcquisitionDate(''); setWrittenOff(false); setCondition('');
         setChassis(''); setNotes('');
         setLatitude(''); setLongitude('');
@@ -279,6 +287,7 @@ export function PatrimonyForm({ open, onOpenChange, item, onSubmit }: PatrimonyF
         patrimony_number_state: patrimonyNumberState.trim() || null,
         description: description.trim() || null,
         value: parseCurrencyInput(value),
+        current_value: parseCurrencyInput(currentValue),
         category: category || null,
         acquisition_date: acquisitionDate || null,
         written_off: writtenOff,
@@ -482,7 +491,7 @@ export function PatrimonyForm({ open, onOpenChange, item, onSubmit }: PatrimonyF
           {/* ── Value & Date ── */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="pat-value">Valor (R$)</Label>
+              <Label htmlFor="pat-value">Valor de aquisição (R$)</Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium pointer-events-none">R$</span>
                 <Input
@@ -491,6 +500,21 @@ export function PatrimonyForm({ open, onOpenChange, item, onSubmit }: PatrimonyF
                   inputMode="decimal"
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
+                  placeholder="0,00"
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pat-current-value">Valor atual (R$)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium pointer-events-none">R$</span>
+                <Input
+                  id="pat-current-value"
+                  type="text"
+                  inputMode="decimal"
+                  value={currentValue}
+                  onChange={(e) => setCurrentValue(e.target.value)}
                   placeholder="0,00"
                   className="pl-10"
                 />

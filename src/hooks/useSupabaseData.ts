@@ -1979,6 +1979,7 @@ export function useCreatePatrimony() {
       patrimony_number_state?: string | null;
       description?: string | null;
       value?: number | null;
+      current_value?: number | null;
       category?: string | null;
       acquisition_date?: string | null;
       location?: string | null;

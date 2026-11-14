@@ -997,6 +997,7 @@ export type Database = {
           chassis: string | null
           condition: string | null
           created_at: string | null
+          current_value: number | null
           description: string | null
           id: string
           image_url: string | null
@@ -1022,6 +1023,7 @@ export type Database = {
           chassis?: string | null
           condition?: string | null
           created_at?: string | null
+          current_value?: number | null
           description?: string | null
           id?: string
           image_url?: string | null
@@ -1047,6 +1049,7 @@ export type Database = {
           chassis?: string | null
           condition?: string | null
           created_at?: string | null
+          current_value?: number | null
           description?: string | null
           id?: string
           image_url?: string | null

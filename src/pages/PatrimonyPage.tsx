@@ -39,6 +39,7 @@ interface PatrimonyItem {
   patrimony_number_state?: string | null;
   description: string | null;
   value: number | null;
+  current_value?: number | null;
   category: string | null;
   acquisition_date: string | null;
   is_active: boolean;
@@ -145,6 +146,10 @@ export default function PatrimonyPage() {
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [patrimony]);
 
+  const grandCurrentValue = useMemo(
+    () => (patrimony as PatrimonyItem[]).reduce((s, p) => s + Number(p.current_value || 0), 0),
+    [patrimony],
+  );
   const grandTotalValue = useMemo(
     () => (patrimony as PatrimonyItem[]).reduce((s, p) => s + Number(p.value || 0), 0),
     [patrimony],
@@ -187,6 +192,7 @@ export default function PatrimonyPage() {
         patrimony_number_state: data.patrimony_number_state,
         description: data.description,
         value: data.value,
+        current_value: data.current_value,
         category: data.category,
         acquisition_date: data.acquisition_date,
         written_off: data.written_off,
@@ -238,6 +244,7 @@ export default function PatrimonyPage() {
       patrimony_number_state: data.patrimony_number_state,
       description: data.description,
       value: data.value,
+      current_value: data.current_value,
       category: data.category,
       acquisition_date: data.acquisition_date,
       written_off: data.written_off,
@@ -379,8 +386,13 @@ export default function PatrimonyPage() {
                   <span className="text-muted-foreground/40">·</span>
                   <span className="inline-flex items-center gap-1 font-medium text-emerald-700">
                     <DollarSign className="h-3.5 w-3.5" />
-                    {formatBRL(grandTotalValue)}
+                    {formatBRL(grandTotalValue)} <span className="font-normal text-muted-foreground">(aquisição)</span>
                   </span>
+                  {grandCurrentValue > 0 && (
+                    <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                      {formatBRL(grandCurrentValue)} <span className="font-normal text-muted-foreground">(valor atual)</span>
+                    </span>
+                  )}
                 </>
               )}
             </div>
@@ -588,9 +600,12 @@ export default function PatrimonyPage() {
                   </div>
 
                   {p.value != null && (
-                    <div className="flex items-center gap-2 text-sm">
+                    <div className="flex items-center gap-2 text-sm flex-wrap">
                       <DollarSign className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                      <span className="font-semibold text-emerald-700">{formatBRL(p.value)}</span>
+                      <span className="font-semibold text-emerald-700" title="Valor de aquisição">{formatBRL(p.value)}</span>
+                      {p.current_value != null && (
+                        <span className="text-xs text-muted-foreground">· atual {formatBRL(Number(p.current_value))}</span>
+                      )}
                     </div>
                   )}
 
