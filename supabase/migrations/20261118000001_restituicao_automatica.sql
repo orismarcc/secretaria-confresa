@@ -13,12 +13,14 @@ RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = public AS $$
 BEGIN
-  -- Reaberto: a restituição pendente deixa de existir (regra anterior)
+  -- Reaberto: a restituição pendente deixa de existir (regras anteriores,
+  -- incluindo o vínculo com o ofício — 20261112000003)
   IF NEW.status <> 'cancelled' AND NEW.restituicao_status = 'pendente' THEN
     NEW.restituicao_status := NULL;
     NEW.restituicao_valor := NULL;
     NEW.restituicao_motivo := NULL;
     NEW.restituicao_oficio := NULL;
+    NEW.restituicao_oficio_id := NULL;
     NEW.restituicao_solicitada_em := NULL;
   END IF;
 
