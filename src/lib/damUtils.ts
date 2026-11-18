@@ -30,9 +30,9 @@ export function isDamOverdue(
  * Valor de uma DAM que conta na arrecadação (e no total de DAMs do produtor).
  * - Só DAM paga conta.
  * - Restituição CONFIRMADA: o valor restituído é descontado.
- * - Cancelado com restituição PENDENTE: continua contando (o dinheiro ainda
- *   não foi devolvido) até a confirmação.
- * - Cancelado sem pedido de restituição: não conta (regra que já existia).
+ * - Cancelado (com ou sem ofício pelo sistema): a DAM paga continua contando
+ *   enquanto a restituição estiver pendente — o banco marca todo cancelado com
+ *   DAM paga como "pendente" — e é descontada quando a restituição é confirmada.
  */
 export function valorDamArrecadado(s: {
   dam_paid?: boolean | null;
@@ -46,7 +46,6 @@ export function valorDamArrecadado(s: {
   if (s.restituicao_status === 'confirmada') {
     return Math.max(0, valor - (Number(s.restituicao_valor) || 0));
   }
-  if (s.status === 'cancelled' && s.restituicao_status !== 'pendente') return 0;
   return valor;
 }
 

@@ -6,8 +6,8 @@ describe('valorDamArrecadado (restituição da DAM)', () => {
     expect(valorDamArrecadado({ dam_paid: true, dam_value: 500, status: 'completed' })).toBe(500);
     expect(valorDamArrecadado({ dam_paid: false, dam_value: 500, status: 'completed' })).toBe(0);
   });
-  it('cancelado sem pedido de restituição não conta (regra anterior)', () => {
-    expect(valorDamArrecadado({ dam_paid: true, dam_value: 500, status: 'cancelled' })).toBe(0);
+  it('cancelado com DAM paga conta até a restituição ser confirmada', () => {
+    expect(valorDamArrecadado({ dam_paid: true, dam_value: 500, status: 'cancelled' })).toBe(500);
   });
   it('cancelado com restituição pendente continua contando até confirmar', () => {
     expect(valorDamArrecadado({ dam_paid: true, dam_value: 500, status: 'cancelled', restituicao_status: 'pendente', restituicao_valor: 500 })).toBe(500);
