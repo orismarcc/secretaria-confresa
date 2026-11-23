@@ -34,6 +34,8 @@ import NotFound from "./pages/NotFound";
 // Conecta Confresa (Vitrine da Agricultura Familiar): módulo independente,
 // carregado só quando a página é aberta (não pesa no restante do sistema).
 const TransparenciaPage = lazy(() => import("./pages/TransparenciaPage"));
+// EcoAção: demonstração pública de denúncia ambiental (dados só no aparelho)
+const EcoAcaoPage = lazy(() => import("./pages/EcoAcaoPage"));
 const VitrinePage = lazy(() => import("./modules/vitrine/VitrinePage"));
 import { OFICIOS_HABILITADO, CONECTA_CONFRESA_HABILITADO } from "@/lib/funcionalidades";
 const OficiosPage = lazy(() => import("./pages/OficiosPage"));
@@ -87,6 +89,7 @@ function AppRoutes() {
       <Route path="/" element={<HomeRedirect />} />
       {/* Público (sem login): só números agregados */}
       <Route path="/transparencia" element={<Suspense fallback={<Loading />}><TransparenciaPage /></Suspense>} />
+      <Route path="/ecoacao" element={<Suspense fallback={<Loading />}><EcoAcaoPage /></Suspense>} />
 
       {/* Admin Routes */}
       <Route path="/dashboard" element={<ProtectedRoute adminOnly><DashboardPage /></ProtectedRoute>} />
