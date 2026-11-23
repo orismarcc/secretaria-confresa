@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   gerarProtocolo, pendencias, coordenadaValida, salvarDenuncia, listarDenuncias, apagarDenuncia,
   medidasReduzidas, alternarSugestao, CHAVE_ECOACAO, LIMITE_DENUNCIAS, MAX_FOTOS, type Denuncia,
-  melhorLeitura, leituraUtil, detectarPlataforma, navegadorDeApp, comoLiberarGps, type LeituraGps,
+  melhorLeitura, leituraUtil, detectarPlataforma, navegadorDeApp, comoLiberarGps, linkDoMapa, type LeituraGps,
 } from './ecoacao';
 
 function armazem(limiteBytes = Infinity) {
@@ -142,5 +142,13 @@ describe('EcoAção — GPS', () => {
     expect(navegadorDeApp('Mozilla/5.0 (iPhone) Instagram 300')).toBe(true);
     expect(navegadorDeApp('Mozilla/5.0 (iPhone) Version/18 Mobile Safari')).toBe(false);
     expect(comoLiberarGps('iphone').join(' ')).toMatch(/Sites do Safari/);
+  });
+});
+
+describe('EcoAção — abrir no mapa', () => {
+  it('usa o app de mapas de cada aparelho', () => {
+    expect(linkDoMapa(-10.644121, -51.569512, 'iphone')).toMatch(/^https:\/\/maps\.apple\.com\/\?ll=-10\.644121,-51\.569512/);
+    expect(linkDoMapa(-10.644121, -51.569512, 'android')).toMatch(/^geo:-10\.644121,-51\.569512\?q=/);
+    expect(linkDoMapa(-10.644121, -51.569512, 'outro')).toBe('https://www.google.com/maps/search/?api=1&query=-10.644121,-51.569512');
   });
 });

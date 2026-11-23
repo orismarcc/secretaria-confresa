@@ -206,6 +206,17 @@ export function navegadorDeApp(ua: string = typeof navigator !== 'undefined' ? n
   return /FBAN|FBAV|Instagram|WhatsApp|Line\/|\bwv\b|GSA\//i.test(ua);
 }
 
+/**
+ * Link para abrir o ponto no app de mapas do celular: iPhone → Apple Mapas;
+ * Android → app de mapas (geo:); computador → Google Maps.
+ */
+export function linkDoMapa(lat: number, lng: number, p: Plataforma = detectarPlataforma()): string {
+  const c = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+  if (p === 'iphone') return `https://maps.apple.com/?ll=${c}&q=${encodeURIComponent('Denúncia EcoAção')}`;
+  if (p === 'android') return `geo:${c}?q=${c}(${encodeURIComponent('Denúncia EcoAção')})`;
+  return `https://www.google.com/maps/search/?api=1&query=${c}`;
+}
+
 /** Passo a passo para liberar a localização, por aparelho. */
 export function comoLiberarGps(p: Plataforma): string[] {
   if (p === 'iphone') {

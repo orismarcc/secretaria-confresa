@@ -10,7 +10,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
   Camera, ImagePlus, MapPin, Trash2, ArrowLeft, ArrowRight, Check, Leaf, Loader2,
-  ClipboardList, Info, LocateFixed, Pencil, ShieldCheck, Smartphone, X, AlertTriangle, Plus,
+  ClipboardList, Info, LocateFixed, Pencil, ShieldCheck, Smartphone, X, AlertTriangle, Plus, Navigation,
 } from 'lucide-react';
 import { EscolherNoMapaDialog } from '@/components/mapa/EscolherNoMapaDialog';
 import { adicionarCamadaBase } from '@/lib/mapa/camadaBase';
@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 import {
   type Denuncia, type EstadoGps, type LeituraGps, ROTULO_TIPO, ROTULO_ORIGEM, LIMITE_DESCRICAO, MAX_FOTOS,
   gerarProtocolo, pendencias, coordenadaValida, salvarDenuncia, listarDenuncias, apagarDenuncia,
-  reduzirFoto, alternarSugestao, criarRastreioGps, leituraUtil, detectarPlataforma, navegadorDeApp, comoLiberarGps,
+  reduzirFoto, alternarSugestao, criarRastreioGps, leituraUtil, detectarPlataforma, navegadorDeApp, comoLiberarGps, linkDoMapa,
 } from '@/lib/ecoacao';
 
 type Tela = 'inicio' | 'tipo' | 'foto' | 'descricao' | 'revisao' | 'enviado' | 'lista';
@@ -54,6 +54,23 @@ function MiniMapa({ lat, lng }: { lat: number; lng: number }) {
     return () => { try { tirar(); map.remove(); } catch { /* ok */ } };
   }, [lat, lng]);
   return <div ref={ref} className="isolate h-36 w-full rounded-2xl overflow-hidden border border-[#cfe0cf] [&_.leaflet-control-container]:hidden" />;
+}
+
+/** Mapa tocável: abre o ponto no app de mapas do celular. */
+function MapaComLink({ lat, lng }: { lat: number; lng: number }) {
+  const href = linkDoMapa(lat, lng, PLATAFORMA);
+  const externo = href.startsWith('http');
+  return (
+    <a href={href} target={externo ? '_blank' : undefined} rel="noopener noreferrer" className="block space-y-2 group" aria-label="Abrir o local no mapa">
+      <div className="relative">
+        <MiniMapa lat={lat} lng={lng} />
+        <span className="absolute bottom-2 right-2 z-[500] rounded-full bg-white/95 text-[#1f5a35] text-[11px] font-semibold px-2.5 py-1 shadow">Toque para abrir</span>
+      </div>
+      <span className="w-full h-11 rounded-xl bg-[#1f5a35] text-white text-[13px] font-semibold flex items-center justify-center gap-1.5 group-active:opacity-90">
+        <Navigation className="h-4 w-4" /> {PLATAFORMA === 'iphone' ? 'Abrir no Mapas' : 'Abrir no mapa'} — como chegar
+      </span>
+    </a>
+  );
 }
 
 // ── Peças visuais ────────────────────────────────────────────────────────────
@@ -544,6 +561,9 @@ export default function EcoAcaoPage() {
                 <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#5d7a61]">Protocolo</p>
                 <p className="font-mono text-[22px] font-bold text-[#1f5a35] tracking-wide">{enviada.protocolo}</p>
               </div>
+              {coordenadaValida(enviada.latitude, enviada.longitude) && (
+                <div className="w-full text-left"><MapaComLink lat={enviada.latitude!} lng={enviada.longitude!} /></div>
+              )}
               <Dica>Na versão de demonstração a denúncia fica só neste aparelho. No aplicativo definitivo, ela seguirá para o órgão responsável.</Dica>
               <div className="w-full mt-auto space-y-2.5 pt-2">
                 <BotaoPrincipal onClick={() => setTela('lista')}><ClipboardList className="h-5 w-5" /> Ver minhas denúncias</BotaoPrincipal>
@@ -610,7 +630,7 @@ export default function EcoAcaoPage() {
               <p className="font-mono text-[15px] font-bold text-[#1f5a35]">{aberta.protocolo}</p>
               <p className="text-[12px] text-[#6b8270]">{ROTULO_TIPO[aberta.tipo]} · {fmtData(aberta.criadaEm)}</p>
               <p className="text-[14px] text-[#17301f] whitespace-pre-wrap">{aberta.descricao}</p>
-              {coordenadaValida(aberta.latitude, aberta.longitude) && <MiniMapa lat={aberta.latitude!} lng={aberta.longitude!} />}
+              {coordenadaValida(aberta.latitude, aberta.longitude) && <MapaComLink lat={aberta.latitude!} lng={aberta.longitude!} />}
               {aberta.endereco && <p className="text-[13px] text-[#3d5341]"><MapPin className="inline h-3.5 w-3.5 -mt-0.5 text-[#e4572e]" /> {aberta.endereco}</p>}
               <button type="button" onClick={() => apagar(aberta.id)} className="w-full h-11 rounded-xl text-red-700 bg-red-50 text-[13px] font-semibold flex items-center justify-center gap-1.5">
                 <Trash2 className="h-4 w-4" /> Apagar deste aparelho
