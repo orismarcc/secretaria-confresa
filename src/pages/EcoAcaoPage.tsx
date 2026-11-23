@@ -1,29 +1,31 @@
 // EcoAção — DEMONSTRAÇÃO pública (sem login) de denúncia de descarte irregular
 // de lixo. Projeto idealizado por alunos da comunidade Bridão Brasileiro.
 // Reaproveita a lógica dos atendimentos dos operadores: foto + GPS de alta
-// precisão na hora da foto, GPS gravado na foto (galeria) e "Procurar no mapa".
+// precisão, GPS gravado na foto (galeria) e "Procurar no mapa".
+// O GPS começa a ser lido ao escolher o tipo (antes da câmera) — no iPhone a
+// primeira posição demora e há o pedido de permissão.
 // Nada é enviado ao banco do sistema: as denúncias ficam só neste aparelho.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
   Camera, ImagePlus, MapPin, Trash2, ArrowLeft, ArrowRight, Check, Leaf, Loader2,
-  ClipboardList, Info, LocateFixed, Pencil, RotateCcw, ShieldCheck, Smartphone, X,
+  ClipboardList, Info, LocateFixed, Pencil, ShieldCheck, Smartphone, X, AlertTriangle, Plus,
 } from 'lucide-react';
 import { EscolherNoMapaDialog } from '@/components/mapa/EscolherNoMapaDialog';
 import { adicionarCamadaBase } from '@/lib/mapa/camadaBase';
 import { lerExifFoto } from '@/lib/exifFoto';
 import { cn } from '@/lib/utils';
 import {
-  type Denuncia, ROTULO_TIPO, ROTULO_ORIGEM, LIMITE_DESCRICAO,
+  type Denuncia, type EstadoGps, type LeituraGps, ROTULO_TIPO, ROTULO_ORIGEM, LIMITE_DESCRICAO, MAX_FOTOS,
   gerarProtocolo, pendencias, coordenadaValida, salvarDenuncia, listarDenuncias, apagarDenuncia,
-  reduzirFoto, lerGpsDenuncia, alternarSugestao,
+  reduzirFoto, alternarSugestao, criarRastreioGps, leituraUtil, detectarPlataforma, navegadorDeApp, comoLiberarGps,
 } from '@/lib/ecoacao';
 
 type Tela = 'inicio' | 'tipo' | 'foto' | 'descricao' | 'revisao' | 'enviado' | 'lista';
 const PASSOS: { tela: Tela; rotulo: string }[] = [
   { tela: 'tipo', rotulo: 'Tipo' },
-  { tela: 'foto', rotulo: 'Foto e local' },
+  { tela: 'foto', rotulo: 'Fotos e local' },
   { tela: 'descricao', rotulo: 'Descrição' },
   { tela: 'revisao', rotulo: 'Enviar' },
 ];
@@ -31,11 +33,13 @@ const SUGESTOES = ['Entulho de obra', 'Lixo doméstico', 'Pneus', 'Móveis velho
 
 type Rascunho = Omit<Denuncia, 'id' | 'protocolo' | 'criadaEm'>;
 const RASCUNHO_VAZIO: Rascunho = {
-  tipo: 'descarte_lixo', fotoDataUrl: '', latitude: null, longitude: null, precisaoM: null,
+  tipo: 'descarte_lixo', fotos: [], latitude: null, longitude: null, precisaoM: null,
   origemLocal: null, endereco: '', descricao: '',
 };
 
 const fmtData = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const PLATAFORMA = detectarPlataforma();
+const EM_APP = navegadorDeApp();
 
 // ── Mini mapa só para mostrar o ponto ────────────────────────────────────────
 function MiniMapa({ lat, lng }: { lat: number; lng: number }) {
@@ -95,71 +99,148 @@ function Passos({ atual }: { atual: Tela }) {
   );
 }
 
+/** Situação do GPS ao vivo, com o que fazer quando não funciona. */
+function PainelGps({ estado, leitura, onTentar, onMapa }: { estado: EstadoGps; leitura: LeituraGps | null; onTentar: () => void; onMapa: () => void }) {
+  const [verComo, setVerComo] = useState(false);
+  if (estado === 'ok' && leitura) {
+    return (
+      <div className="flex items-center gap-2 rounded-2xl bg-[#eef6e9] px-3.5 py-2.5 text-[13px] text-[#2d4a32]">
+        <span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full rounded-full bg-[#3f8f4a] opacity-60 animate-ping" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#3f8f4a]" /></span>
+        <span className="flex-1">GPS ligado{leitura.precisaoM != null ? ` · precisão de ${Math.round(leitura.precisaoM)} m` : ''}</span>
+      </div>
+    );
+  }
+  if (estado === 'buscando' || estado === 'parado') {
+    return (
+      <div className="rounded-2xl bg-[#eef6e9] px-3.5 py-2.5 text-[13px] text-[#2d4a32]">
+        <p className="flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin text-[#3f8f4a]" /> Procurando sua localização…</p>
+        <p className="text-[12px] text-[#5d7a61] mt-1">
+          {PLATAFORMA === 'iphone' ? 'Se o iPhone perguntar, toque em "Permitir". ' : 'Se o celular perguntar, toque em "Permitir". '}
+          Ao ar livre o GPS fica mais rápido e preciso.
+        </p>
+      </div>
+    );
+  }
+  // negado / indisponível
+  return (
+    <div className="rounded-2xl border border-[#f1c9a8] bg-[#fff6ee] px-3.5 py-3 text-[13px] text-[#6b3a12] space-y-2">
+      <p className="flex items-start gap-2 font-semibold">
+        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-[#d9772b]" />
+        {estado === 'negado' ? 'A localização está bloqueada para este site.' : 'O celular não informou a localização.'}
+      </p>
+      {EM_APP && <p className="text-[12px]">Você abriu o link dentro de um aplicativo (WhatsApp, Instagram…). Abra no {PLATAFORMA === 'iphone' ? 'Safari' : 'Chrome'} para o GPS funcionar.</p>}
+      {verComo ? (
+        <ol className="list-decimal pl-5 space-y-1 text-[12px]">
+          {comoLiberarGps(PLATAFORMA).map((p) => <li key={p}>{p}</li>)}
+        </ol>
+      ) : (
+        <button type="button" onClick={() => setVerComo(true)} className="text-[12px] font-semibold underline">Como liberar a localização</button>
+      )}
+      <div className="grid grid-cols-2 gap-2 pt-1">
+        <button type="button" onClick={onTentar} className="h-9 rounded-xl bg-white border border-[#f1c9a8] text-[12px] font-semibold flex items-center justify-center gap-1.5"><LocateFixed className="h-3.5 w-3.5" /> Tentar de novo</button>
+        <button type="button" onClick={onMapa} className="h-9 rounded-xl bg-white border border-[#f1c9a8] text-[12px] font-semibold flex items-center justify-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> Marcar no mapa</button>
+      </div>
+    </div>
+  );
+}
+
 // ── Página ───────────────────────────────────────────────────────────────────
 export default function EcoAcaoPage() {
   const [tela, setTela] = useState<Tela>('inicio');
   const [r, setR] = useState<Rascunho>(RASCUNHO_VAZIO);
   const [nota, setNota] = useState<string | null>(null);
-  const [processando, setProcessando] = useState<'foto' | 'gps' | null>(null);
+  const [preparandoFoto, setPreparandoFoto] = useState(false);
   const [mapaAberto, setMapaAberto] = useState(false);
   const [lista, setLista] = useState<Denuncia[]>(() => listarDenuncias());
   const [enviada, setEnviada] = useState<Denuncia | null>(null);
   const [aberta, setAberta] = useState<Denuncia | null>(null);
+  const [fotoAmpliada, setFotoAmpliada] = useState(0);
   const [erro, setErro] = useState<string | null>(null);
+  const [gps, setGps] = useState<{ estado: EstadoGps; leitura: LeituraGps | null }>({ estado: 'parado', leitura: null });
   const camRef = useRef<HTMLInputElement>(null);
   const galRef = useRef<HTMLInputElement>(null);
   const topoRef = useRef<HTMLDivElement>(null);
+  const rastreio = useMemo(() => criarRastreioGps((estado, leitura) => setGps({ estado, leitura })), []);
 
   useEffect(() => { document.title = 'EcoAção — Denúncia ambiental'; }, []);
   useEffect(() => { topoRef.current?.scrollIntoView({ block: 'start' }); }, [tela]);
+  useEffect(() => () => rastreio.parar(), [rastreio]);
+  // GPS ligado só durante o preenchimento
+  useEffect(() => {
+    if (tela === 'tipo' || tela === 'foto') rastreio.iniciar();
+    if (tela === 'inicio' || tela === 'enviado' || tela === 'lista') rastreio.parar();
+  }, [tela, rastreio]);
+
+  // Com foto e sem ponto escolhido à mão/da foto: usa (e vai melhorando) a posição do GPS.
+  useEffect(() => {
+    if (tela !== 'foto' || r.fotos.length === 0) return;
+    if (r.origemLocal === 'mapa' || r.origemLocal === 'foto') return;
+    const l = gps.leitura;
+    if (!leituraUtil(l)) return;
+    const atual = r.origemLocal === 'gps' ? r.precisaoM ?? 9999 : Infinity;
+    if ((l.precisaoM ?? 9999) < atual || !coordenadaValida(r.latitude, r.longitude)) {
+      setR((x) => ({ ...x, latitude: l.latitude, longitude: l.longitude, precisaoM: l.precisaoM, origemLocal: 'gps' }));
+    }
+  }, [gps.leitura, r.fotos.length, r.origemLocal, r.precisaoM, r.latitude, r.longitude, tela]);
 
   const temLocal = coordenadaValida(r.latitude, r.longitude);
   const falta = useMemo(() => pendencias(r), [r]);
+  const podeMaisFotos = r.fotos.length < MAX_FOTOS;
 
   const novaDenuncia = () => { setR(RASCUNHO_VAZIO); setNota(null); setErro(null); setTela('tipo'); };
 
-  async function aoEscolherFoto(arquivo: File | undefined, origem: 'camera' | 'galeria') {
-    if (!arquivo) return;
-    if (!/^image\//.test(arquivo.type)) { setErro('Escolha um arquivo de imagem (foto).'); return; }
-    setErro(null);
-    setProcessando('foto');
-    // Câmera: lê o GPS AGORA, junto com a foto (como no atendimento do operador).
-    const gpsAgora = origem === 'camera' ? lerGpsDenuncia() : null;
+  async function aoEscolherFotos(arquivos: FileList | null, origem: 'camera' | 'galeria') {
+    const lista = Array.from(arquivos ?? []).filter((f) => /^image\//.test(f.type));
+    if (!lista.length) { if (arquivos?.length) setErro('Escolha um arquivo de imagem (foto).'); return; }
+    const vagas = MAX_FOTOS - r.fotos.length;
+    if (vagas <= 0) return;
+    const usar = lista.slice(0, vagas);
+    setErro(lista.length > vagas ? `Só cabem ${MAX_FOTOS} fotos — usamos as ${vagas === 1 ? 'primeira' : `${vagas} primeiras`}.` : null);
+    setPreparandoFoto(true);
     try {
-      const [dataUrl, exif] = await Promise.all([reduzirFoto(arquivo), origem === 'galeria' ? lerExifFoto(arquivo) : Promise.resolve(null)]);
-      setR((x) => ({ ...x, fotoDataUrl: dataUrl }));
-      setProcessando('gps');
-      if (origem === 'galeria' && exif && coordenadaValida(exif.latitude, exif.longitude)) {
-        setR((x) => ({ ...x, latitude: exif.latitude, longitude: exif.longitude, precisaoM: null, origemLocal: 'foto' }));
-        setNota('Localização gravada na própria foto.');
-        return;
-      }
-      const leitura = await (gpsAgora ?? lerGpsDenuncia());
-      if (leitura) {
-        setR((x) => ({ ...x, latitude: leitura.latitude, longitude: leitura.longitude, precisaoM: leitura.precisaoM, origemLocal: 'gps' }));
-        setNota(origem === 'galeria'
-          ? 'A foto não trazia localização: usamos a sua posição atual. Se a foto foi tirada em outro lugar, ajuste no mapa.'
-          : null);
+      const primeiraDaDenuncia = r.fotos.length === 0;
+      const reduzidas = await Promise.all(usar.map((f) => reduzirFoto(f)));
+      setR((x) => ({ ...x, fotos: [...x.fotos, ...reduzidas].slice(0, MAX_FOTOS) }));
+      if (!primeiraDaDenuncia || r.origemLocal === 'mapa') return;
+      // Galeria: tenta a localização gravada na própria foto
+      if (origem === 'galeria') {
+        for (const f of usar) {
+          const exif = await lerExifFoto(f);
+          if (exif && coordenadaValida(exif.latitude, exif.longitude)) {
+            setR((x) => ({ ...x, latitude: exif.latitude, longitude: exif.longitude, precisaoM: null, origemLocal: 'foto' }));
+            setNota('Localização gravada na própria foto.');
+            return;
+          }
+        }
+        setNota('A foto não trazia localização: usamos a sua posição atual. Se ela foi tirada em outro lugar, ajuste no mapa.');
       } else {
-        setNota('Não conseguimos a localização automática. Marque no mapa ou escreva o endereço abaixo.');
+        setNota(null);
       }
+      rastreio.iniciar();
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível usar esta foto.');
     } finally {
-      setProcessando(null);
+      setPreparandoFoto(false);
     }
   }
 
-  async function tentarGpsDeNovo() {
-    setProcessando('gps');
-    const leitura = await lerGpsDenuncia();
-    setProcessando(null);
-    if (leitura) {
-      setR((x) => ({ ...x, latitude: leitura.latitude, longitude: leitura.longitude, precisaoM: leitura.precisaoM, origemLocal: 'gps' }));
-      setNota(null);
-    } else {
-      setNota('O GPS não respondeu. Verifique se a localização do celular está ligada e permitida para o navegador — ou marque no mapa.');
-    }
+  function removerFoto(i: number) {
+    setR((x) => {
+      const fotos = x.fotos.filter((_, j) => j !== i);
+      // sem fotos, a localização que veio da foto deixa de valer
+      return fotos.length === 0 && x.origemLocal === 'foto'
+        ? { ...x, fotos, latitude: null, longitude: null, precisaoM: null, origemLocal: null }
+        : { ...x, fotos };
+    });
+    if (r.fotos.length === 1) setNota(null);
+  }
+
+  function usarMeuGps() {
+    // volta a seguir o GPS (desfaz ponto do mapa/da foto)
+    setR((x) => ({ ...x, latitude: null, longitude: null, precisaoM: null, origemLocal: null }));
+    setNota(null);
+    if (gps.estado === 'negado' || gps.estado === 'indisponivel') rastreio.reiniciar();
+    else rastreio.iniciar();
   }
 
   function enviar() {
@@ -225,7 +306,7 @@ export default function EcoAcaoPage() {
                 <ol className="space-y-3">
                   {[
                     ['Escolha o tipo', 'Descarte irregular de lixo.'],
-                    ['Tire a foto', 'A localização é registrada sozinha. Dá para ajustar no mapa ou escrever o endereço.'],
+                    ['Tire até 3 fotos', 'A localização é registrada sozinha. Dá para ajustar no mapa ou escrever o endereço.'],
                     ['Descreva', 'Conte rapidamente o que encontrou.'],
                     ['Envie', 'Você recebe um número de protocolo.'],
                   ].map(([t, d], i) => (
@@ -249,7 +330,7 @@ export default function EcoAcaoPage() {
               <h2 className="text-[22px] font-extrabold tracking-tight text-[#17301f] leading-tight">O que você quer denunciar?</h2>
               <button
                 type="button"
-                onClick={() => { setR((x) => ({ ...x, tipo: 'descarte_lixo' })); setTela('foto'); }}
+                onClick={() => { rastreio.iniciar(); setR((x) => ({ ...x, tipo: 'descarte_lixo' })); setTela('foto'); }}
                 className="group text-left rounded-[1.6rem] border-2 border-[#3f8f4a] bg-[#f3f9ef] p-5 flex items-center gap-4 hover:bg-[#eaf5e4] transition-colors"
               >
                 <span className="h-14 w-14 rounded-2xl bg-[#1f5a35] grid place-items-center shrink-0">
@@ -267,41 +348,63 @@ export default function EcoAcaoPage() {
             </div>
           )}
 
-          {/* ── 2. FOTO E LOCAL ── */}
+          {/* ── 2. FOTOS E LOCAL ── */}
           {tela === 'foto' && (
             <div className="flex flex-col gap-4 flex-1">
-              <h2 className="text-[22px] font-extrabold tracking-tight text-[#17301f] leading-tight">Fotografe o local</h2>
+              <div>
+                <h2 className="text-[22px] font-extrabold tracking-tight text-[#17301f] leading-tight">Fotografe o local</h2>
+                <p className="text-[13px] text-[#5d6f60] mt-1">Até {MAX_FOTOS} fotos. A primeira deve mostrar bem o lixo.</p>
+              </div>
 
-              <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { aoEscolherFoto(e.target.files?.[0], 'camera'); e.target.value = ''; }} />
-              <input ref={galRef} type="file" accept="image/*" className="hidden" onChange={(e) => { aoEscolherFoto(e.target.files?.[0], 'galeria'); e.target.value = ''; }} />
+              <PainelGps estado={gps.estado} leitura={gps.leitura} onTentar={() => rastreio.reiniciar()} onMapa={() => setMapaAberto(true)} />
 
-              {!r.fotoDataUrl ? (
+              <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { aoEscolherFotos(e.target.files, 'camera'); e.target.value = ''; }} />
+              <input ref={galRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { aoEscolherFotos(e.target.files, 'galeria'); e.target.value = ''; }} />
+
+              {r.fotos.length === 0 ? (
                 <>
-                  <button type="button" onClick={() => camRef.current?.click()} disabled={!!processando}
-                    className="rounded-[1.6rem] border-2 border-dashed border-[#9cc79a] bg-[#f3f9ef] h-56 flex flex-col items-center justify-center gap-3 text-[#1f5a35] hover:bg-[#eaf5e4]">
-                    {processando ? <Loader2 className="h-10 w-10 animate-spin" /> : <span className="h-16 w-16 rounded-full bg-[#1f5a35] grid place-items-center"><Camera className="h-8 w-8 text-white" /></span>}
-                    <span className="font-bold text-[15px]">{processando ? 'Preparando a foto…' : 'Tirar foto agora'}</span>
+                  <button type="button" onClick={() => camRef.current?.click()} disabled={preparandoFoto}
+                    className="rounded-[1.6rem] border-2 border-dashed border-[#9cc79a] bg-[#f3f9ef] h-52 flex flex-col items-center justify-center gap-3 text-[#1f5a35] hover:bg-[#eaf5e4]">
+                    {preparandoFoto ? <Loader2 className="h-10 w-10 animate-spin" /> : <span className="h-16 w-16 rounded-full bg-[#1f5a35] grid place-items-center"><Camera className="h-8 w-8 text-white" /></span>}
+                    <span className="font-bold text-[15px]">{preparandoFoto ? 'Preparando a foto…' : 'Tirar foto agora'}</span>
                     <span className="text-[12px] text-[#5d7a61]">A localização é registrada junto</span>
                   </button>
-                  <button type="button" onClick={() => galRef.current?.click()} disabled={!!processando} className="h-12 rounded-2xl border-2 border-[#cfe0cf] text-[#1f5a35] font-semibold text-sm flex items-center justify-center gap-2 hover:bg-[#f1f6ee]">
+                  <button type="button" onClick={() => galRef.current?.click()} disabled={preparandoFoto} className="h-12 rounded-2xl border-2 border-[#cfe0cf] text-[#1f5a35] font-semibold text-sm flex items-center justify-center gap-2 hover:bg-[#f1f6ee]">
                     <ImagePlus className="h-4 w-4" /> Escolher da galeria
                   </button>
                   <Dica>Mostre bem o lixo e, se der, algo que ajude a reconhecer o lugar (uma placa, uma casa, uma árvore).</Dica>
                 </>
               ) : (
                 <>
-                  <div className="relative">
-                    <img src={r.fotoDataUrl} alt="Foto do local" className="w-full max-h-72 object-cover rounded-[1.6rem]" />
-                    <button type="button" onClick={() => camRef.current?.click()} className="absolute bottom-3 right-3 rounded-full bg-white/95 text-[#1f5a35] text-xs font-semibold px-3 py-2 flex items-center gap-1.5 shadow">
-                      <RotateCcw className="h-3.5 w-3.5" /> Trocar foto
-                    </button>
+                  {/* Fotos */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {r.fotos.map((f, i) => (
+                      <div key={i} className={cn('relative', i === 0 && 'col-span-3')}>
+                        <img src={f} alt={`Foto ${i + 1}`} className={cn('w-full object-cover rounded-2xl', i === 0 ? 'h-56' : 'h-24')} />
+                        <button type="button" onClick={() => removerFoto(i)} aria-label={`Remover foto ${i + 1}`} className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/55 text-white grid place-items-center">
+                          <X className="h-4 w-4" />
+                        </button>
+                        {i === 0 && <span className="absolute bottom-2 left-2 rounded-full bg-black/55 text-white text-[11px] px-2 py-0.5">Principal</span>}
+                      </div>
+                    ))}
+                    {podeMaisFotos && (
+                      <>
+                        <button type="button" onClick={() => camRef.current?.click()} disabled={preparandoFoto} className="h-24 rounded-2xl border-2 border-dashed border-[#9cc79a] bg-[#f3f9ef] text-[#1f5a35] text-[12px] font-semibold flex flex-col items-center justify-center gap-1">
+                          {preparandoFoto ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />} Tirar mais
+                        </button>
+                        <button type="button" onClick={() => galRef.current?.click()} disabled={preparandoFoto} className="h-24 rounded-2xl border-2 border-dashed border-[#cfe0cf] text-[#1f5a35] text-[12px] font-semibold flex flex-col items-center justify-center gap-1">
+                          <Plus className="h-5 w-5" /> Da galeria
+                        </button>
+                      </>
+                    )}
                   </div>
+                  <p className="text-[12px] text-[#8a9a8c] -mt-2">{r.fotos.length} de {MAX_FOTOS} fotos</p>
 
+                  {/* Local */}
                   <section className="rounded-[1.6rem] border border-[#dce7d9] bg-white p-4 space-y-3">
                     <div className="flex items-center gap-2">
                       <MapPin className="h-4 w-4 text-[#e4572e]" />
-                      <p className="font-bold text-[14px] text-[#17301f] flex-1">Localização</p>
-                      {processando === 'gps' && <span className="text-[12px] text-[#5d7a61] flex items-center gap-1"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Localizando…</span>}
+                      <p className="font-bold text-[14px] text-[#17301f] flex-1">Local da denúncia</p>
                     </div>
                     {temLocal ? (
                       <>
@@ -311,15 +414,19 @@ export default function EcoAcaoPage() {
                           {r.precisaoM != null ? ` · precisão de ${Math.round(r.precisaoM)} m` : ''}
                         </p>
                       </>
-                    ) : processando !== 'gps' && (
-                      <p className="text-[13px] text-[#5d6f60]">Ainda sem localização.</p>
+                    ) : (
+                      <p className="text-[13px] text-[#5d6f60]">
+                        {gps.estado === 'buscando' || gps.estado === 'parado'
+                          ? <span className="flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Aguardando o GPS… o ponto aparece aqui sozinho.</span>
+                          : 'Sem localização automática. Marque no mapa ou escreva o endereço.'}
+                      </p>
                     )}
                     {nota && <p className="text-[12px] text-[#8a5a00] bg-[#fff6e3] rounded-xl px-3 py-2">{nota}</p>}
                     <div className="grid grid-cols-2 gap-2">
                       <button type="button" onClick={() => setMapaAberto(true)} className="h-10 rounded-xl bg-[#eef6e9] text-[#1f5a35] text-[13px] font-semibold flex items-center justify-center gap-1.5">
                         <Pencil className="h-3.5 w-3.5" /> {temLocal ? 'Ajustar no mapa' : 'Marcar no mapa'}
                       </button>
-                      <button type="button" onClick={tentarGpsDeNovo} disabled={processando === 'gps'} className="h-10 rounded-xl bg-[#eef6e9] text-[#1f5a35] text-[13px] font-semibold flex items-center justify-center gap-1.5 disabled:opacity-50">
+                      <button type="button" onClick={usarMeuGps} className="h-10 rounded-xl bg-[#eef6e9] text-[#1f5a35] text-[13px] font-semibold flex items-center justify-center gap-1.5">
                         <LocateFixed className="h-3.5 w-3.5" /> Usar meu GPS
                       </button>
                     </div>
@@ -338,11 +445,11 @@ export default function EcoAcaoPage() {
               {erro && <p className="text-[13px] text-red-700 bg-red-50 rounded-xl px-3 py-2">{erro}</p>}
 
               <div className="mt-auto pt-2">
-                <BotaoPrincipal onClick={() => setTela('descricao')} disabled={!r.fotoDataUrl || (!temLocal && r.endereco.trim().length < 5) || processando === 'foto'}>
+                <BotaoPrincipal onClick={() => setTela('descricao')} disabled={r.fotos.length === 0 || (!temLocal && r.endereco.trim().length < 5) || preparandoFoto}>
                   Continuar <ArrowRight className="h-5 w-5" />
                 </BotaoPrincipal>
-                {r.fotoDataUrl && !temLocal && r.endereco.trim().length < 5 && processando !== 'gps' && (
-                  <p className="text-center text-[12px] text-[#8a9a8c] mt-2">Marque no mapa ou escreva o endereço para continuar.</p>
+                {r.fotos.length > 0 && !temLocal && r.endereco.trim().length < 5 && (
+                  <p className="text-center text-[12px] text-[#8a9a8c] mt-2">Aguarde o GPS, marque no mapa ou escreva o endereço para continuar.</p>
                 )}
               </div>
             </div>
@@ -353,10 +460,10 @@ export default function EcoAcaoPage() {
             <div className="flex flex-col gap-4 flex-1">
               <h2 className="text-[22px] font-extrabold tracking-tight text-[#17301f] leading-tight">Conte o que você viu</h2>
               <div>
-                <p className="text-[12px] font-semibold text-[#3d5341] mb-2">Toque para adicionar:</p>
+                <p className="text-[12px] font-semibold text-[#3d5341] mb-2">Toque para adicionar (toque de novo para tirar):</p>
                 <div className="flex flex-wrap gap-2">
                   {SUGESTOES.map((s) => {
-                    const ja = r.descricao.toLowerCase().includes(s.toLowerCase());
+                    const ja = new RegExp(`(^|,\\s*)${s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=\\s*(,|$))`, 'i').test(r.descricao.trim());
                     return (
                       <button key={s} type="button" aria-pressed={ja}
                         onClick={() => setR((x) => ({ ...x, descricao: alternarSugestao(x.descricao, s) }))}
@@ -392,10 +499,20 @@ export default function EcoAcaoPage() {
             <div className="flex flex-col gap-4 flex-1">
               <h2 className="text-[22px] font-extrabold tracking-tight text-[#17301f] leading-tight">Confira antes de enviar</h2>
               <div className="rounded-[1.6rem] border border-[#dce7d9] bg-white overflow-hidden">
-                {r.fotoDataUrl && <img src={r.fotoDataUrl} alt="Foto do local" className="w-full h-44 object-cover" />}
+                {r.fotos.length > 0 && (
+                  <div className={cn('grid gap-0.5', r.fotos.length === 1 ? 'grid-cols-1' : 'grid-cols-[2fr_1fr]')}>
+                    <img src={r.fotos[0]} alt="Foto principal" className="w-full h-44 object-cover" />
+                    {r.fotos.length > 1 && (
+                      <div className="grid gap-0.5" style={{ gridTemplateRows: `repeat(${r.fotos.length - 1}, 1fr)` }}>
+                        {r.fotos.slice(1).map((f, i) => <img key={i} src={f} alt={`Foto ${i + 2}`} className="w-full h-full object-cover" />)}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <dl className="divide-y divide-[#edf2eb] text-[14px]">
                   {[
                     ['Tipo', ROTULO_TIPO[r.tipo], 'tipo'],
+                    ['Fotos', `${r.fotos.length} de ${MAX_FOTOS}`, 'foto'],
                     ['Local', [temLocal ? `${r.latitude!.toFixed(5)}, ${r.longitude!.toFixed(5)} (${r.origemLocal ? ROTULO_ORIGEM[r.origemLocal] : ''})` : '', r.endereco.trim()].filter(Boolean).join(' · '), 'foto'],
                     ['Descrição', r.descricao.trim(), 'descricao'],
                   ].map(([k, v, t]) => (
@@ -448,8 +565,11 @@ export default function EcoAcaoPage() {
               ) : (
                 <>
                   {lista.map((d) => (
-                    <button key={d.id} type="button" onClick={() => setAberta(d)} className="text-left rounded-2xl border border-[#dce7d9] bg-white p-2.5 flex gap-3 hover:bg-[#f6faf3]">
-                      <img src={d.fotoDataUrl} alt="" className="h-16 w-16 rounded-xl object-cover shrink-0" />
+                    <button key={d.id} type="button" onClick={() => { setAberta(d); setFotoAmpliada(0); }} className="text-left rounded-2xl border border-[#dce7d9] bg-white p-2.5 flex gap-3 hover:bg-[#f6faf3]">
+                      <div className="relative shrink-0">
+                        {d.fotos[0] ? <img src={d.fotos[0]} alt="" className="h-16 w-16 rounded-xl object-cover" /> : <div className="h-16 w-16 rounded-xl bg-[#eef3ea]" />}
+                        {d.fotos.length > 1 && <span className="absolute -bottom-1 -right-1 rounded-full bg-[#1f5a35] text-white text-[10px] font-bold px-1.5 py-0.5">{d.fotos.length}</span>}
+                      </div>
                       <div className="flex-1 min-w-0 py-0.5">
                         <p className="font-mono text-[12px] font-bold text-[#1f5a35]">{d.protocolo}</p>
                         <p className="text-[13px] text-[#17301f] truncate">{d.descricao}</p>
@@ -474,9 +594,18 @@ export default function EcoAcaoPage() {
         <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center" onClick={() => setAberta(null)}>
           <div className="w-full max-w-[440px] bg-[#fbfcf8] rounded-t-[1.8rem] sm:rounded-[1.8rem] overflow-hidden max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="relative">
-              <img src={aberta.fotoDataUrl} alt="Foto do local" className="w-full h-56 object-cover" />
+              {aberta.fotos[fotoAmpliada] && <img src={aberta.fotos[fotoAmpliada]} alt="Foto do local" className="w-full h-56 object-cover" />}
               <button type="button" onClick={() => setAberta(null)} aria-label="Fechar" className="absolute top-3 right-3 h-9 w-9 rounded-full bg-white/95 grid place-items-center"><X className="h-4 w-4" /></button>
             </div>
+            {aberta.fotos.length > 1 && (
+              <div className="flex gap-2 px-5 pt-3">
+                {aberta.fotos.map((f, i) => (
+                  <button key={i} type="button" onClick={() => setFotoAmpliada(i)} className={cn('h-14 w-14 rounded-xl overflow-hidden border-2', i === fotoAmpliada ? 'border-[#3f8f4a]' : 'border-transparent opacity-70')}>
+                    <img src={f} alt={`Foto ${i + 1}`} className="h-full w-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="p-5 space-y-3">
               <p className="font-mono text-[15px] font-bold text-[#1f5a35]">{aberta.protocolo}</p>
               <p className="text-[12px] text-[#6b8270]">{ROTULO_TIPO[aberta.tipo]} · {fmtData(aberta.criadaEm)}</p>
@@ -494,7 +623,7 @@ export default function EcoAcaoPage() {
       <EscolherNoMapaDialog
         open={mapaAberto}
         onOpenChange={setMapaAberto}
-        inicial={temLocal ? { lat: r.latitude!, lng: r.longitude! } : null}
+        inicial={temLocal ? { lat: r.latitude!, lng: r.longitude! } : (leituraUtil(gps.leitura) ? { lat: gps.leitura.latitude, lng: gps.leitura.longitude } : null)}
         onConfirm={(p) => { setR((x) => ({ ...x, latitude: p.lat, longitude: p.lng, precisaoM: null, origemLocal: 'mapa' })); setNota(null); }}
       />
     </div>
