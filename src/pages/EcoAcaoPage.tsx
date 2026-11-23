@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
-  Camera, ImagePlus, MapPin, Trash2, ArrowLeft, ArrowRight, Check, Leaf, Loader2,
+  Camera, ImagePlus, MapPin, Trash2, ArrowLeft, ArrowRight, Check, Loader2,
   ClipboardList, Info, LocateFixed, Pencil, ShieldCheck, Smartphone, X, AlertTriangle, Plus, Navigation,
 } from 'lucide-react';
 import { EscolherNoMapaDialog } from '@/components/mapa/EscolherNoMapaDialog';
@@ -70,6 +70,22 @@ function MapaComLink({ lat, lng }: { lat: number; lng: number }) {
         <Navigation className="h-4 w-4" /> {PLATAFORMA === 'iphone' ? 'Abrir no Mapas' : 'Abrir no mapa'} — como chegar
       </span>
     </a>
+  );
+}
+
+/**
+ * Marca do EcoAção: um "e" de traço contínuo que desemboca no marcador de
+ * localização (a cor do ponto no mapa) — a inicial + o gesto de marcar o local.
+ */
+function LogoEcoAcao({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 40 40" className={className} role="img" aria-label="EcoAção">
+      <rect width="40" height="40" rx="12" fill="#1f5a35" />
+      <path d="M11.2 20.2H27.4" stroke="#b8e07a" strokeWidth="3.4" strokeLinecap="round" />
+      <path d="M27.4 20.2A8.2 8.2 0 1 0 25.66 25.25" fill="none" stroke="#b8e07a" strokeWidth="3.4" strokeLinecap="round" />
+      <path d="M27.96 21.95a3.9 3.9 0 0 1 3.9 3.9c0 2.9-3.9 6.4-3.9 6.4s-3.9-3.5-3.9-6.4a3.9 3.9 0 0 1 3.9-3.9z" fill="#f0703f" stroke="#1f5a35" strokeWidth="1.3" />
+      <circle cx="27.96" cy="25.85" r="1.35" fill="#1f5a35" />
+    </svg>
   );
 }
 
@@ -288,7 +304,7 @@ export default function EcoAcaoPage() {
               <ArrowLeft className="h-5 w-5" />
             </button>
           ) : (
-            <div className="h-10 w-10 -ml-1 rounded-2xl bg-[#1f5a35] grid place-items-center"><Leaf className="h-5 w-5 text-[#b8e07a]" /></div>
+            <LogoEcoAcao className="h-10 w-10 -ml-1 shrink-0" />
           )}
           <div className="flex-1 leading-tight">
             <p className="font-extrabold text-[17px] tracking-tight text-[#17301f]">Eco<span className="text-[#3f8f4a]">Ação</span></p>
@@ -304,8 +320,9 @@ export default function EcoAcaoPage() {
           {tela === 'inicio' && (
             <div className="flex flex-col gap-5">
               <div className="relative overflow-hidden rounded-[1.8rem] bg-[#1f5a35] text-white p-6 pb-7">
-                <svg className="absolute -right-10 -top-10 h-48 w-48 opacity-20" viewBox="0 0 200 200" aria-hidden>
-                  <path d="M100 10c50 20 80 60 70 110-8 40-45 65-80 65C55 185 25 150 30 110 37 60 70 25 100 10z" fill="#b8e07a" />
+                <svg className="absolute -right-8 -top-6 h-44 w-44 opacity-[0.16]" viewBox="0 0 40 40" aria-hidden>
+                  <path d="M11.2 20.2H27.4" stroke="#b8e07a" strokeWidth="3.4" strokeLinecap="round" />
+                  <path d="M27.4 20.2A8.2 8.2 0 1 0 25.66 25.25" fill="none" stroke="#b8e07a" strokeWidth="3.4" strokeLinecap="round" />
                 </svg>
                 <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#b8e07a]">Cuidar da cidade é com a gente</p>
                 <h1 className="mt-2 text-[28px] leading-[1.1] font-extrabold tracking-tight">Viu lixo jogado em lugar errado?</h1>
